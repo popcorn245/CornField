@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 /**
- * Deep links (issue #103, explorer/deep-link.js), through the page's own markup with a fake server behind `fetch`: `?run=` opens
- * that run in the Agents tab, `?issue=` the Issues tab with that issue's Start an agent ready, `?proposal=…&start=1` the Start dialog;
- * each on a desktop and on a phone (the sheet expanded); a name that is not there is a line in the panel and is said through the live
- * region; a followed link is taken out of the address so a reload does not open it again, `?proposal=` stays.
+ * Deep links (issue #103, explorer/deep-link.js, spec 0012 D8), through the page's own markup with a fake server behind `fetch`:
+ * `?proposal=…&start=1` opens the Start dialog; `?run=` and `?issue=` are the Work view's addresses now (work-view.js), and work the
+ * graph does not draw (older than its 14 days) is shown in the node panel by `showWorkRef`, which is what they come to here: a run's
+ * card, an issue's Start an agent, a closed issue as closed; each on a desktop and on a phone; a name that is not there is a line in the
+ * Work list said through the live region. A followed link is taken out of the address so a reload does not open it again, `?proposal=` stays.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
@@ -14,7 +15,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, closeForge, openForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -74,7 +77,7 @@ function mount(extra = {}) {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -84,7 +87,10 @@ function mount(extra = {}) {
   initKeyboard();
   initSheets();
   resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock: () => NOW });
+  resetWorkViewForTests();
+  const forgeOn = initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock: () => NOW });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work (work:panel): the actions are in it
+  return forgeOn;
 }
 const follow = async (search, opts = {}) => {
   history.replaceState(null, '', `/${search}`);
@@ -98,16 +104,13 @@ afterEach(() => { closeForge({ restoreFocus: false }); closeDrawer(); vi.unstubA
 
 describe('what a query asks for (parseDeepLink)', () => {
   beforeEach(() => { document.body.innerHTML = body; });
-  it('reads one link, a run before an issue before a proposal, and calls a value that cannot be a name bad', () => {
+  it('reads only the link that starts an agent on a proposal, and calls a value that cannot be a name bad', () => {
     expect(parseDeepLink('')).toBeNull();
     expect(parseDeepLink('?view=dataflow')).toBeNull();
-    expect(parseDeepLink(`?run=${RUN_ID}&issue=3`)).toEqual({ kind: 'run', id: RUN_ID });
-    expect(parseDeepLink('?issue=12')).toEqual({ kind: 'issue', n: 12 });
+    expect(parseDeepLink(`?run=${RUN_ID}&issue=3`)).toBeNull(); // the Work view's addresses (work-model.js workAddress)
+    expect(parseDeepLink('?issue=12')).toBeNull();
     expect(parseDeepLink('?proposal=0040-meals&start=1')).toEqual({ kind: 'proposal', slug: '0040-meals' });
     expect(parseDeepLink('?proposal=0040-meals')).toBeNull(); // opening a proposal is proposal.js's, with no Start
-    expect(parseDeepLink('?run=nope')).toMatchObject({ kind: 'run', bad: expect.stringMatching(/not a run id/) });
-    expect(parseDeepLink('?issue=-1')).toMatchObject({ kind: 'issue', bad: expect.stringMatching(/not an issue number/) });
-    expect(parseDeepLink('?issue=')).toMatchObject({ bad: 'That is not an issue number.' });
     expect(parseDeepLink('?proposal=../x&start=1')).toMatchObject({ kind: 'proposal', bad: expect.stringMatching(/not a proposal name/) });
   });
 });
@@ -115,80 +118,66 @@ describe('what a query asks for (parseDeepLink)', () => {
 describe.each([['a desktop', false], ['a phone', true]])('on %s', (_name, onPhone) => {
   beforeEach(() => phone(onPhone));
 
-  it('?run= opens that run in the Agents tab, lit, in view and said', async () => {
+  it('a run the graph does not draw is shown in the node panel with its card, and said', async () => {
     fakeServer();
     mount();
-    expect(await follow(`?run=${RUN_ID}`)).toBe(true);
-    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
-    if (onPhone) expect(sheetState('forge')).toBe('expanded');
-    expect(q('[data-forge-kind="work"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-runs').hidden).toBe(false);
-    expect(q(`[data-run-select="${RUN_ID}"]`).getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q(`[data-run="${RUN_ID}"]`));
-    expect($('forge-act-note').hidden).toBe(true);
-    expect(await said()).toBe(`Run ${RUN_ID}, in the Runs view`);
-    expect(window.location.search).toBe('');
+    expect(await showWorkRef('run', RUN_ID)).toBe(true);
+    await settle();
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    expect($('drawer-badge').textContent).toBe('Agent run');
+    expect(q(`#forge-run-card [data-run="${RUN_ID}"]`)).not.toBeNull();
+    expect(await said()).toBe(`Run ${RUN_ID}`);
   });
 
-  it('?run= for a run that is not there says so in the panel and through the live region, never a blank', async () => {
+  it('a run that is not there says so in the list and through the live region, never a blank', async () => {
     const server = fakeServer();
     mount();
-    expect(await follow(`?run=${OTHER_ID}`)).toBe(false);
-    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
-    if (onPhone) expect(sheetState('forge')).toBe('expanded');
+    openForge({ tab: 'work' });
+    expect(await showWorkRef('run', OTHER_ID)).toBe(false);
     expect($('forge-act-note').hidden).toBe(false);
     expect($('forge-act-note').textContent).toBe(`There is no run ${OTHER_ID}.`);
     expect(await said()).toBe(`There is no run ${OTHER_ID}.`);
     expect(server.urls()).toContain('/api/agent-runs?follow=1'); // asked once more, past the cache
-    expect(window.location.search).toBe('');
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
   });
 
-  it('?issue= opens the Issues tab with that issue\'s Start an agent focused', async () => {
+  it('an issue the graph does not draw is shown with its Start an agent, which is not opened for you', async () => {
     fakeServer();
     mount();
-    expect(await follow('?issue=7')).toBe(true);
-    if (onPhone) expect(sheetState('forge')).toBe('expanded');
-    expect(q('[data-forge-kind="issues"]').getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q('[data-forge-agent="issue:7"]'));
+    expect(await showWorkRef('issue', '7')).toBe(true);
+    await settle();
+    expect($('drawer-badge').textContent).toBe('Issue');
+    expect(q('#forge-detail [data-forge-agent="issue:7"]')).not.toBeNull();
     expect($('agent-start').hidden).toBe(true);
-    expect(await said()).toBe('Issue 7: Meals page. Start an agent is ready');
-    expect(window.location.search).toBe('');
   });
 
-  it('?issue= for an issue that is not listed asks for it once: no such issue is said so', async () => {
+  it('an issue that is not listed asks for it once: no such issue is said so', async () => {
     const srv = fakeServer();
     mount();
-    expect(await follow('?issue=99')).toBe(false);
+    openForge({ tab: 'issues' });
+    expect(await showWorkRef('issue', '99')).toBe(false);
     expect($('forge-act-note').textContent).toBe('There is no issue 99.');
     expect(await said()).toBe('There is no issue 99.');
-    expect(q('[data-forge-kind="issues"]').getAttribute('aria-pressed')).toBe('true');
     expect(srv.urls().filter((u) => u === '/api/forge/issues/99')).toHaveLength(1);
     expect($('agent-start').hidden).toBe(true);
   });
 
-  it('?issue= for a closed issue calls it closed, with its title as text and a link to it', async () => {
+  it('a closed issue is shown as closed, with its title as text and a link to it, and nothing to start', async () => {
     const srv = fakeServer();
     mount();
-    expect(await follow('?issue=12')).toBe(false);
-    const note = $('forge-act-note');
-    expect(note.textContent).toContain('Issue 12 is closed: <img src=x onerror="window.pwned=1">Old');
-    expect(note.querySelector('img')).toBeNull();
-    expect(note.querySelector('a').getAttribute('href')).toBe('https://git.example.test/owner/name/issues/12');
-    expect(await said()).toBe('Issue 12 is closed: <img src=x onerror="window.pwned=1">Old');
+    expect(await showWorkRef('issue', '12')).toBe(true);
+    await settle();
+    expect($('drawer-title').textContent).toBe('<img src=x onerror="window.pwned=1">Old');
+    expect(q('#spec-drawer img')).toBeNull();
+    expect(q('#forge-detail [data-forge-agent]')).toBeNull();
+    expect(q('#forge-detail').textContent).toContain('closed');
+    expect(await said()).toBe('Issue 12: <img src=x onerror="window.pwned=1">Old. It is closed.'); // what the side panel said of it: its number, its title, closed
+    expect(q('#spec-drawer a[href="https://git.example.test/owner/name/issues/12"]')).not.toBeNull();
     expect(srv.urls().filter((u) => u.startsWith('/api/forge/issues/'))).toEqual(['/api/forge/issues/12']);
-    expect($('agent-start').hidden).toBe(true);
-    // An open issue the list does not reach is open, not missing
-    expect(await follow('?issue=40')).toBe(false);
-    expect($('forge-act-note').textContent).toContain('Issue 40 is open, but not in the list shown here: Far down');
-  });
-
-  it('a value in the link is never markup: a bad run id is said as text', async () => {
-    fakeServer();
-    mount();
-    expect(await follow('?run=<img src=x onerror=alert(1)>')).toBe(false);
-    expect(await said()).toBe('"<img src=x onerror=alert(1)>" is not a run id.');
-    expect(document.querySelector('img[src="x"]')).toBeNull();
-    expect(window.location.search).toBe('');
+    // An open issue the list does not reach is shown as open, with its Start an agent
+    expect(await showWorkRef('issue', '40')).toBe(true);
+    await settle();
+    expect(q('#forge-detail [data-forge-agent="issue:40"]')).not.toBeNull();
   });
 
   it('?proposal=&start=1 opens the Start dialog on that proposal, and leaves ?proposal= in the address', async () => {
@@ -240,26 +229,22 @@ describe("the node panel's Start a run (#138)", () => {
 });
 
 describe('after the link', () => {
-  it('a reload does not open the dialog again: run, issue and start are gone from the address', async () => {
+  it('a reload does not open the dialog again: start is gone from the address, ?proposal= stays', async () => {
     fakeServer();
     mount();
-    history.replaceState(null, '', `/?run=${RUN_ID}`);
-    await followDeepLink({ forgeOn: true });
-    expect(window.location.search).toBe('');
-    await settle();
-    // A reload reads the address: nothing is asked for
-    expect(parseDeepLink(window.location.search)).toBeNull();
-    history.replaceState(null, '', '/?issue=7&x=1');
-    await followDeepLink({ forgeOn: true });
-    expect(window.location.search).toBe('?x=1');
+    $('proposal-bar').hidden = false;
+    history.replaceState(null, '', '/?proposal=0040-meals&start=1&x=1');
+    await followDeepLink({ forgeOn: true, proposalOpened: true });
+    expect(window.location.search).toBe('?proposal=0040-meals&x=1');
+    expect(parseDeepLink(window.location.search)).toBeNull(); // a reload reads the address: nothing is asked for
   });
 
   it('with no forge in the config it still says why, and still cleans the address', async () => {
     fakeServer();
-    history.replaceState(null, '', `/?run=${RUN_ID}`);
+    history.replaceState(null, '', '/?proposal=0040-meals&start=1');
     document.body.innerHTML = body;
-    expect(await followDeepLink({ forgeOn: false })).toBe(false);
-    expect(await said()).toBe('Runs and issues need a forge in the config.');
-    expect(window.location.search).toBe('');
+    expect(await followDeepLink({ forgeOn: false, proposalOpened: true })).toBe(false);
+    expect(await said()).toBe('Start an agent needs a forge in the config.');
+    expect(window.location.search).toBe('?proposal=0040-meals');
   });
 });

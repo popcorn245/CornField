@@ -15,9 +15,10 @@
  */
 
 import { NODE_THEMES } from '../core/schema.js';
-import { WORK_KINDS, WORK_THEMES, workType } from '../core/schema.js';
+import { WORK_KINDS, WORK_THEMES, WORK_EDGE_THEMES, workType } from '../core/schema.js';
 import { relativeTime } from './review-model.js';
-import { SPEC_STATE_WORDS } from './waiting-model.js';
+import { SPEC_STATE_WORDS, specStateOf } from './waiting-model.js';
+import { runName, canAnswer } from './runs-model.js';
 import { cornState } from './corn-state.js';
 import { escapeHtml as esc } from '../core/text.js';
 import { safeUrl } from './pieces/work-common.js';
@@ -106,6 +107,52 @@ export function termsOf(item) {
 const plannedType = (type) => (typeof type === 'string' && Object.hasOwn(NODE_THEMES, type) ? type : 'page');
 
 /**
+ * The node of a piece of work: what the scene draws and the node panel shows for it. `item` is a node of the server's graph, or an old piece of work made
+ * by `oldItem` (older than the graph's 14 days, or past its caps: the Work list reaches it, and the node panel shows it by the same path, `old: true`).
+ */
+export function workNode(item, degree = 0) {
+  const theme = WORK_THEMES[item.kind];
+  const title = text(item.title) || tagOf(item);
+  const draft = isDraft(item);
+  return {
+    id: item.id, type: workType(item.kind), work: item.kind, shape: theme.shape, label: item.kind === 'deploy' ? `Deploy · ${clip(title, LABEL_CHARS)}` : `${tagOf(item)} · ${clip(title, LABEL_CHARS)}`,
+    title, item, r: theme.r, color: theme.color, letters: theme.letters, terms: termsOf(item), groupName: draft ? DRAFT_LAYER_WORDS : LAYER_WORDS[item.kind],
+    draft, waiting: item.waiting === true, updated: text(item.updated), stage: text(item.stage), degree, x: 0, y: 0,
+  };
+}
+
+/** What the Work list holds that the graph does not: a node for it, drawn nowhere (`old`), for the node panel */
+export const oldNode = (item) => ({ ...workNode(item), old: true });
+
+/**
+ * A piece of work the graph does not hold (older than its 14 days, or past its caps), as a node of the graph would give it, made from what the Work list read
+ * of it: a pull request or an issue of the lists, a thread, a run of the runs list, a deploy, a proposal of the specs list. Null for a kind or a shape it cannot read.
+ * Every word of it is the forge's: the panel escapes it, and `url` is an http(s) link or nothing.
+ * @param {string} kind pull | issue | thread | run | deploy | proposal
+ * @param {object} src the list's own item
+ */
+export function oldItem(kind, src) {
+  if (!src || typeof src !== 'object') return null;
+  const who = (a) => (a && typeof a.login === 'string' ? a.login : null);
+  const base = { kind, title: text(src.title), url: safeUrl(src.url), updated: text(src.updatedAt) || text(src.createdAt), waiting: false };
+  const num = Number.isInteger(src.number) ? src.number : null;
+  switch (kind) {
+    case 'pull': return num === null ? null : { ...base, id: `pull:${num}`, stage: 'build', state: text(src.state), open: src.state === 'open', number: num, draft: src.draft === true, author: who(src.author) };
+    case 'issue': return num === null ? null : { ...base, id: `issue:${num}`, stage: 'talk', state: text(src.state), open: src.state === 'open', number: num, author: who(src.author) };
+    case 'thread': return num === null ? null : { ...base, id: `thread:${num}`, stage: 'talk', state: text(src.state), open: src.state === 'open', number: num, threadKind: text(src.kind), author: who(src.author) };
+    case 'run': return typeof src.runId === 'string' ? { ...base, id: `run:${src.runId}`, stage: 'build', title: runName(src), state: text(src.status), open: src.open === true, waiting: canAnswer(src), runId: src.runId, number: null, url: safeUrl(src.report && src.report.url) || safeUrl(src.comment && src.comment.url) || safeUrl(src.pull && src.pull.url), updated: text(src.lastActivity) || text(src.requestedAt), runKind: text(src.kind), requestedBy: src.requestedBy ?? null } : null;
+    case 'deploy': return typeof src.id === 'string' ? { ...base, id: `deploy:${src.id}`, stage: 'ship', title: text(src.title) || text(src.name), state: text(src.state), open: src.state === 'queued' || src.state === 'running', deployId: src.id, number: null, updated: text(src.updatedAt) || text(src.createdAt), name: text(src.name), branch: text(src.branch), sha: text(src.sha), author: who(src.actor) } : null;
+    case 'proposal': {
+      if (typeof src.slug !== 'string') return null;
+      const { state, counted } = specStateOf(src);
+      const pull = src.pull && Number.isInteger(src.pull.number) ? src.pull : null;
+      return { ...base, id: `proposal:${src.slug}`, stage: 'decide', title: text(src.title) || src.slug, state, open: true, waiting: counted, slug: src.slug, number: pull ? pull.number : null, url: safeUrl(pull && pull.url), updated: text(pull && (pull.updatedAt || pull.createdAt)), draft: state === 'local', author: who(pull && pull.author), source: text(src.source) };
+    }
+    default: return null;
+  }
+}
+
+/**
  * The scene of the Work view.
  * @param {{ nodes?: object[], edges?: { from: string, to: string, rel: string }[] } | null} graph the server's answer
  * @param {{ id: string, label?: string, type?: string }[]} mapNodes the map's nodes (the code a piece of work touches is found among them by id)
@@ -142,16 +189,7 @@ export function workScene(graph, mapNodes) {
   const degree = new Map();
   for (const e of edges) { degree.set(e.from, (degree.get(e.from) || 0) + 1); degree.set(e.to, (degree.get(e.to) || 0) + 1); }
   const nodes = [];
-  for (const item of work.values()) {
-    const theme = WORK_THEMES[item.kind];
-    const title = text(item.title) || tagOf(item);
-    const draft = isDraft(item);
-    nodes.push({
-      id: item.id, type: workType(item.kind), work: item.kind, shape: theme.shape, label: item.kind === 'deploy' ? `Deploy · ${clip(title, LABEL_CHARS)}` : `${tagOf(item)} · ${clip(title, LABEL_CHARS)}`,
-      title, item, r: theme.r, color: theme.color, letters: theme.letters, terms: termsOf(item), groupName: draft ? DRAFT_LAYER_WORDS : LAYER_WORDS[item.kind],
-      draft, waiting: item.waiting === true, updated: text(item.updated), stage: text(item.stage), degree: degree.get(item.id) || 0, x: 0, y: 0,
-    });
-  }
+  for (const item of work.values()) nodes.push(workNode(item, degree.get(item.id) || 0));
   let code = 0;
   for (const [id, by] of touched) {
     const base = onMap.get(id);
@@ -165,8 +203,6 @@ export function workScene(graph, mapNodes) {
   const waiting = nodes.filter((n) => n.waiting).length;
   return { nodes, edges, counts: { work: work.size, code, waiting } };
 }
-/** The colours of the lines of the Work view: a work-to-work link, a link to code, and what a proposal adds */
-const WORK_EDGE_COLORS = { work: '#818cf8', code: '#cbd5e1', adds: '#2dd4bf' };
 
 /**
  * One line of the Work view for the scene (spec 0012 D2, D3): a work-to-work link solid, `mentions` dotted, `adds` dashed; the word of its rel beside a lit one. The scene calls it
@@ -178,10 +214,12 @@ const WORK_EDGE_COLORS = { work: '#818cf8', code: '#cbd5e1', adds: '#2dd4bf' };
  * @param {boolean} focused whether a node is selected
  * @param {string} key the line's key
  * @param {{ PROPOSED_DASH: number[], USAGE_DASH: number[] }} dashes the map's two dash patterns
+ * @param {Partial<Record<'work' | 'code' | 'adds', string>>} [colors] what the theme's `--corn-work-edge-<name>` tokens say (`state.workEdgeColors`); a name it does not set is drawn in its default (core/schema.js WORK_EDGE_THEMES)
  */
-export function workEdge(edge, source, target, connected, focused, key, dashes) {
+export function workEdge(edge, source, target, connected, focused, key, dashes, colors) {
   const lit = focused && connected;
-  const color = WORK_EDGE_COLORS[edge.kind === 'adds' ? 'adds' : edge.tone === 'work' ? 'work' : 'code'];
+  const name = edge.kind === 'adds' ? 'adds' : edge.tone === 'work' ? 'work' : 'code';
+  const color = (colors && colors[name]) || WORK_EDGE_THEMES[name];
   const faded = source.dim === true && target.dim === true; // "Waiting on you" is on and neither end waits
   return {
     key, from: edge.from, to: edge.to, kind: edge.kind,
@@ -435,15 +473,15 @@ export function pillStateOf(item) {
   return PILL_OF[item.state] || (item.open ? 'open' : 'closed');
 }
 
-/** What the page says of what comes next, under the connections: what the action in the Work panel will do (the actions move here in step 3) */
+/** What the node panel says of what comes next, above the actions: what each will do */
 export function saysOf(item) {
   switch (item.kind) {
-    case 'proposal': return item.waiting ? 'This waits on you. Open it in the Work panel to open the review, approve or send it back.' : 'Open it in the Work panel for the review.';
-    case 'pull': return item.state === 'open' ? 'Open it in the Work panel to merge when the checks pass, or run the failed ones again.' : 'Nothing waits on you.';
-    case 'issue': return item.open ? 'Open it in the Work panel to start an agent on it.' : 'Nothing waits on you.';
-    case 'run': return item.waiting ? 'This waits on your answer. Open it in the Work panel to answer, continue or stop it.' : item.open ? 'Open it in the Work panel to follow it or stop it.' : 'Nothing waits on you.';
-    case 'thread': return 'Open it in the Work panel to read it and reply.';
-    default: return 'Open it in the Work panel for its logs, or to run it again.';
+    case 'proposal': return item.waiting ? 'This waits on you. Review opens it over the map (Before, Diff, After); there you approve it or send it back.' : 'Review opens it over the map (Before, Diff, After).';
+    case 'pull': return item.state === 'open' ? 'Land it merges this pull request at the head shown, once every check has passed; a failed check can be run again.' : 'Nothing waits on you.';
+    case 'issue': return item.open ? 'Start an agent asks a runner to work on this issue; a confirm step shows what will be asked.' : 'Nothing waits on you.';
+    case 'run': return item.waiting ? 'This waits on your answer: reply, continue or stop it.' : item.open ? 'You can stop it while it works.' : 'Nothing waits on you.';
+    case 'thread': return 'A thread is a conversation on the forge: read it here, and reply there.';
+    default: return 'Its logs are on the forge; here is what it restarted.';
   }
 }
 
@@ -483,20 +521,26 @@ const dotOf = (kind, color) => { const c = typeof color === 'function' ? color(k
 const linkButton = (l) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-action="select-node" data-id="${esc(l.id)}">${esc(l.label)}</button>`;
 
 /**
- * The node panel's markup for a piece of work (`panelOf`'s answer): its state, what it is connected to (each a button that selects that node), the checks of a pull request,
- * the words saying what the action will do, "Open in Work" (the actions move to the node panel in step 3), and a link to the forge when the address is a web one.
+ * The node panel's markup for a piece of work (`panelOf`'s answer): its state, what it is connected to (each a button that selects that node), the words saying what the
+ * actions will do, the place the actions go (`forge-detail`: the Work piece fills it, pieces/work-paint.js `paintDetail`: Land it, the checks, a run's answer field, Start an agent ...),
+ * and a link to the forge when the address is a web one and the actions do not carry it.
  * @param {ReturnType<typeof panelOf>} p
  * @param {object} node
- * @param {{ color?: (kind: string) => string, checks?: string }} [opts] `color`: a kind's colour as the map draws it; `checks`: the words of a pull request's checks
+ * @param {{ color?: (kind: string) => string }} [opts] `color`: a kind's colour as the map draws it
  */
-export function workPanelHtml(p, node, { color = () => '', checks = '' } = {}) {
+export function workPanelHtml(p, node, { color = () => '' } = {}) {
   const url = safeUrl(p.url);
-  const links = p.links.length
-    ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v"><ul class="hx-work-links" data-corn="work-links">${p.links.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dotOf(l.work, color)}${linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}</li>`).join('')}</ul></div></div>`
-    : '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Nothing it is linked to is drawn.</div></div>';
-  const checked = node.item.kind === 'pull' ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Checks</div><div class="hx-fact-v" id="work-checks" data-corn="work-checks">${esc(checks)}</div></div>` : '';
-  const actions = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><button type="button" class="hx-btn hx-btn--primary hx-foot-btn" data-corn-kind="primary" data-work-action="open-in-work" data-id="${esc(node.id)}">Open in Work</button>${url ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : ''}</div>`;
-  return `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p><p class="hx-faint">${esc(p.tag)}${p.meta ? ` · ${esc(p.meta)}` : ''}</p></div>${links}${checked}${actions}`;
+  const kind = node.item.kind;
+  const links = node.old
+    ? '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Its links are not drawn here: it is older than the 14 days the map of work covers, or past its limits.</div></div>'
+    : p.links.length
+      ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v"><ul class="hx-work-links" data-corn="work-links">${p.links.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dotOf(l.work, color)}${linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}</li>`).join('')}</ul></div></div>`
+      : '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Nothing it is linked to is drawn.</div></div>';
+  // A pull request's (a spec's too) and a deploy's own actions carry their link to the forge; the others get it here
+  const specPull = kind === 'proposal' && Number.isInteger(node.item.number); // its pull request's actions carry the link
+  const out = url && kind !== 'pull' && kind !== 'deploy' && !specPull ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : '';
+  const actions = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><section id="forge-detail" class="hx-forge-detail" data-corn="work-detail" aria-label="Actions" data-work-kind="${esc(kind)}" data-work-ref="${esc(node.id)}"></section>${out}</div>`;
+  return `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p><p class="hx-faint">${esc(p.tag)}${p.meta ? ` · ${esc(p.meta)}` : ''}</p></div>${links}${actions}`;
 }
 
 /** The node panel's section for a node of code in the Work view: the work that touches it, and "Show on the map" (a planned node is not on the map yet) */
@@ -519,9 +563,6 @@ export function touchedBy(node, nodes, edges) {
   }
   return out.sort((a, b) => Number(b.waiting) - Number(a.waiting) || a.label.localeCompare(b.label));
 }
-
-/** The checks line of a pull request, from `GET /api/forge/pulls/<n>`'s `checks` ("1 failed, 1 still running", "All 3 passed", "No checks") */
-export { checksWords } from './forge-panel-model.js';
 
 // ---------------------------------------------------------------------------
 //  The keyboard (N and P step through the lanes; an arrow goes to the nearest node that way)
@@ -580,7 +621,7 @@ export function workAddress(search) {
   return params.get('view') === 'work' ? { view: true } : null;
 }
 
-/** The id of the node an address names, among the nodes of the view, or null (a spec by its number, `0100`, or by its whole slug) */
+/** The id of the node an address or a row of the Work list names, among the nodes of the view, or null (a spec by its number, `0100`, or by its whole slug; a deploy by its id) */
 export function nodeForAddress(ask, nodes) {
   if (!ask || !ask.kind) return null;
   const mine = nodes.filter((n) => n.work === ask.kind);
@@ -588,7 +629,7 @@ export function nodeForAddress(ask, nodes) {
   if (ask.kind === 'issue' && !mine.some((n) => String(n.item.number) === ask.key)) { const idea = nodes.find((n) => n.work === 'thread' && String(n.item.number) === ask.key); if (idea) return idea.id; } // an idea is an issue on the forge, drawn as a thread
   const hit = ask.kind === 'proposal'
     ? mine.find((n) => n.item.slug === ask.key) || mine.find((n) => specNumber(text(n.item.slug)) === ask.key)
-    : ask.kind === 'run' ? mine.find((n) => n.item.runId === ask.key) : mine.find((n) => String(n.item.number) === ask.key);
+    : ask.kind === 'run' ? mine.find((n) => n.item.runId === ask.key) : ask.kind === 'deploy' ? mine.find((n) => n.item.deployId === ask.key) : mine.find((n) => String(n.item.number) === ask.key);
   return hit ? hit.id : null;
 }
 

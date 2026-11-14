@@ -21,7 +21,6 @@ export const STRINGS = Object.freeze({
   house: 'House',
   proposals: 'Proposals',
   issuesAndPrs: 'Work',
-  workPanel: 'Work panel',
   searchPlaceholder: 'Search...',
   searchNoMatch: 'No match for',
   signOut: 'Sign out',

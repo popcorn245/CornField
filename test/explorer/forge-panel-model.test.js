@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   listUrl, serverState, matches, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, nodesForFile, isTestPath, testFilesOf, litFor,
-  paintForge, errorWords, FORGE_DIM_ALPHA, FORGE_FAIL_COLOR, defaultFilters,
+  errorWords, defaultFilters,
   mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
   KINDS, DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
@@ -180,48 +180,6 @@ describe('what a pull request lights', () => {
     const lit = litFor({ files: [], checks: [{ id: 'x', name: 'pytest tests/test_x.py', state: 'failure' }] }, nodes);
     expect(lit.checks[0].tests).toEqual([{ path: 'tests/test_x.py', nodes: [] }]);
     expect(lit.failing.size).toBe(0);
-  });
-});
-
-describe('the picture', () => {
-  const map = loadSample();
-  const nodes = map.nodes.map((n, i) => ({ ...n, x: i * 40, y: (i % 5) * 40 }));
-  const st = (forgeLit) => ({
-    nodes, edges: map.edges, view: 'orbit', flow: null, rings: { rings: [], clusters: [] }, camera: { x: 0, y: 0, zoom: 1 }, width: 800, height: 600,
-    selectedNode: null, searchQuery: '', isFreeform: false, theme: 'dark', forgeLit,
-    activeLayers: { app: true, pkg: true, page: true, atom: true, molecule: true, token: true, tool: true, flow: true, table: true, rom: true, service: true, cloud: true, web: true, stack: true, machine: true, container: true, device: true, house: true, persona: true },
-    scenario: null, sceneVersion: 1,
-  });
-  const lit = (changed, failing = []) => ({ changed: new Set(changed), failing: new Set(failing) });
-
-  it('lights the nodes a pull request changes and fades the rest back, edges too', () => {
-    const [a, b, c] = nodes.filter((n) => n.type === 'page' || n.type === 'pkg').map((n) => n.id);
-    const plain = buildScene(st(null));
-    const scene = buildScene(st(lit([a, b])));
-    for (const n of scene.nodes) {
-      if (n.id === a || n.id === b) expect([n.alpha, n.halo, n.labelKeep], n.id).toEqual([1, 'match', true]);
-      else expect(n.alpha, n.id).toBeLessThanOrEqual(FORGE_DIM_ALPHA);
-    }
-    expect(scene.nodes.find((n) => n.id === c).glow).toBe(0);
-    const touching = scene.edges.filter((e) => e.from === a || e.to === a || e.from === b || e.to === b);
-    expect(touching.some((e) => e.alpha === plain.edges.find((p) => p.key === e.key).alpha)).toBe(true);
-    expect(scene.edges.filter((e) => ![a, b].includes(e.from) && ![a, b].includes(e.to)).every((e) => e.alpha <= FORGE_DIM_ALPHA / 2)).toBe(true);
-  });
-
-  it('turns the tests of a failing check red, and keeps the selection\'s halo', () => {
-    const [a, b] = nodes.map((n) => n.id);
-    const scene = buildScene({ ...st(lit([a], [b])), selectedNode: nodes[0] });
-    expect(scene.nodes.find((n) => n.id === b).color).toBe(FORGE_FAIL_COLOR);
-    expect(scene.nodes.find((n) => n.id === a).halo).toBe('selected');
-  });
-
-  it('leaves the scene alone when nothing is lit, and follows the light theme with the rest', () => {
-    const plain = JSON.stringify(buildScene(st(null)));
-    expect(JSON.stringify(buildScene(st(lit([]))))).toBe(plain);
-    const dark = buildScene(st(lit([], [nodes[1].id])));
-    const light = buildScene({ ...st(lit([], [nodes[1].id])), theme: 'light' });
-    expect(light.nodes.find((n) => n.id === nodes[1].id).color).not.toBe(dark.nodes.find((n) => n.id === nodes[1].id).color);
-    expect(paintForge({ nodes: [], edges: [] }, null)).toBeUndefined();
   });
 });
 

@@ -35,16 +35,16 @@ describe('the header before the scripts run', () => {
     expect(chip && field && phone).toBeTruthy();
     expect(chip.textContent).toBe('Layers');
     expect(field.getAttribute('placeholder')).toBe('Search...');
-    // in the header's order: the View switch, Fit, the Layers chip; then search, and Work after it
+    // in the header's order: the View switch, Fit, the Layers chip; then search (the Work panel button that followed it is gone: spec 0012, step 3)
     const hooks = headerHooks();
     expect(hooks.indexOf('fit-button')).toBeLessThan(hooks.indexOf('layers-button'));
     expect(hooks.indexOf('layers-button')).toBeLessThan(hooks.indexOf('search'));
-    expect(hooks.indexOf('search')).toBeLessThan(hooks.indexOf('forge-button'));
+    expect(hooks).not.toContain('forge-button');
   });
 
   it('keeps as stand-ins exactly the pieces\' markup, without ids', () => {
     const stands = standInsOf(html);
-    expect(Object.keys(stands).sort()).toEqual(['layers/menu', 'search/field', 'work/button']);
+    expect(Object.keys(stands).sort()).toEqual(['layers/menu', 'search/field']);
     for (const [place, markup] of Object.entries(stands)) {
       const [name, slot] = place.split('/');
       expect(squash(markup), place).toBe(squash(standIn(PIECE_MARKUP[name]()[slot])));

@@ -12,7 +12,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -96,7 +98,7 @@ function mount(clock = () => NOW) {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -106,7 +108,10 @@ function mount(clock = () => NOW) {
   initKeyboard();
   initSheets();
   resetForgePanelForTests(clock);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } }, { clock });
+  resetWorkViewForTests();
+  const forgeOn = initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } }, { clock });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work (work:panel): the actions are in it
+  return forgeOn;
 }
 const groupTitles = () => qa('#forge-list .hx-spec-group > h3').map((h) => h.textContent);
 const typeInto = (id, value) => { const el = $(id); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
@@ -122,7 +127,6 @@ describe('D1, D2: one number, the same everywhere', () => {
     // specs to decide: 21, 22, and 25 (approved, then changed) = 3; plus the run waiting = 4
     // the number is the view switch's Work (work-view.js) and the page's title; this button opens the panel and says so (spec 0012 D1), with no badge
     expect($('forge-btn-waiting')).toBeNull();
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work panel');
     const specs = q('[data-forge-kind="specs"] .hx-forge-count');
     const runs = q('[data-forge-kind="work"] .hx-forge-count');
     expect([specs.textContent, specs.dataset.corn]).toEqual(['3', 'waiting-badge']);
@@ -141,7 +145,6 @@ describe('D1, D2: one number, the same everywhere', () => {
     mount();
     await settle();
     expect($('forge-btn-waiting')).toBeNull();
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work panel');
     expect(q('[data-forge-kind="specs"] .hx-forge-count').dataset.corn).toBe('count');
     expect(q('[data-forge-kind="specs"] .hx-forge-count').textContent).toBe('3');
     expect(q('[data-forge-kind="work"] .hx-forge-count').textContent).toBe('1');
@@ -184,7 +187,7 @@ describe('D1, D2: one number, the same everywhere', () => {
     click($('forge-btn'));
     await settle();
     expect(q('#forge-runs-list [data-corn="run-group"]').textContent).toBe('Needs you · 1');
-    expect(q('#forge-runs-list [data-run] [data-run-answer="continue"]')).not.toBe(null);
+    expect(q('#forge-runs-list [data-work-ref] [data-corn="state-pill"]').textContent).toBe('Waiting'); // a row; its card, with the answer field, is the node panel's
   });
 });
 
@@ -207,7 +210,7 @@ describe('D3, D4: the Specs groups and each row\'s review state', () => {
 
   it('says each row\'s state in words, with who and when, and a state a theme can style', async () => {
     await open();
-    const pill = (slug) => q(`#forge-list [data-slug="${slug}"] [data-corn="review-state"]`);
+    const pill = (slug) => q(`#forge-list [data-work-ref="proposal:${slug}"] [data-corn="review-state"]`);
     expect(pill('0021-old').textContent).toBe('To decide');
     expect(pill('0021-old').dataset.cornState).toBe('waiting');
     expect(pill('0025-changed').textContent).toBe('Changed since approved');
@@ -217,7 +220,7 @@ describe('D3, D4: the Specs groups and each row\'s review state', () => {
     expect(pill('0023-approved').dataset.cornState).toBe('success');
     expect(pill('0026-draftpr').textContent).toBe('Draft PR');
     expect(pill('0030-local-a').textContent).toBe('Local');
-    const facts = (slug) => q(`#forge-list [data-slug="${slug}"] .hx-forge-facts`).textContent;
+    const facts = (slug) => q(`#forge-list [data-work-ref="proposal:${slug}"] .hx-forge-facts`).textContent;
     expect(facts('0023-approved')).toContain('Approved by maintainer-one · 2 hours ago');
     expect(facts('0024-sent')).toContain('Sent back by maintainer-one · 1 day ago');
     expect(facts('0021-old')).toContain('Waiting 2 days');
@@ -228,7 +231,7 @@ describe('D3, D4: the Specs groups and each row\'s review state', () => {
     await open({ proposals: [{ ...spec(21, '0021-x', { review: { verdict: 'approved', by: '<img src=x onerror=alert(1)>', at: ago(1), current: true } }), title: '<b>bold</b>' }] });
     expect(q('#forge-list img')).toBe(null);
     expect(q('#forge-list b')).toBe(null);
-    expect(q('#forge-list [data-slug="0021-x"]').textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(q('#forge-list [data-work-ref="proposal:0021-x"]').textContent).toContain('<img src=x onerror=alert(1)>');
     const hostile = { ...spec(22, '0022-y'), review: { verdict: 'approved"><i>', by: 'x', at: ago(1), current: 'yes' } };
     fakeServer({ proposals: [hostile] });
     resetForgePanelForTests();
@@ -241,7 +244,7 @@ describe('D3, D4: the Specs groups and each row\'s review state', () => {
 
   it('says when a review could not be read, never makes the row look unreviewed, and does not count it', async () => {
     const server = await open({ proposals: [spec(21, '0021-x', { review: { error: 'GitHub did not answer.' } }), spec(22, '0022-y')] });
-    const row = q('#forge-list [data-slug="0021-x"]');
+    const row = q('#forge-list [data-work-ref="proposal:0021-x"]');
     expect(row.querySelector('[data-corn="review-state"]').textContent).toBe('Review state unknown');
     expect(row.closest('li').textContent).toContain('GitHub did not answer.');
     expect(row.closest('li').querySelector('[data-action="retry-forge"]').textContent).toBe('Try again');
@@ -249,7 +252,7 @@ describe('D3, D4: the Specs groups and each row\'s review state', () => {
     server.setProposals([spec(21, '0021-x', { review: OK('approved', 1) }), spec(22, '0022-y')]);
     click(row.closest('li').querySelector('[data-action="retry-forge"]'));
     await settle();
-    expect(q('#forge-list [data-slug="0021-x"] [data-corn="review-state"]').textContent).toBe('Approved');
+    expect(q('#forge-list [data-work-ref="proposal:0021-x"] [data-corn="review-state"]').textContent).toBe('Approved');
   });
 
   it('folds Drafts past ten rows behind their heading, and opens them with the keyboard\'s own button', async () => {
@@ -311,7 +314,7 @@ describe('D6: the Runs groups', () => {
     mount();
     openForge({ tab: 'work' });
     await settle();
-    const order = qa('#forge-runs-list > li').map((li) => (li.dataset.corn === 'run-group' ? `# ${li.textContent}` : li.dataset.run.slice(-2)));
+    const order = qa('#forge-runs-list > li').map((li) => (li.dataset.corn === 'run-group' ? `# ${li.textContent}` : li.dataset.key.slice(-2)));
     expect(order).toEqual(['# Needs you · 2', '02', '01', '# In motion · 2', '04', '03', '# Finished · 2', '06', '05']);
     expect(q('[data-corn="run-group"]').dataset.group).toBe('needs');
     expect(q('[data-forge-kind="work"] .hx-forge-count').textContent).toBe('2');
@@ -328,7 +331,7 @@ describe('the proposal bar\'s line', () => {
     hooks.bar(true);
     return hooks;
   };
-  it('says a run is waiting on the open proposal, escapes the runner\'s words, and Answer opens Runs at it with the reply field focused', async () => {
+  it('says a run is waiting on the open proposal, escapes the runner\'s words, and Answer shows the run in the node panel with the reply field focused', async () => {
     fakeServer({ runs: [waitingRun], proposals: [] });
     mount();
     await settle();
@@ -341,7 +344,8 @@ describe('the proposal bar\'s line', () => {
     expect(line.closest('#proposal-body')).not.toBe(null);
     click(line.querySelector('[data-waiting-answer]'));
     await settle();
-    expect(q('[data-forge-kind="work"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true); // the run is in the node panel, over the review, with its reply field focused
+    expect($('drawer-badge').textContent).toBe('Agent run');
     expect(document.activeElement).toBe(q(`[data-run-reply="${ID(1)}"]`));
     hooks.bar(false);
     expect(line.hidden).toBe(true);

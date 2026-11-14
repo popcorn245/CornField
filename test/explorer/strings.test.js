@@ -16,7 +16,8 @@ import { t, setStrings, applyStrings, resetStringsForTests } from '../../explore
 // @ts-expect-error plain JS modules, no declarations
 import { applyBranding } from '../../explorer/plugins.js';
 // @ts-expect-error plain JS modules, no declarations
-import { runsHtml } from '../../explorer/runs-view.js';
+import { runHtml } from '../../explorer/runs-view.js';
+const runsHtml = (ctx, runs) => runs.map((r) => runHtml(ctx, r, runs)).join(''); // the cards, one after another, as the node panel draws each
 // @ts-expect-error plain JS modules, no declarations
 import { syncViewUi } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -91,7 +92,6 @@ describe('the static markup', () => {
     applyBranding(document, { title: 'x', links: [], signIn: false, strings: ALL });
     expect($('legend-toggle-btn').textContent).toContain('«layers»'); // its name is its text
     expect($('preset-dataflow-btn').textContent).toContain('«dataFlow»');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('«workPanel»');
     expect($('node-search').getAttribute('placeholder')).toBe('«searchPlaceholder»');
     expect(document.querySelector('[data-view="diff"]').textContent).toBe('«diff»');
     expect(document.querySelector('[data-forge-kind="pulls"]').textContent).toBe('«tabPulls»');

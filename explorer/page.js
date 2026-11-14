@@ -19,14 +19,15 @@
  *   page-address.js  ?proposal=, ?source= and ?proposalView= in the address bar
  *   whatif.js   what-if edits on an open proposal (add, remove, draw, steps, undo); whatif-model.js its pure half
  *   review-model.js, decision-model.js  the words and the choices of the decision (pure)
- *   deep-link.js  ?run=, ?issue= and ?proposal=…&start=1 land on a run, an issue and a Start dialog
+ *   deep-link.js  ?proposal=…&start=1 lands on a proposal's Start dialog (?run=, ?issue= and the other work addresses are work-view.js's)
  *   scenario.js the player's pure core
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
  *   review-tokens.js  review tokens for the review API, when somebody is signed in: make one (shown once), list, revoke; review-tokens-model.js its pure half
- *   pieces/work.js  the Work panel (a piece, with a part per tab in pieces/work-*.js), when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half;
- *                   forge-panel.js is the page's way in to it (initForgePanel, the deep links)
+ *   pieces/work.js  the Work piece (with a part per tab in pieces/work-*.js; the Work list is pieces/work-list.js), when the config names a forge: the lists a row of which selects its node,
+ *                   and a piece of work's actions in the node panel; forge-panel-model.js its pure half; forge-panel.js is the page's way in to it (initForgePanel)
+ *   work-view.js  the Work view: the map of work, its List toggle, and the addresses (?view=work, ?pr=, ?issue=, ?run=, ?thread=, ?spec=); work-model.js its pure half
  *   theme.js    light or dark: the system setting and the header toggle; theme-model.js the colours (theme-boot.js before the first paint)
  */
 
@@ -211,7 +212,7 @@ export function startPage() {
     initWorkView({ offered: !!config.forge }); // the Work view (work-view.js): offered when the config names a forge
     mergePagePieceOptions('changes', { checker }); // scenarios ask the source's checker, when there is one (pieces/changes.js)
     if (new URLSearchParams(window.location.search).get("view") === "dataflow") setView("dataflow");
-    // /?run=, /?issue= and /?proposal=…&start=1 land on a run, an issue's Start button and a proposal's Start dialog (deep-link.js)
+    // /?view=work, /?pr=, /?issue=, /?run=, /?thread=, /?spec= land on the Work view (work-view.js); /?proposal=…&start=1 on a proposal's Start dialog (deep-link.js)
     (asksForWork(window.location.search) ? followWorkAddress() : followDeepLink({ proposalOpened, forgeOn })).catch((err) => console.error('Following the link failed', err));
     // /?scenario-demo=1 plays a small scenario over real nodes, to look at the player
     maybeStartDemo();

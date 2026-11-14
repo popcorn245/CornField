@@ -1,14 +1,14 @@
 /**
  * @module explorer/pieces/work-runs
  *
- * The Runs tab: the groups, a run, Stop, answer, the brief, the poll, and the runs on the map. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
+ * The Runs tab: the groups and the runs' rows; a run in the node panel (its card: Stop, answer, Start again, the timeline); the poll, and the runs on the map. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
  * to `ctx.fn`; nothing is shared between two mounts.
  */
 
 import { withParts } from '../engine/piece.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from '../agents-model.js';
 import { runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, stopWords, changeWords } from '../runs-model.js';
-import { runsHtml, totalsHtml, loadingRowsHtml, loadingLinesHtml } from '../runs-view.js';
+import { runHtml, runRowsHtml, totalsHtml, loadingRowsHtml, loadingLinesHtml } from '../runs-view.js';
 import { waiting } from '../waiting-model.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { safeUrl, RUNS_POLL_MS } from './work-common.js';
@@ -20,7 +20,7 @@ export function install(ctx) {
   const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 
   /** Loads the Agents tab: everything it groups, in one answer */
-  async function loadWork(refresh, token) {
+  async function loadWork(refresh, token, quiet = false) {
     ui.loading = true;
     ui.error = '';
     fn.paint();
@@ -30,10 +30,10 @@ export function install(ctx) {
     if (res.ok) {
       const b = res.body;
       ui.work = { grouped: groupWork(b), problem: b.specsProblem || '', at: b.at, rate: b.rate || '', stale: b.stale || '' };
-      announce(`${workStatus(groupsShown(), '', m.now())}${ui.work.stale ? '. This is an older answer' : ''}`);
+      if (!quiet) announce(`${workStatus(groupsShown(), '', m.now())}${ui.work.stale ? '. This is an older answer' : ''}`);
     } else {
       ui.error = fn.failWords(res, 'the work');
-      announce(ui.error);
+      if (!quiet) announce(ui.error);
     }
     fn.paint();
   }
@@ -48,7 +48,6 @@ export function install(ctx) {
     // The map shows the open runs' nodes; a run lit on the map follows its nodes; what changed is said, once the first answer is in
     setRunsOnMap(ui.runs.data.runs);
     syncRunsPoll();
-    if (ui.runSel) relightRun();
     const said = say ? changeWords(before, ui.runs.data.runs) : [];
     // A runner appearing or going quiet is said once, when the state changes (the line itself is plain text, not a live region). The state last
     // shown is kept, not worked out again from the last listing: a runner that goes quiet is the same listing judged later
@@ -102,9 +101,7 @@ export function install(ctx) {
   function groupsHtml(groups) {
     return groups.map((g, i) => {
       const link = g.issue && safeUrl(g.issue.url) ? ` <a data-corn="text-link" class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(fn.forgeName())} (new tab)">↗</a>` : '';
-      const startRef = g.kind === 'issue' && g.issue && g.issue.state === 'open' ? `issue:${g.number}` : g.kind === 'proposal' ? `proposal:${g.slug}` : null;
-      const start = startRef ? ` <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-agent="${escHtml(startRef)}" aria-label="${escHtml(t('startAgent'))} on ${escHtml(g.kind === 'issue' ? `issue ${g.number}` : `proposal ${g.slug}`)}">${escHtml(t('startAgent'))} …</button>` : '';
-      return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3>${start}<p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
+      return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3><p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
     }).join('');
   }
 
@@ -112,7 +109,7 @@ export function install(ctx) {
   function paintRuns() {
     const box = $('forge-runs');
     if (!box) return;
-    box.hidden = ui.kind !== 'work' || !!fn.detailKey();
+    box.hidden = ui.kind !== 'work';
     if (box.hidden) return;
     const data = ui.runs && ui.runs.data;
     $('forge-runs-status').textContent = data ? runsStatus(data) : ui.loading ? 'Loading the runs …' : '';
@@ -146,7 +143,25 @@ export function install(ctx) {
     const list = $('forge-runs-list');
     list.setAttribute('aria-busy', String(!data && !!ui.loading));
     if (!data) { list.innerHTML = ui.loading ? loadingRowsHtml(3) : ''; return; }
-    patchList(list, data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint" data-corn="empty">No agent has been asked for yet. Start one from an issue or a proposal: Issues, then Start an agent.</li>');
+    patchList(list, data.runs.length ? runRowsHtml({ ...viewContext(), shown: ui.runShown }, data.runs) : '<li class="hx-forge-empty hx-faint" data-corn="empty">No agent has been asked for yet. Start one from an issue or a proposal: select it on the map, then Start an agent.</li>');
+  }
+
+  /** The run in the node panel: its card (state, what it changes, Stop, the answer field, Start again, the timeline). Drawn with `patchList`, so a reply being typed stays. */
+  function paintRunCard() {
+    const box = $('forge-detail');
+    if (!box) return;
+    let list = box.querySelector('#forge-run-card');
+    if (!list) {
+      list = inst.doc.createElement('ul');
+      list.id = 'forge-run-card';
+      list.className = 'hx-forge-files';
+      list.setAttribute('aria-label', 'Run');
+      box.replaceChildren(list);
+    }
+    const run = runById(ui.runShown);
+    const data = ui.runs && ui.runs.data;
+    if (run) patchList(list, runHtml(viewContext(), run, data.runs));
+    else patchList(list, `<li class="hx-forge-empty hx-faint" data-corn="empty">${escHtml(ui.runs && ui.runs.error ? ui.runs.error : data ? 'This run is not in what the runners reported.' : 'Reading the run …')}</li>`);
   }
 
   /**
@@ -251,37 +266,29 @@ export function install(ctx) {
     const base = f && safeUrl(f.url) ? f.url.replace(/\/+$/, '') : null;
     return {
       esc: escHtml, t, safeUrl, forgeName: fn.forgeName(), forgeType: f ? f.type : 'github', repoUrl: base && f.repo ? `${base}/${f.repo}` : null,
-      now: m.now(), nodes: state.nodes, selected: ui.runSel, timelines: ui.runTimelines, replies: ui.runReplies, busy: !!ui.busy,
+      now: m.now(), nodes: state.nodes, timelines: ui.runTimelines, replies: ui.runReplies, busy: !!ui.busy,
       results: { get: (id) => resultOf(id) },
     };
   }
 
   const runById = (id) => ((ui.runs && ui.runs.data && ui.runs.data.runs) || []).find((r) => r.runId === id) || null;
 
-  /** The nodes of a selected run, worked out again (the runs were read again, or the map changed) */
-  function relightRun() {
-    if (!runById(ui.runSel)) ui.runSel = null;
-    fn.relight();
-  }
-
-  /** Lights the nodes of a run on the map, like a pull request; the same button lets go of it */
-  function selectRun(id) {
-    const run = runById(id);
-    if (!run) return;
-    if (ui.runSel === id) {
-      ui.runSel = null;
-      fn.relight();
-      announce(`Run ${id} no longer lit on the map`);
-      return;
-    }
-    const had = ui.runSel;
+  /** Shows a run in the node panel: the runs are read once if they have not been (the graph holds the run's state, not its answer field or its brief) */
+  async function showRun(id) {
+    ui.runShown = id;
     m.pullToken++;
     fn.dropThread();
+    ui.runShown = id; // dropThread forgets the one it replaced
     Object.assign(ui, { selected: null, detail: null, detailError: '', lit: null, landing: null, note: null, deploy: null, deployItem: null, litDeploy: null });
-    ui.runSel = id;
-    fn.relight();
-    const n = (run.nodes || []).length;
-    announce(n ? `Run ${id}: ${n} ${n === 1 ? 'node' : 'nodes'} lit on the map${had ? '' : ''}` : `Run ${id} has no node on the map yet`);
+    fn.paint();
+    if (!(ui.runs && ui.runs.data)) await loadRuns(false, { say: false });
+    if (ui.runShown !== id) return;
+    const run = runById(id);
+    // A run asked for a moment ago may not be in what was read before: ask once more, past the cache
+    if (!run && ui.runs && ui.runs.data) await loadRuns(true, { say: false });
+    if (ui.runShown !== id) return;
+    fn.paint();
+    fn.sayDetail(runById(id) ? `Run ${id}` : ui.runs && ui.runs.data ? `There is no run ${id} in what the runners reported.` : (ui.runs && ui.runs.error) || 'The runs could not be read.');
   }
 
   /** Opens or closes the timeline of a run (it stays open when the list is drawn again) */
@@ -292,8 +299,7 @@ export function install(ctx) {
 
   /** Gives the focus to the first of `selectors` that is there and not disabled, inside the card of a run (else the card itself) */
   function focusInRun(runId, selectors) {
-    const panel = $('forge-panel');
-    const card = panel && [...panel.querySelectorAll('[data-run]')].find((c) => c.dataset.run === runId);
+    const card = [...root.querySelectorAll('#forge-run-card [data-run]')].find((c) => c.dataset.run === runId);
     if (!card) return;
     const to = selectors.map((sel) => card.querySelector(sel)).find((el) => el && !el.disabled) || card;
     if (to !== inst.active()) to.focus();
@@ -355,33 +361,17 @@ export function install(ctx) {
     focusInRun(runId, [back, `[data-run-timeline="${runId}"]`]);
   }
 
-  /** Answer, on the proposal bar's line: Work opens on Runs at that run with its reply field focused */
+  /** Answer, on the proposal bar's line: the run is shown in the node panel with its reply field focused */
   async function answerFromBar(id) {
-    if (!(await openRunLink(id))) return;
-    const field = $('forge-runs-list').querySelector(`[data-run-reply="${id}"]`);
+    if (!(await fn.showRef('run', id))) return;
+    const field = $('forge-detail') && $('forge-detail').querySelector(`[data-run-reply="${id}"]`);
     if (field) field.focus();
   }
 
-  /** Takes the person to another run of the list: the row scrolls into view and has the focus */
+  /** Takes the person to another run (a collision names it, a timeline entry does): its node */
   function goToRun(runId) {
-    fn.bringIntoView([...root.querySelectorAll('#forge-runs-list [data-run]')].find((r) => r.dataset.run === runId));
+    fn.showRef('run', runId);
   }
 
-  /** `?run=<runId>`: the Agents tab with that run lit and in view. A run that is not there is said, never a blank panel. */
-  async function openRunLink(id) {
-    if (!ui.config) return false;
-    await fn.openTab('work');
-    if (!(ui.runs && ui.runs.data)) await loadRuns(false, { say: false });
-    let run = runById(id);
-    // A run asked for a moment ago may not be in what was read before: ask once more, past the cache
-    if (!run && ui.runs && ui.runs.data) { await loadRuns(true, { say: false }); run = runById(id); }
-    if (!run) return fn.linkMissing(ui.runs && ui.runs.data ? `There is no run ${id}.` : (ui.runs && ui.runs.error) || 'The runs could not be read.');
-    if (ui.runSel !== id) selectRun(id);
-    fn.paint();
-    fn.bringIntoView($('forge-runs-list').querySelector(`[data-run="${id}"]`));
-    announce(`Run ${id}, in the Runs view`);
-    return true;
-  }
-
-  Object.assign(fn, { groupsShown, loadWork, loadRuns, syncRunsPoll, onPageHide, onPageShow, workHtml: (...a) => withParts(workHtml(...a)), groupsHtml: (...a) => withParts(groupsHtml(...a)), paintRuns, patchList, graftAround, runnerAway, askRunnerWords, paintRunner, viewContext, runById, relightRun, selectRun, toggleTimeline, focusInRun, discardReply, stopRun, answerRun, answerFromBar, goToRun, openRunLink });
+  Object.assign(fn, { groupsShown, loadWork, loadRuns, syncRunsPoll, onPageHide, onPageShow, workHtml: (...a) => withParts(workHtml(...a)), groupsHtml: (...a) => withParts(groupsHtml(...a)), paintRuns, paintRunCard, patchList, graftAround, runnerAway, askRunnerWords, paintRunner, viewContext, runById, showRun, toggleTimeline, focusInRun, discardReply, stopRun, answerRun, answerFromBar, goToRun });
 }

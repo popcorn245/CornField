@@ -177,7 +177,6 @@ import { NODE_THEMES, shapeOf } from '../core/schema.js';
 import { WORK_KINDS } from '../core/schema.js';
 import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
-import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-match.js';
 import { nodeColor } from './css-color.js';
@@ -500,7 +499,7 @@ function buildEdges(state, subgraph, reduceMotion) {
     const target = byId.get(edge.to);
     if (!source || !target || !isNodeVisible(state, source) || !isNodeVisible(state, target)) return;
 
-    if (state.view === 'work') { out.push(state.workEdge(edge, source, target, subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true, !!subgraph, edgeKeyOf(edge), { PROPOSED_DASH, USAGE_DASH })); return; } // the Work view's lines are work-model.js's (the page installs `workEdge`)
+    if (state.view === 'work') { out.push(state.workEdge(edge, source, target, subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true, !!subgraph, edgeKeyOf(edge), { PROPOSED_DASH, USAGE_DASH }, state.workEdgeColors)); return; } // the Work view's lines are work-model.js's (the page installs `workEdge`)
     if (preset) return flow(edge, source, target);
     if (state.view === 'house') { const how = houseEdgeStyle(edge, source, target); if (how === 'flow') flow(edge, source, target); else if (how === 'link') out.push(linkEdge(edge, source, target, subgraph)); return; }
 
@@ -758,7 +757,6 @@ export function buildScene(state, opts = {}) {
   const colours = { nodes: scene.nodes.map((n) => n.color), edges: scene.edges.map((e) => e.color) };
   if (state.scenario) paintOutage(scene, outageFor(state.scenario, state.nodes, state.edges)); // CLOUD-07: red, amber, violet by when the outage bites
   if (state.scenario) paintVerdict(scene, state.scenario); // PHY-10: red, green or amber by the step's permission check
-  if (state.forgeLit) paintForge(scene, state.forgeLit); // CF-07: the selected pull request's nodes, the rest faded
   // The nodes and edges a painter above gave a colour: the map's own styling (map-style.js) leaves them to it
   scene.nodes.forEach((n, i) => { if (colours.nodes.length === scene.nodes.length && n.color !== colours.nodes[i]) scene.painted.nodes.add(n.id); });
   scene.edges.forEach((e, i) => { if (colours.edges.length === scene.edges.length && e.color !== colours.edges[i]) scene.painted.edges.add(e.key); });

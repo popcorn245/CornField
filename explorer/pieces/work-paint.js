@@ -1,7 +1,7 @@
 /**
  * @module explorer/pieces/work-paint
  *
- * Drawing the panel from its state: tabs, counts, filters, the list, the detail, the Work button. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
+ * Drawing the Work list from its state (tabs, counts, filters, the rows) and the node panel's actions for the piece of work it shows. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
  * to `ctx.fn`; nothing is shared between two mounts.
  */
 
@@ -10,7 +10,7 @@ import { workStatus } from '../agents-model.js';
 import { loadingRowsHtml } from '../runs-view.js';
 import { STATES, defaultFilters, filterItems, facetsOf, emptyWords } from '../forge-panel-model.js';
 import { relativeTime } from '../review-model.js';
-import { waiting, specGroups, waitingWords, runWaitingOn } from '../waiting-model.js';
+import { specGroups, waitingWords, runWaitingOn } from '../waiting-model.js';
 import { specGroupsHtml } from '../waiting-view.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { plural, safeUrl, option } from './work-common.js';
@@ -19,13 +19,10 @@ export function install(ctx) {
   const { inst, ui, m, fn, state, root, $ } = ctx;
   const { t, refreshStubs, paintWaitingLine } = ctx.h;
 
-  /** How to find an element of the panel again after it is drawn anew, or null */
+  /** How to find an element of the list or of the node panel's actions again after it is drawn anew, or null */
   function findAgain(el) {
     if (!el || !el.dataset) return null;
-    if (el.classList.contains('hx-forge-back') && el.closest('#forge-detail')) return '#forge-detail .hx-forge-back'; // the detail is drawn anew as its answer comes in
-    if (el.dataset.forgePr) return `[data-forge-pr="${el.dataset.forgePr}"]`;
-    if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
-    if (el.dataset.forgeThread) return `[data-forge-thread="${el.dataset.forgeThread}"]`;
+    if (el.dataset.workRef) return `[data-work-ref="${el.dataset.workRef}"]`;
     if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
     if (el.dataset.specGroupToggle) return `[data-spec-group-toggle="${el.dataset.specGroupToggle}"]`;
     if (el.dataset.forgeMerge) return '[data-forge-merge]';
@@ -35,16 +32,14 @@ export function install(ctx) {
     if (el.dataset.forgeAgent) return `[data-forge-agent="${el.dataset.forgeAgent}"]`;
     if (el.dataset.forgeStop) return `[data-forge-stop="${el.dataset.forgeStop}"]`;
     if (el.dataset.forgeRetry) return `[data-forge-retry="${el.dataset.forgeRetry}"]`;
+    if (el.dataset.forgeLandingCancel) return '[data-forge-landing-cancel]';
     if (el.dataset.runReply) return `[data-run-reply="${el.dataset.runReply}"]`;
     if (el.dataset.runAnswer) return `[data-run-answer="${el.dataset.runAnswer}"][data-run-id="${el.dataset.runId}"]`;
-    if (el.dataset.runSelect) return `[data-run-select="${el.dataset.runSelect}"]`;
     if (el.dataset.runTimeline) return `[data-run-timeline="${el.dataset.runTimeline}"]`;
     return null;
   }
 
-  const key0 = () => fn.detailKey();
-
-  /** Everything the panel shows, from `ui` (a row or node button that had the focus has it again) */
+  /** Everything the list shows, from `ui` (a row that had the focus has it again), and the node panel's actions */
   function paint() {
     const panel = $('forge-panel');
     if (!panel) return;
@@ -53,35 +48,57 @@ export function install(ctx) {
     // A list drawn again must not move what the person is looking at: the scroll of the panel stays where it was
     const scroller = panel.querySelector('.hx-forge-body');
     const scrolled = scroller ? scroller.scrollTop : 0;
-    const keyBefore = m.shownKey;
     draw(panel);
     addParts(panel); // the hooks the panel was just drawn with are parts too
-    if (scroller && scrolled && key0() === keyBefore && scroller.scrollTop !== scrolled) scroller.scrollTop = scrolled;
+    if (scroller && scrolled && scroller.scrollTop !== scrolled) scroller.scrollTop = scrolled;
     const back = again && panel.querySelector(again);
     if (back && back !== inst.active() && !back.closest('[hidden]')) back.focus();
-    // Retry was pressed and its notice is gone (the list is being read again): the focus goes to the panel's title, never to the page
+    // Retry was pressed and its notice is gone (the list is being read again): the focus goes to the list's title, never to the page
     if (had && had.dataset && had.dataset.action === 'retry-forge' && !panel.contains(inst.active())) $('forge-title').focus();
-    // A control of a run card that is no longer drawn (the run went on): the focus goes to that run's card, never to the page
-    const hadRun = had && !had.isConnected && had.closest('[data-run]');
-    if (hadRun && !panel.contains(inst.active())) {
-      const card = [...panel.querySelectorAll('[data-run]')].find((c) => c.dataset.run === hadRun.dataset.run);
-      if (card) card.focus();
-    }
-    // A selection replaces the list: the focus goes to its back control, and returns to the row when it is let go of
-    // (a tab changed leaves the focus on the tab)
-    const key = fn.detailKey();
-    if (key !== m.shownKey && m.shownKind === ui.kind) {
-      if (key) {
-        const target = panel.querySelector('#forge-detail .hx-forge-back');
-        if (target && (had || !m.shownKey)) target.focus();
-      } else {
-        const row = m.returnTo && panel.querySelector(m.returnTo);
-        if (row && !row.closest('[hidden]')) row.focus(); else $('forge-title').focus();
-        m.returnTo = null;
+    paintDetail();
+  }
+
+  /** What the last drawing of each place of actions was, so a repaint that changes nothing leaves it (and the focus in it) alone */
+  const drawn = new WeakMap();
+
+  /**
+   * The node panel's actions (`forge-detail`, work-model.js `workPanelHtml`) for the piece of work it shows: a pull request's Land it and checks, a thread's messages, a deploy's
+   * restarts, an issue's Start an agent, a proposal's Review, a run's card with its answer field. The focus stays on the control that had it; a reply being typed is kept.
+   */
+  function paintDetail() {
+    const box = $('forge-detail');
+    if (!box || !ui.item) return;
+    const kind = box.dataset.workKind;
+    if (kind !== ui.item.kind) return; // the node panel shows another piece of work than the one read: its own draw comes with `node:painted`
+    const had = box.contains(inst.active()) ? inst.active() : null;
+    const again = had ? findAgain(had) : null;
+    if (kind === 'run') fn.paintRunCard();
+    else {
+      const body = kind === 'pull' ? fn.detailHtml() : kind === 'thread' ? fn.threadDetailHtml() : kind === 'deploy' ? fn.deployDetailHtml() : kind === 'issue' ? fn.issueActionsHtml(ui.item) : kind === 'proposal' ? `${fn.proposalActionsHtml(ui.item)}${Number.isInteger(ui.item.number) ? fn.detailHtml() : ''}` : '';
+      const html = `${noteHtml(kind)}${body}`;
+      if (drawn.get(box) !== html) {
+        box.innerHTML = html;
+        drawn.set(box, html);
+        addParts(box);
       }
     }
-    m.shownKey = key;
-    m.shownKind = ui.kind;
+    const back = again && box.querySelector(again);
+    if (back && back !== inst.active() && !back.closest('[hidden]') && !back.disabled) back.focus();
+    // A control of a run card that is no longer drawn (the run went on): the focus goes to that run's card, never to the page
+    const hadRun = had && !had.isConnected && had.closest('[data-run]');
+    if (hadRun && !box.contains(inst.active())) {
+      const card = [...box.querySelectorAll('[data-run]')].find((c) => c.dataset.run === hadRun.dataset.run);
+      if (card) card.focus();
+    }
+  }
+
+  /** What the last step the actions took came to (a spec started, a build issue opened: with a link to it), and what the last request of a run said */
+  function noteHtml(kind) {
+    const note = ui.actNote && ui.actNote.ref === ui.ref && kind !== 'thread' && kind !== 'deploy' && kind !== 'run' ? ui.actNote : null; // a step's note is its piece of work's (a link that found nothing says so in the list)
+    const link = note && safeUrl(note.url);
+    const done = note ? `<p class="hx-forge-notice${note.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${note.ok ? ' data-corn-state="success"' : ''}>${escHtml(note.text)}${link ? ` <a data-corn="text-link" class="hx-link" href="${escHtml(link)}" target="_blank" rel="noreferrer">Open on ${escHtml(fn.forgeName())} ↗</a>` : ''}</p>` : '';
+    const started = ui.runNote && ui.runNote.ref === ui.ref && (kind === 'issue' || kind === 'proposal') ? `<p class="hx-forge-notice${ui.runNote.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${ui.runNote.ok ? ' data-corn-state="success"' : ''}>${escHtml(ui.runNote.text)}</p>` : '';
+    return done + started;
   }
 
   /** The tabs' counts, where there is one: the proposals, the open pull requests and issues and threads, the runs still open */
@@ -165,17 +182,15 @@ export function install(ctx) {
     paintCounts();
     const notes = ui.kind === 'notes';
     const specs = ui.kind === 'specs';
-    const showing = fn.detailKey();
     $('forge-filters').hidden = notes || ui.kind === 'work' || specs;
     const searchBox = $('forge-specs-search');
-    if (searchBox) searchBox.hidden = !specs || !!showing;
+    if (searchBox) searchBox.hidden = !specs;
     $('forge-work-filters').hidden = ui.kind !== 'work';
-    $('forge-bar').hidden = !!showing;
     paintChip();
-    $('forge-list').hidden = notes || !!showing;
+    $('forge-list').hidden = notes;
     $('forge-notes').hidden = !notes;
-    $('notes-open').hidden = ui.kind !== 'pulls' || !!showing;
-    $('forge-foot').hidden = notes || !!showing;
+    $('notes-open').hidden = ui.kind !== 'pulls';
+    $('forge-foot').hidden = notes;
     if (notes) {
       fn.drawNotes();
       return;
@@ -213,46 +228,26 @@ export function install(ctx) {
     // are drawn with the work's answer all the same, which loadWork paints only once the runs are read too, failed or not.)
     if (!list) rows.innerHTML = ui.loading && !(work && !(ui.runs && ui.runs.data)) ? loadingRowsHtml(4) : '';
     else if (specs) {
-      const open = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
       const groups = specGroups(list.items, { query: ui.specQuery });
-      rows.innerHTML = groups.length ? specGroupsHtml(groups, { current: open, nowMs: m.now(), draftsOpen: ui.draftsOpen, say: t })
+      rows.innerHTML = groups.length ? specGroupsHtml(groups, { shown: ui.ref, nowMs: m.now(), draftsOpen: ui.draftsOpen, say: t })
         : list.items.length ? `<li class="hx-forge-empty hx-faint" data-corn="empty">No spec matches \u201c${escHtml(ui.specQuery.trim())}\u201d. <button type="button" class="hx-btn hx-forge-act" data-corn-kind="quiet" data-action="clear-specs-search">Clear the search</button></li>`
           : empty(emptyWords('specs', fn.forgeName()));
     }
     else if (work) rows.innerHTML = groups.length ? fn.groupsHtml(groups) : empty(ui.work.grouped.groups.length ? 'No work matches these filters.' : emptyWords('work', fn.forgeName()));
     else rows.innerHTML = shown.length ? shown.map((i) => fn.itemHtml(i)).join('') : empty(list.items.length ? `No ${fn.kindWords()} matches these filters.` : emptyWords(ui.kind, fn.forgeName()));
 
-    const detail = $('forge-detail');
-    detail.hidden = !showing;
-    detail.setAttribute('aria-label', showing.startsWith('thread:') ? 'Selected thread' : showing.startsWith('deploy:') ? 'Selected deploy' : 'Selected pull request');
-    detail.innerHTML = fn.detailHtml();
-
     fn.paintIdea();
     $('forge-foot').hidden = $('notes-open').hidden && $('forge-idea').hidden;
-    const rate = (showing && ((ui.threadDetail && ui.threadDetail.rate) || (ui.detail && ui.detail.rate))) || (list && list.rate) || '';
+    const rate = (list && list.rate) || '';
     $('forge-rate').textContent = rate;
     fn.paintRuns();
     paintButton();
     paintTabsMore();
   }
 
-  /** The toggles that open the panel (`data-action="toggle-forge"`: the header's, whatever it calls it) say whether it is open, and the old button which selection is lit */
+  /** The toggles that open the list (`data-action="toggle-forge"`: the Work view's List) say whether it is open */
   function paintButton() {
     for (const toggle of root.querySelectorAll('[data-action="toggle-forge"]')) toggle.setAttribute('aria-expanded', String(ui.open));
-    const btn = $('forge-btn');
-    if (!btn) return;
-    const lit = ui.selected !== null || !!ui.deployItem || ui.thread !== null || !!ui.runSel;
-    const tag = $('forge-btn-lit');
-    if (tag) {
-      tag.hidden = !lit;
-      tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
-    }
-    // A run would wait for a runner that is not there: a dot, and the name says so (issue #183); it sits beside the waiting badge, not on it
-    const away = fn.runnerAway();
-    const dot = $('forge-btn-dot');
-    if (dot) dot.hidden = !away;
-    // What waits on the maintainer is the badge of the view switch's Work (work-view.js): this button opens the panel, and says so while both exist (spec 0012 D1, until step 3)
-    btn.setAttribute('aria-label', `${t('workPanel')}${away ? ', no runner online' : ''}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
   }
 
   /** Whether the Filter chip applies to the view: the proposals and the release notes have nothing to filter */
@@ -270,7 +265,7 @@ export function install(ctx) {
   function paintChip() {
     const chip = $('forge-filter-chip');
     const box = $('forge-filter-box');
-    const on = filterable() && !fn.detailKey();
+    const on = filterable();
     const n = activeFilters();
     chip.hidden = !on;
     chip.setAttribute('aria-expanded', String(on && ui.filtersOpen));
@@ -303,5 +298,5 @@ export function install(ctx) {
     $('forge-text').placeholder = ui.kind === 'deploys' ? 'Workflow, branch, commit, who' : ui.kind === 'threads' ? 'Title, number, author' : 'Title, number, label';
   }
 
-  Object.assign(fn, { findAgain, key0, paint, paintCounts, paintWaiting, paintBarLine, paintTitle, paintTabsMore, setNotice, draw, paintButton, filterable, activeFilters, paintChip, paintFilters });
+  Object.assign(fn, { findAgain, paint, paintDetail, paintCounts, paintWaiting, paintBarLine, paintTitle, paintTabsMore, setNotice, draw, paintButton, filterable, activeFilters, paintChip, paintFilters });
 }

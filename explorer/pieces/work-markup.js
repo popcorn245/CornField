@@ -1,9 +1,10 @@
 /**
  * @module explorer/pieces/work-markup
  *
- * The Work piece's markup (spec 0011 D3), moved out of explorer/index.html unchanged: the Work button (its stand-in stays in the header, held equal to
- * this by test/explorer/page-pieces.test.js), the panel, and the two dialogs it opens (the confirm step and Start an agent), which sit
- * at the end of the page, over a scrim. Every `data-corn` element also gets its `part` when the piece places it (engine/piece.js).
+ * The Work piece's markup (spec 0011 D3, spec 0012 D6): the Work list (the panel's lists, opened by the List toggle of the Work view), the layer of marks
+ * over the map, and the two dialogs the actions open (the confirm step and Start an agent), which sit at the end of the page, over a scrim. A piece of
+ * work's detail and actions are the node panel's (work-model.js `workPanelHtml` puts its place, `forge-detail`, in the panel). Every `data-corn` element also gets its `part` when
+ * the piece places it (engine/piece.js).
  */
 
 import { withParts } from '../engine/piece.js';
@@ -12,18 +13,12 @@ import { withParts } from '../engine/piece.js';
 export const markup = () => Object.fromEntries(Object.entries(markupOf()).map(([slot, html]) => [slot, withParts(html)]));
 
 const markupOf = () => ({
-  /** The Work toggle: opens the panel; hidden until the config names a forge and somebody is signed in */
-  button: `<button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work panel" data-corn-string-aria-label="workPanel" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
-  <span data-corn-string="workPanel">Work panel</span>
-  <span id="forge-btn-lit" class="hx-forge-lit" data-corn="count" hidden></span>
-  <span id="forge-btn-dot" class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
-</button>`,
-  /** Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop: a slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge. `forge-panel` on the inner box is the old name of the hook, kept for one release (docs/theming.md) */
-  panel: `<aside id="forge-panel" class="hx-forge glass" aria-label="Work" inert hidden data-corn="work-panel">
+  /** The Work list: Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop: a slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the Work view opens it. A row selects its node; the detail is the node panel's. `forge-panel` on the inner box is the old name of the hook, kept for one release (docs/theming.md) */
+  panel: `<aside id="forge-panel" class="hx-forge glass" aria-label="Work list" inert hidden data-corn="work-panel">
   <div class="hx-forge-body" data-corn="forge-panel">
     <div class="hx-forge-top" data-corn="work-top">
     <div class="hx-forge-head" data-corn="work-head">
-      <h2 id="forge-title" class="hx-drawer-title" data-corn="work-title" tabindex="-1">Work</h2>
+      <h2 id="forge-title" class="hx-drawer-title" data-corn="work-title" tabindex="-1">Work list</h2>
       <button type="button" class="hx-btn hx-btn--quiet" data-action="refresh-forge" title="Ask the forge again" data-corn-kind="quiet">Refresh</button>
       <button type="button" class="hx-close" data-action="close-forge" aria-label="Close" data-corn-kind="icon">✕</button>
     </div>
@@ -85,9 +80,8 @@ const markupOf = () => ({
       <p id="forge-runs-trigger" class="hx-forge-notice" hidden data-corn="notice"></p>
       <div id="forge-runs-totals" data-corn="run-totals" role="group" aria-label="Tokens and cost the runners reported" hidden></div>
       <ul id="forge-runs-hand" class="hx-forge-meta" aria-label="Requests written by hand that started nothing" hidden></ul>
-      <ul id="forge-runs-list" class="hx-forge-files" aria-label="Runs"></ul>
+      <ul id="forge-runs-list" class="hx-forge-list" aria-label="Runs"></ul>
     </section>
-    <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
     <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
     <div id="forge-foot" class="hx-forge-foot" data-corn="work-foot">
       <button data-corn-kind="secondary" type="button" id="notes-open" class="hx-btn" data-action="open-notes" hidden>Release notes …</button>
@@ -152,3 +146,4 @@ const markupOf = () => ({
   </div>
 </div>`,
 });
+

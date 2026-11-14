@@ -345,7 +345,7 @@ describe('the default tokens', () => {
   it('resolve every pair, in light and dark, and every one passes, over the ground and its image', () => {
     const all = checkSheets(themes);
     // The fixed pairs, plus the map's four diff marks and a dimmed label (F19, F23); the node fills and labels are counted in their describe below
-    expect(all.filter((f) => !/^(the fill of|the outline that carries|a node's label)/.test(f.use || '')).length).toBe((contrastPairs().length + 5) * 2 + 1); // + a label a review greys, on the dark ground (issue #232)
+    expect(all.filter((f) => !/^(the fill of|the outline that carries|a node's label)/.test(f.use || '')).length).toBe((contrastPairs().length + 5 + 3) * 2 + 1); // + a label a review greys, on the dark ground (issue #232); + the three lines of the Work view (spec 0012)
     const { fails, unresolved } = contrastProblems(themes);
     expect(fails.map(describeFinding)).toEqual([]);
     expect(unresolved.map(describeFinding)).toEqual([]);

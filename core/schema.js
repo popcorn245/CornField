@@ -63,6 +63,12 @@ export const WORK_THEMES = Object.freeze({
   pull:     Object.freeze({ color: '#60a5fa', shape: 'rounded-square', letters: 'PR', r: 20 }),
   deploy:   Object.freeze({ color: '#4ade80', shape: 'square', letters: 'D', r: 20 }),
 });
+/**
+ * The three colours of the Work view's lines (spec 0012 D3): a link from one piece of work to another, a link to the code it touches, and what a proposal adds (dashed).
+ * A theme sets each with `--corn-work-edge-<name>` (explorer/tokens.css, docs/theming.md); these are what `auto` draws, written for the dark ground (the light one deepens them as it does every line).
+ */
+export const WORK_EDGES = Object.freeze(['work', 'code', 'adds']);
+export const WORK_EDGE_THEMES = Object.freeze({ work: '#818cf8', code: '#cbd5e1', adds: '#2dd4bf' });
 /** The node type a kind of work has in the Work view (`work-pull`): never in topology.json */
 export const workType = (kind) => `work-${kind}`;
 

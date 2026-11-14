@@ -15,7 +15,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -57,6 +59,8 @@ const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, 
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0)); };
 const said = async () => { await new Promise((r) => setTimeout(r, 50)); return $('map-announcer').textContent; };
 const openAgents = async () => { openForge({ tab: 'pulls' }); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
+/** A run in the node panel, where its card is (no Work view in this page: it is shown there alone, as work older than the graph's 14 days is) */
+const showRun = async (id) => { await showWorkRef('run', id); await settle(); };
 const run = (id, extra = {}) => ({
   runId: `run-01JC8Z3Q5M7VXK2RT9N4B6HD${id}`, kind: 'code', profile: 'claude', refs: { issue: 7 }, status: 'working', open: true, requestedBy: 'maintainer-one',
   requestedAt: '2026-11-05T11:00:00Z', via: 'dashboard', comment: { id: '9', url: 'https://git.example.test/owner/name/issues/7#issuecomment-9' },
@@ -114,10 +118,13 @@ function mount() {
   initSheets();
   resetForgePanelForTests(() => NOW);
   resetRunsMapForTests();
-  return initForgePanel({ forge: { type: 'github', url: 'https://git.example.test', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } }, { clock: () => NOW });
+  resetWorkViewForTests();
+  const forgeOn = initForgePanel({ forge: { type: 'github', url: 'https://git.example.test', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } }, { clock: () => NOW });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work (work:panel): the actions are in it
+  return forgeOn;
 }
 const marks = () => qa('#run-overlay .hx-run-mark');
-const rows = () => qa('#forge-runs-list li.hx-run');
+const rows = () => qa('#forge-run-card li.hx-run');
 
 const audit = async () => {
   const r = await axe.run({ include: [document.documentElement] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false }, region: { enabled: false } } });
@@ -258,12 +265,15 @@ describe('the marks on the map', () => {
 });
 
 describe('the Runs view', () => {
-  it('shows state, profile, limits beside what was reported, links, nodes, the collision, and the runner\'s log', async () => {
+  it('lists the runs as rows, and shows state, profile, limits beside what was reported, links, nodes, the collision, and the runner\'s log in the card of the node panel', async () => {
     fakeServer([A2, B]);
     mount();
     await openAgents();
-    expect(rows()).toHaveLength(2);
-    const a = rows().find((r) => r.dataset.run === A.runId);
+    expect(qa('#forge-runs-list [data-work-ref]')).toHaveLength(2);
+    await showRun(A.runId);
+    expect(rows()).toHaveLength(1);
+    const a = rows()[0];
+    expect(a.dataset.run).toBe(A.runId);
     expect(a.textContent).toContain('Working');
     expect(a.textContent).toContain('profile claude');
     expect(a.querySelector('.hx-run-limits').textContent).toContain('Cost');
@@ -282,25 +292,23 @@ describe('the Runs view', () => {
     ]);
   });
 
-  it('puts two profiles of one request side by side in a labelled group, and keeps the others apart', async () => {
+  it('lists two profiles of one request as two rows, each with its own card (the side-by-side group is gone with the cards)', async () => {
     fakeServer([P1, P2, A]);
     mount();
     await openAgents();
-    const group = q('#forge-runs-list section.hx-run-compare');
-    expect(group.getAttribute('aria-labelledby')).toBeTruthy();
-    expect(document.getElementById(group.getAttribute('aria-labelledby')).textContent).toBe('Code on issue #11 under 2 profiles: claude and qwen');
-    expect([...group.querySelectorAll('li.hx-run')].map((r) => r.textContent.match(/profile (\w+)/)[1])).toEqual(['claude', 'qwen']);
-    expect(group.querySelector('ul.hx-run-columns')).not.toBe(null);
-    expect(qa('#forge-runs-list li.hx-run')).toHaveLength(3);
-    // two columns on a wide panel, stacked on a narrow one
-    expect(css).toMatch(/\.hx-run-columns \{[^}]*grid-template-columns: 1fr;/);
-    expect(css).toMatch(/@container corn-box \(min-width: 1100px\)[\s\S]*\.hx-run-columns \{ grid-template-columns: repeat\(2/);
+    expect(qa('#forge-runs-list [data-work-ref]')).toHaveLength(3);
+    await showRun(P1.runId);
+    expect(rows()[0].textContent).toMatch(/profile claude/);
+    await showRun(P2.runId);
+    expect(rows()[0].textContent).toMatch(/profile qwen/);
+    expect(q('.hx-run-compare')).toBe(null);
   });
 
   it('opens a timeline as an ordered list with times, escaped, and keeps it open when the list is drawn again', async () => {
     fakeServer([A2]);
     mount();
     await openAgents();
+    await showRun(A.runId);
     const btn = q(`[data-run-timeline="${A.runId}"]`);
     expect(btn.getAttribute('aria-expanded')).toBe('false');
     expect(q('.hx-run-timeline')).toBe(null);
@@ -322,24 +330,6 @@ describe('the Runs view', () => {
     expect(q('ol.hx-run-timeline')).not.toBe(null);
   });
 
-  it('lights a run\'s nodes like a pull request, with a button that is pressed and lets go', async () => {
-    fakeServer([A2, B]);
-    mount();
-    await openAgents();
-    const pick = q(`[data-run-select="${B.runId}"]`);
-    expect(pick.getAttribute('aria-pressed')).toBe('false');
-    pick.focus();
-    click(pick);
-    await settle();
-    expect([...state.forgeLit.changed].sort()).toEqual(['cart', 'orders']);
-    expect(q(`[data-run-select="${B.runId}"]`).getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q(`[data-run-select="${B.runId}"]`));
-    expect(await said()).toMatch(/2 nodes lit/);
-    click(q(`[data-run-select="${B.runId}"]`));
-    await settle();
-    expect(state.forgeLit).toBe(null);
-  });
-
   it('says when a run\'s state or a collision changes, through the live region', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     try {
@@ -357,7 +347,7 @@ describe('the Runs view', () => {
 });
 
 describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
-  it('passes axe with the marks on the map, the Runs view, a compare, and a timeline open', async () => {
+  it('passes axe with the marks on the map, the Runs list, a card, and a timeline open', async () => {
     document.documentElement.dataset.theme = theme;
     fakeServer([A2, B, P1, P2, DONE]);
     mount();
@@ -369,10 +359,9 @@ describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
     q('#legend-toggle-btn').click?.();
     await openAgents();
     expect(await audit()).toEqual([]);
+    await showRun(A.runId);
     click(q(`[data-run-timeline="${A.runId}"]`));
-    click(q(`[data-run-select="${B.runId}"]`));
     await settle();
-    expect(q('.hx-run-compare')).not.toBe(null);
     expect(q('ol.hx-run-timeline')).not.toBe(null);
     expect(await audit()).toEqual([]);
     delete document.documentElement.dataset.theme;
@@ -390,7 +379,9 @@ describe('the runs are read again every minute, only while one is open', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(reads()).toBe(1);
     // A second init (as a test reset or a re-wire would) does not start a second timer
+    resetWorkViewForTests();
     initForgePanel({ forge: { type: 'github', url: 'https://git.example.test', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } }, { clock: () => NOW });
+    initWorkView({ offered: true });
     await vi.advanceTimersByTimeAsync(0);
     const afterInit = reads();
     await vi.advanceTimersByTimeAsync(60_000);
@@ -423,15 +414,14 @@ describe('the runs are read again every minute, only while one is open', () => {
   });
 });
 
-describe('the proposal bar beside the issues and PRs panel (explorer.css)', () => {
+describe('the proposal bar beside the Work list (explorer.css)', () => {
   beforeEach(() => { document.body.innerHTML = body; });
   // happy-dom has no layout: the rule is held here, and measured in Chromium at 1100, 1440 and 1920 px wide for the review of #90
-  it('makes room by the panel\'s own width, which the compare widens, never a fixed offset', () => {
+  it('makes room by the list\'s own width, never a fixed offset', () => {
     const cssText = explorerCss();
     expect(cssText).not.toMatch(/proposal-bar \{ left: \d+px/);
     expect(cssText).toContain('.hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px);');
     expect(cssText).toContain('width: var(--hx-forge-w);');
-    expect(cssText).toContain('.hx-stage:has(.hx-forge .hx-run-compare) { --hx-forge-w: min(780px, calc(100% - 24px)); }');
-    expect(cssText).toContain('.hx-stage:has(.hx-forge .hx-run-compare):has(.drawer-open) { --hx-forge-w: min(400px, calc(100% - 24px)); }');
+    expect(cssText).not.toContain('.hx-run-compare');
   });
 });

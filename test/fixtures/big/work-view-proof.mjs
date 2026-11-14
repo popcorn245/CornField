@@ -1,15 +1,20 @@
 /**
- * The proof in a browser of cornfield's Work view (spec 0012, step 2), against the rig with the fake forge. Runs by hand: needs Playwright and Chromium.
+ * The proof in a browser of cornfield's Work view and its Work list (spec 0012, steps 2 and 3), against the rig with the fake forge. Runs by hand: needs Playwright and Chromium.
  *
  *   node test/fixtures/big/work-view-proof.mjs [--shots <dir>] [--port <n>] [--slow <ms>]
  *
  * Signs in and opens the Work view by its button, then drives it by mouse and keyboard: every kind of node is there and each is selected (the node panel says what it is),
  * a connection is followed, Waiting on you dims the rest, the layers go off and on (the local drafts' layer is off to start, and on it has a lane), search finds `#21`, `PR 21`,
  * a slug and a title, N, P and the arrows move through the lanes, Enter goes into the panel and Escape back, each address opens the view on its node, and Map brings the map back.
+ * Step 3: the List toggle opens the Work list where the side panel sat; each tab's first row selects its node (the node panel shows it, the focus stays on the row); work older than
+ * the graph's 14 days (a closed issue, a deploy) is shown in the node panel with nothing selected; every action is driven from the node panel (a proposal's Review, a pull request's Land
+ * it with its confirm and Re-run, an issue's Start an agent, a run's answer field with Continue, Stop, a thread's links, a deploy's logs); the old-work addresses; the phone's two sheets
+ * (the list and the node panel take turns, the map keeps 35%); axe with the list open and a node selected, in both themes and on a phone.
  * It looks at what is on the screen: the names under the nodes (none off the screen, none over another, none under a control), the lanes' titles (readable, under the toggles),
- * the controls (none over another, on a desktop and on a phone) and the header's two Work buttons. It then starts a second rig whose fake forge is slow (`--slow`, ms a request;
+ * the controls (none over another, on a desktop and on a phone) and that the header has no Work panel button. It then starts a second rig whose fake forge is slow (`--slow`, ms a request;
  * default 1500) and proves the first answer shows its loading state at once, that the page works while it is awaited, and that a refresh keeps the last answer on the map.
- * Screenshots (synthetic fixture only) go in `--shots`: desktop dark and light with all work, with a node selected, with Waiting on you, with the drafts on, and a phone with all work and with a node selected.
+ * Screenshots (synthetic fixture only) go in `--shots`: desktop dark and light with all work, with a node selected, with Waiting on you, with the drafts on, and a phone with all work and with a node selected;
+ * the finals of step 3, at a device scale factor of 2 (desktop light and dark with the list open and a node selected, a proposal's actions, a run's answer field, the phone's list and node sheets).
  * Exit code 1 when a check fails.
  */
 import { spawn } from 'node:child_process';
@@ -22,6 +27,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVE = path.join(HERE, 'serve.js');
 const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : null);
 const SHOTS = arg('--shots');
+const FINAL = arg('--final'); // the finals of step 3, at a device scale factor of 2
 const PORT = Number(arg('--port') || 3830);
 const SLOW = Number(arg('--slow') || 1500);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -148,14 +154,13 @@ async function main() {
     const before = await snap();
     const mapLayers = before.layers;
 
-    // the header's two Work buttons
+    // the header: the view switch's Work (with its badge) and no Work panel button
     const buttons = await page.evaluate(() => ({
       view: document.querySelector('#preset-work-btn').getAttribute('aria-label') || document.querySelector('#preset-work-btn').textContent,
-      panel: document.querySelector('[data-corn="forge-button"]').getAttribute('aria-label'),
-      panelText: document.querySelector('[data-corn="forge-button"]').textContent.replace(/\s+/g, ' ').trim(),
-      panelBadge: !!document.querySelector('[data-corn="forge-button"] [data-corn="waiting-badge"]'),
+      panelButton: document.querySelectorAll('[data-corn="forge-button"], .hx-work, #forge-btn').length,
+      header: [...document.querySelector('[data-corn="header"]').querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean),
     }));
-    check('the far-right button is the Work panel, with no badge, and the view switch\'s Work is not that', buttons.panel === 'Work panel' && /^Work panel/.test(buttons.panelText) && !buttons.panelBadge && /^Work/.test(buttons.view) && buttons.view !== buttons.panel, JSON.stringify(buttons));
+    check('the header has the view switch\'s Work and no Work panel button', /^Work/.test(buttons.view) && buttons.panelButton === 0 && !buttons.header.includes('Work panel'), JSON.stringify(buttons));
 
     await page.click('#preset-work-btn');
     check('the Work view opens and shows its answer', await until(page, async () => { const { state } = await import('/explorer/state.js'); return state.view === 'work' && state.nodes.some((n) => n.work); }, null, 60_000));
@@ -208,7 +213,7 @@ async function main() {
     await pick('proposal:0100-new-flow-across-apps');
     const hrefs = await page.evaluate(() => [...document.querySelectorAll('[data-corn="work-actions"] a[href], [data-corn="work-links"] a[href]')].map((a) => a.getAttribute('href')));
     check('the node panel links to the forge by an http or https address only', hrefs.length > 0 && hrefs.every((h) => /^https?:\/\//.test(h)), hrefs.join(' | '));
-    check('the panel offers Open in Work', await page.locator('[data-work-action="open-in-work"]').count() > 0);
+    check('the node panel has the place for the actions and no Open in Work', await page.locator('#forge-detail[data-work-kind="proposal"]').count() === 1 && await page.locator('[data-work-action="open-in-work"]').count() === 0);
     names = await namesOnScreen(page);
     check('desktop, a node selected: no name off the screen or over another', names.off.length === 0 && names.over.length === 0, `off ${names.off.join()} over ${names.over.slice(0, 3).join()}`);
     await shot('desktop-dark-selected');
@@ -294,6 +299,140 @@ async function main() {
     check('Escape comes back to the map', (await page.evaluate(() => document.activeElement && document.activeElement.tagName)) === 'CANVAS');
     await clear();
 
+    // ---- the Work list (spec 0012 D6): the List toggle, the lists, a row selects its node, work older than the graph's 14 days ----
+    await clear();
+    const requests = [];
+    page.on('request', (r) => requests.push(`${r.method()} ${new URL(r.url()).pathname}`));
+    const listBtn = page.locator('.hx-work-bar [data-action="toggle-forge"]');
+    check('the List toggle is in the Work view\'s bar, collapsed, and names the panel it opens', (await listBtn.isVisible()) && (await listBtn.getAttribute('aria-expanded')) === 'false' && (await listBtn.getAttribute('aria-controls')) === 'forge-panel');
+    await listBtn.click(); await sleep(1500);
+    const opened = await page.evaluate(() => { const p = document.querySelector('#forge-panel'); const r = p.getBoundingClientRect(); return { open: p.classList.contains('forge-open'), left: r.left, width: r.width, inert: p.inert, focus: document.activeElement && document.activeElement.id }; });
+    check('List opens the list where the side panel sat: on the left, open, not inert, the focus on its title', opened.open && opened.left <= 1 && opened.width > 300 && !opened.inert && opened.focus === 'forge-title', JSON.stringify(opened));
+    check('and the toggle says it is expanded', (await listBtn.getAttribute('aria-expanded')) === 'true');
+    check('with no side-panel button anywhere in the header', (await page.locator('[data-corn="forge-button"]').count()) === 0);
+    const rowsOf = (tab) => page.locator(tab === 'work' ? '#forge-runs-list [data-work-ref]:visible' : '#forge-list [data-work-ref]:visible');
+    for (const tab of ['specs', 'pulls', 'issues', 'threads', 'work', 'deploys']) {
+      await page.click(`[data-forge-kind="${tab}"]`); await sleep(1500);
+      const rows = rowsOf(tab);
+      const n = await rows.count();
+      const tabInfo = await page.evaluate((t) => ({ pressed: document.querySelector(`[data-forge-kind="${t}"]`).getAttribute('aria-pressed'), status: document.querySelector('#forge-status').textContent }), tab);
+      check(`${tab}: the tab is pressed and its list has rows, with a count in the line under the tabs`, tabInfo.pressed === 'true' && n > 0 && /\d/.test(tabInfo.status), `${n} rows; ${tabInfo.status}`);
+      const ref = await rows.first().getAttribute('data-work-ref');
+      await rows.first().focus();
+      await rows.first().click(); await sleep(1400);
+      const r = await page.evaluate(async (ref0) => {
+        const { state } = await import('/explorer/state.js');
+        const { nodeForAddress } = await import('/explorer/work-model.js');
+        const at = ref0.indexOf(':');
+        const want = nodeForAddress({ kind: ref0.slice(0, at), key: ref0.slice(at + 1) }, state.nodes);
+        const act = document.activeElement;
+        return { want, selected: state.selectedNode ? state.selectedNode.id : null, badge: document.querySelector('#drawer-badge').textContent, detail: document.querySelector('#forge-detail') ? document.querySelector('#forge-detail').dataset.workKind : null, focusRef: act && act.dataset ? act.dataset.workRef : null, listOpen: document.querySelector('#forge-panel').classList.contains('forge-open'), panelOpen: document.querySelector('#spec-drawer').classList.contains('drawer-open'), pressed: act && act.getAttribute ? act.getAttribute('aria-pressed') : null };
+      }, ref);
+      check(`${tab}: a row selects its node on the map and the node panel shows it (${ref}${r.want ? '' : ', older than the graph: shown with nothing selected'})`, (r.want ? r.selected === r.want : r.selected === null) && r.panelOpen && !!r.detail, JSON.stringify(r));
+      check(`${tab}: the list stays open and the focus stays on the row, pressed`, r.listOpen && r.pressed === 'true' && r.focusRef !== null, JSON.stringify({ focus: r.focusRef, pressed: r.pressed }));
+      await clear();
+    }
+    // by the keyboard, from a row into the node panel and back: Enter on the row shown goes in, Escape comes back to the row, and Escape again closes the list
+    {
+      await page.click('[data-forge-kind="pulls"]'); await sleep(1200);
+      const row = page.locator('#forge-list [data-work-ref]').first();
+      const ref = await row.getAttribute('data-work-ref');
+      await row.focus(); await page.keyboard.press('Enter'); await sleep(1400);
+      await page.keyboard.press('Enter'); await sleep(400);
+      check('Enter again on the row shown goes into the node panel', await page.evaluate(() => document.activeElement && document.activeElement.id === 'drawer-title'));
+      await page.keyboard.press('Escape'); await sleep(400);
+      check('Escape in the node panel closes it and gives the focus back to the row', await page.evaluate((r) => document.activeElement && document.activeElement.dataset.workRef === r && !document.querySelector('#spec-drawer').classList.contains('drawer-open'), ref));
+      await page.keyboard.press('Escape'); await sleep(400);
+      check('and Escape in the list closes the list, back on the List toggle', await page.evaluate(() => !document.querySelector('#forge-panel').classList.contains('forge-open') && document.activeElement && document.activeElement.dataset.action === 'toggle-forge'));
+      await page.click('[data-action="toggle-forge"]'); await sleep(800);
+    }
+    check('the list does not repeat the detail: it holds no action button', (await page.locator('#forge-panel [data-forge-merge], #forge-panel [data-forge-agent], #forge-panel [data-forge-stop], #forge-panel [data-run-answer], #forge-panel [data-forge-rerun], #forge-panel [data-work-action]').count()) === 0);
+    await shot('desktop-dark-list');
+
+    // work older than the graph's 14 days: its row opens it in the node panel, with nothing selected on the map
+    await page.click('[data-forge-kind="issues"]'); await sleep(800);
+    await page.click('#forge-filter-chip'); await sleep(300);
+    await page.selectOption('#forge-state', 'all'); await sleep(1500);
+    const oldIssue = page.locator('#forge-list [data-work-ref="issue:2"]');
+    check('the Issues list reaches a closed issue the graph does not draw', (await oldIssue.count()) === 1);
+    await oldIssue.click(); await sleep(1500);
+    const oldState = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { selected: state.selectedNode ? state.selectedNode.id : null, badge: document.querySelector('#drawer-badge').textContent, open: document.querySelector('#spec-drawer').classList.contains('drawer-open'), agent: document.querySelectorAll('#forge-detail [data-forge-agent]').length, text: document.querySelector('#spec-drawer [data-corn="work-head"]').textContent + document.querySelector('#forge-detail').textContent, links: document.querySelector('#spec-drawer').textContent.includes('not drawn here') }; });
+    check('an old issue is in the node panel (nothing selected), closed, with nothing to start and its links said not to be drawn', oldState.selected === null && oldState.badge === 'Issue' && oldState.open && oldState.agent === 0 && /Closed/.test(oldState.text) && oldState.links, JSON.stringify(oldState));
+    await page.click('[data-forge-kind="deploys"]'); await sleep(1200);
+    await page.locator('#forge-list [data-work-ref="deploy:9003"]').click(); await sleep(1500);
+    const oldDeploy = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { selected: state.selectedNode ? state.selectedNode.id : null, badge: document.querySelector('#drawer-badge').textContent, logs: [...document.querySelectorAll('#forge-detail a')].map((a) => a.textContent.trim()), rerun: document.querySelectorAll('#forge-detail [data-forge-rerun]').length }; });
+    check('an old deploy is in the node panel by the same path, with its logs and no Re-run', oldDeploy.selected === null && oldDeploy.badge === 'Deploy' && oldDeploy.logs.some((t) => /Open the logs on/.test(t)) && oldDeploy.rerun === 0, JSON.stringify(oldDeploy));
+    await clear();
+    await page.keyboard.press('Escape'); await sleep(200);
+
+    // the node panel's actions, each one driven from it (the list is closed)
+    const closeList = async () => { if (await page.evaluate(() => document.querySelector('#forge-panel').classList.contains('forge-open'))) { await page.click('#forge-panel [data-action="close-forge"]'); await sleep(300); } };
+    await closeList();
+    const detailText = () => page.locator('#forge-detail').innerText();
+    // a proposal: Review opens the review over the map
+    await pick('proposal:0013-meals');
+    check('a proposal waiting on you says so and offers Review (and Start an agent when runs can start)', (await page.locator('#forge-detail [data-work-action="review"]').count()) === 1 && /waits on you/.test(await page.locator('[data-corn="work-actions"]').innerText()), (await detailText()).replace(/\s+/g, ' ').slice(0, 120));
+    await page.click('#forge-detail [data-work-action="review"]'); await sleep(2500);
+    const review = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { view: state.view, slug: state.proposalSlug, bar: !document.querySelector('#proposal-bar').hidden }; });
+    check('Review goes back to the map and opens the review over it (Before, Diff, After in its bar)', review.view === 'orbit' && review.slug === '0013-meals' && review.bar, JSON.stringify(review));
+    await page.click('#preset-work-btn');
+    await until(page, async () => { const { state } = await import('/explorer/state.js'); return state.view === 'work' && state.nodes.some((n) => n.work); });
+    await sleep(900);
+    // a pull request that cannot land yet: Land it is off, with its reason; Re-run on a failed check posts
+    await pick('pull:13');
+    const prInfo = await page.evaluate(() => ({ land: document.querySelector('#forge-detail .hx-btn--approve') ? document.querySelector('#forge-detail .hx-btn--approve').disabled : null, why: document.querySelector('#forge-detail .hx-forge-why') ? document.querySelector('#forge-detail .hx-forge-why').textContent : '', rerun: document.querySelectorAll('#forge-detail [data-forge-rerun]').length, checks: document.querySelector('#forge-detail .hx-forge-sub') ? document.querySelector('#forge-detail .hx-forge-sub').textContent : '' }));
+    check('a pull request shows its checks and Land it, off with the reason in words, and Re-run on a failed check', prInfo.land === true && /Can't land yet/.test(prInfo.why) && prInfo.rerun >= 1 && /failed/.test(prInfo.checks), JSON.stringify(prInfo));
+    const rerunFrom = requests.length;
+    await page.click('#forge-detail [data-forge-rerun]'); await sleep(1500);
+    check('Re-run posts to the server for that head and check, and says what it came to', requests.slice(rerunFrom).some((x) => /^POST \/api\/forge\/pulls\/13\/rerun$/.test(x)) && (await detailText()).length > 0 && (await page.locator('#forge-detail .hx-forge-notice').count()) > 0, requests.slice(rerunFrom).join(' | '));
+    // a spec pull request that is green: Land it opens its confirm with the focus on Cancel; Cancel gives the focus back
+    await fetch(`http://127.0.0.1:${PORT + 1}/__rig/checks?pr=21&state=passed`);
+    await pick('proposal:0100-new-flow-across-apps'); await sleep(1500);
+    const land = page.locator('#forge-detail [data-forge-merge]');
+    check('a spec pull request with green checks has Land it in the node panel, beside Review', (await land.count()) === 1 && (await page.locator('#forge-detail [data-work-action="review"]').count()) === 1);
+    await land.focus(); await land.click(); await sleep(900);
+    const confirm = await page.evaluate(() => ({ shown: !document.querySelector('#forge-confirm').hidden, focus: document.activeElement && document.activeElement.dataset.action, title: document.querySelector('#forge-confirm-title').textContent, role: document.querySelector('#forge-confirm [role="dialog"]').getAttribute('aria-modal') }));
+    check('Land it opens the confirm step: a modal dialog, the focus on Cancel, naming what lands', confirm.shown && confirm.focus === 'forge-confirm-cancel' && confirm.role === 'true' && /Land/.test(confirm.title), JSON.stringify(confirm));
+    await page.keyboard.press('Escape'); await sleep(500);
+    check('Escape closes it, nothing was sent, and the focus is back on Land it', await page.evaluate(() => document.querySelector('#forge-confirm').hidden && document.activeElement && document.activeElement.hasAttribute('data-forge-merge')) && !requests.some((x) => /\/merge$/.test(x)));
+    // an issue: Start an agent opens its dialog; Escape closes it, the focus back on the button
+    await pick('issue:5');
+    const agent = page.locator('#forge-detail [data-forge-agent="issue:5"]');
+    check('an open issue has Start an agent in its node panel', (await agent.count()) === 1);
+    await agent.focus(); await agent.click(); await sleep(900);
+    check('Start an agent opens its dialog with the focus in it, and Escape closes it, giving the focus back', await page.evaluate(() => !document.querySelector('#agent-start').hidden && document.activeElement && document.activeElement.id === 'agent-kind'));
+    await page.keyboard.press('Escape'); await sleep(500);
+    check('and the focus is on the button again', await page.evaluate(() => document.querySelector('#agent-start').hidden && document.activeElement && document.activeElement.dataset.forgeAgent === 'issue:5'));
+    // a run that waits on you: its answer field, then Continue, Stop or a reply
+    await pick('run:run-01RIGRUN000000000000000003');
+    const answerCard = await page.evaluate(() => ({ answers: [...document.querySelectorAll('#forge-detail [data-run-answer]')].map((b) => b.dataset.runAnswer), field: !!document.querySelector('#forge-detail [data-run-reply]'), label: document.querySelector('#forge-detail [data-run-reply]') ? document.querySelector('#forge-detail [data-run-reply]').closest('label').textContent : '', stop: document.querySelectorAll('#forge-detail [data-forge-stop]').length }));
+    check('a waiting run shows its answer field, with Continue, Stop and Reply (and no plain Stop)', answerCard.field && answerCard.answers.join() === 'continue,stop,reply' && answerCard.stop === 0, JSON.stringify(answerCard));
+    await shot('desktop-dark-run-answer');
+    await page.fill('#forge-detail [data-run-reply]', 'Use the second plan.');
+    const typed = await page.inputValue('#forge-detail [data-run-reply]');
+    const sent0 = requests.length;
+    await page.click('#forge-detail [data-run-answer="reply"]'); await sleep(1800);
+    const replyPosts = requests.slice(sent0).filter((x) => /POST .*\/answer$/.test(x)).length;
+    const emptied = await page.evaluate(() => { const f = document.querySelector('#forge-detail [data-run-reply]'); return f ? f.value === '' : true; });
+    check('Reply posts the typed answer once, says what it came to in the run\'s card, and the field is empty again', replyPosts === 1 && typed === 'Use the second plan.' && emptied && (await page.locator('#forge-detail [data-run-result]').count()) > 0, requests.slice(sent0).join(' | '));
+    // a working run: Stop
+    await pick('run:run-01RIGRUN000000000000000002');
+    const stop = page.locator('#forge-detail [data-forge-stop]');
+    check('a working run has Stop (and the timeline), in its card', (await stop.count()) === 1 && (await page.locator('#forge-detail [data-run-timeline]').count()) === 1);
+    const sent1 = requests.length;
+    await stop.click(); await sleep(1500);
+    check('Stop posts once and the card says so', requests.slice(sent1).filter((x) => /POST .*\/stop$/.test(x)).length === 1 && (await page.locator('#forge-detail [data-run-result]').count()) > 0, requests.slice(sent1).join(' | '));
+    // a thread: read-only, its links to the forge
+    await pick('thread:21');
+    const threadLinks = await page.evaluate(() => ({ reply: [...document.querySelectorAll('#forge-detail a')].filter((a) => /^Reply on /.test(a.textContent)).map((a) => a.getAttribute('href')), open: [...document.querySelectorAll('[data-corn="work-actions"] > a')].map((a) => a.textContent.trim()), form: document.querySelectorAll('#forge-detail input, #forge-detail textarea, #forge-detail form').length }));
+    check('a thread is read-only here, with Reply on the forge and Open on the forge, both http(s) links', threadLinks.reply.length === 1 && /^https?:\/\//.test(threadLinks.reply[0]) && threadLinks.open.some((t) => /Open on the forge/.test(t)) && threadLinks.form === 0, JSON.stringify(threadLinks));
+    // a deploy: its logs, what it restarted, no Re-run
+    await pick('deploy:9001');
+    const deployInfo = await page.evaluate(() => ({ logs: [...document.querySelectorAll('#forge-detail a')].map((a) => [a.textContent.trim(), a.getAttribute('href')]), rerun: document.querySelectorAll('#forge-detail [data-forge-rerun]').length }));
+    check('a deploy has its logs on the forge as an http(s) link, and no Re-run', deployInfo.logs.some(([t, h]) => /Open the logs on/.test(t) && /^https?:\/\//.test(h)) && deployInfo.rerun === 0, JSON.stringify(deployInfo));
+    check('Copy Spec is not shown for a piece of work, and is for a node of code', await page.evaluate(async () => { const hidden = document.querySelector('#drawer-copy-btn').hidden; const { state } = await import('/explorer/state.js'); const { pick: p } = await import('/explorer/work-view.js'); p(state.nodes.find((n) => !n.work && !n.planned && !n.hidden).id); await new Promise((r) => setTimeout(r, 500)); return hidden && !document.querySelector('#drawer-copy-btn').hidden; }));
+    await clear();
+
     // Map restores
     await page.click('#preset-map-btn'); await sleep(800);
     s = await snap();
@@ -318,15 +457,34 @@ async function main() {
       check('?run= selects that run in the Work view', (await snap()).selected === `run:${run}`, `${(await snap()).selected} for ${run}`);
     }
 
-    // axe, on the view with a node's panel open
+    // work older than the graph's 14 days: its address opens the Work list on its tab, and the node panel shows it
+    await page.goto(`${BASE}/?issue=2`);
+    await until(page, async () => (await import('/explorer/state.js')).state.nodes.some((n) => n.work));
+    await until(page, () => document.querySelector('#spec-drawer').classList.contains('drawer-open') && !!document.querySelector('#forge-detail'));
+    await sleep(800);
+    const oldAddr = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { view: state.view, selected: state.selectedNode ? state.selectedNode.id : null, listOpen: document.querySelector('#forge-panel').classList.contains('forge-open'), tab: document.querySelector('[data-forge-kind="issues"]').getAttribute('aria-pressed'), badge: document.querySelector('#drawer-badge').textContent, title: document.querySelector('#drawer-title').textContent, search: location.search, said: (document.querySelector('#map-announcer') || {}).textContent }; });
+    check('?issue=<old> opens the Work view, the list on Issues, and the issue in the node panel with nothing selected; the address is spent', oldAddr.view === 'work' && oldAddr.selected === null && oldAddr.listOpen && oldAddr.tab === 'true' && oldAddr.badge === 'Issue' && oldAddr.search === '', JSON.stringify(oldAddr));
+    check('and the live region says the issue it shows, not the count of the list', /^Issue 2: .+\. It is closed\.$/.test(oldAddr.said || ''), oldAddr.said);
+    await page.goto(`${BASE}/?pr=999`);
+    await until(page, async () => (await import('/explorer/state.js')).state.nodes.some((n) => n.work));
+    await sleep(2500);
+    const noPr = await page.evaluate(() => ({ note: document.querySelector('#forge-act-note').textContent, hidden: document.querySelector('#forge-act-note').hidden, tab: document.querySelector('[data-forge-kind="pulls"]').getAttribute('aria-pressed'), said: (document.querySelector('#map-announcer') || {}).textContent }));
+    check('?pr=999 (no such pull request) is a line in the list, said through the live region, never a blank', !noPr.hidden && /pull request 999/.test(noPr.note) && noPr.tab === 'true' && /pull request 999/.test(noPr.said || ''), JSON.stringify(noPr));
+
+    // axe, on the view with the list open and a node's panel open
+    const axeSource = fs.readFileSync(path.join(HERE, '..', '..', '..', 'node_modules', 'axe-core', 'axe.min.js'), 'utf8');
+    await page.route('**/__axe.js', (route) => route.fulfill({ body: axeSource, contentType: 'application/javascript' })); // a script of the page's own origin: its CSP does not allow an inline one
+    const runAxe = async (pg) => { await pg.route('**/__axe.js', (route) => route.fulfill({ body: axeSource, contentType: 'application/javascript' })); await pg.addScriptTag({ url: `${BASE}/__axe.js` }); return pg.evaluate(async () => { const r = await window.axe.run(document, { resultTypes: ['violations'] }); return r.violations.map((v) => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(' ')}`); }); };
     await page.goto(`${BASE}/?issue=3`);
     await until(page, async () => (await import('/explorer/state.js')).state.selectedNode?.work === 'issue');
     await sleep(800);
-    const axeSource = fs.readFileSync(path.join(HERE, '..', '..', '..', 'node_modules', 'axe-core', 'axe.min.js'), 'utf8');
-    await page.route('**/__axe.js', (route) => route.fulfill({ body: axeSource, contentType: 'application/javascript' })); // a script of the page's own origin: its CSP does not allow an inline one
-    await page.addScriptTag({ url: `${BASE}/__axe.js` });
-    const axe = await page.evaluate(async () => { const r = await window.axe.run(document, { resultTypes: ['violations'] }); return r.violations.map((v) => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(' ')}`); });
-    check('axe: no violation in the Work view with a node open', axe.length === 0, axe.join(' | '));
+    await page.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1500);
+    const axe = await runAxe(page);
+    check('axe: no violation in the Work view with the list open and a node selected (dark)', axe.length === 0, axe.join(' | '));
+    await page.fill('#forge-text', '').catch(() => {});
+    await pick('pull:13'); await sleep(1500);
+    const axePr = await runAxe(page);
+    check('axe: none with a pull request\'s checks and Land it in the node panel (dark)', axePr.length === 0, axePr.join(' | '));
 
     // light
     await page.emulateMedia({ colorScheme: 'light' });
@@ -336,6 +494,12 @@ async function main() {
     names = await namesOnScreen(page);
     check('light: no name off the screen or over another', names.off.length === 0 && names.over.length === 0 && names.under.length === 0, `${names.count} names`);
     await shot('desktop-light-work');
+    await page.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1500);
+    await pick('run:run-01RIGRUN000000000000000003'); await sleep(1500);
+    const axeLight = await runAxe(page);
+    check('axe: none with the list open and a waiting run\'s answer field in the node panel (light)', axeLight.length === 0, axeLight.join(' | '));
+    await clear();
+    await page.click('#forge-panel [data-action="close-forge"]'); await sleep(300);
 
     // a phone
     const phoneContext = await newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', hasTouch: true, isMobile: true });
@@ -345,8 +509,8 @@ async function main() {
     await until(pp, async () => (await import('/explorer/state.js')).state.nodes.some((n) => n.work), null, 60_000);
     await sleep(2000);
     check('the phone shows the view', (await pp.evaluate(async () => (await import('/explorer/state.js')).state.view)) === 'work');
-    const header = await pp.evaluate(() => ({ panelShown: getComputedStyle(document.querySelector('[data-corn="forge-button"]')).display !== 'none', badge: document.querySelector('#preset-work-btn [data-corn="waiting-badge"]') && getComputedStyle(document.querySelector('#preset-work-btn [data-corn="waiting-badge"]')).display !== 'none' }));
-    check('on a phone the header\'s own Work button is not there and the view switch carries the badge', !header.panelShown && header.badge, JSON.stringify(header));
+    const header = await pp.evaluate(() => ({ panelButton: document.querySelectorAll('[data-corn="forge-button"], .hx-work').length, badge: document.querySelector('#preset-work-btn [data-corn="waiting-badge"]') && getComputedStyle(document.querySelector('#preset-work-btn [data-corn="waiting-badge"]')).display !== 'none' }));
+    check('on a phone the header has no Work panel button and the view switch carries the badge', header.panelButton === 0 && header.badge, JSON.stringify(header));
     check('on a phone no control is over another', (await controlsOverlap(pp)).length === 0, (await controlsOverlap(pp)).join(' | '));
     const phoneNames = await namesOnScreen(pp);
     check('on a phone no name is off the screen, over another or under a control', phoneNames.count > 3 && phoneNames.off.length === 0 && phoneNames.over.length === 0 && phoneNames.under.length === 0, `${phoneNames.count} names, zoom ${phoneNames.zoom.toFixed(2)}; off ${phoneNames.off.join()} over ${phoneNames.over.slice(0, 3).join()} under ${phoneNames.under.slice(0, 3).join()}`);
@@ -365,9 +529,38 @@ async function main() {
     const titlesSelected = await laneTitles(pp);
     check('on a phone, selected, the lanes\' titles stay clear of the toggles', titlesSelected.length > 0 && titlesSelected.every((l) => l.inside && l.clear), titlesSelected.map((l) => l.text).join(' | '));
     await shot('phone-dark-selected', pp);
+
+    // the phone's sheets (spec 0010 D7): the List toggle is on the map, the list and the node panel take turns, at most two are open, the map keeps 35%
+    await pp.evaluate(async () => { const m = await import('/explorer/engine/selection.js'); const { pageInstance } = await import('/explorer/state.js'); m.clearSelection(pageInstance()); });
+    await sleep(500);
+    const sheetsNow = () => pp.evaluate(async () => {
+      const { state } = await import('/explorer/state.js');
+      const open = [...document.querySelectorAll('.hx-sheet')].filter((e) => (e.classList.contains('hx-forge') ? e.classList.contains('forge-open') : e.classList.contains('hx-drawer') ? e.classList.contains('drawer-open') : !e.hidden) && !e.hasAttribute('data-sheet-away')).map((e) => `${e.id}:${e.dataset.sheetState}`);
+      return { open, map: (state.height - (state.coveredBottom || 0)) / state.height, selected: state.selectedNode ? state.selectedNode.id : null };
+    });
+    const pList = pp.locator('.hx-work-bar [data-action="toggle-forge"]');
+    check('on a phone the List toggle is on the map, in the bar, and a tap target', (await pList.isVisible()) && ((await pList.boundingBox()).height >= 28));
+    await pList.tap(); await sleep(1500);
+    let sh = await sheetsNow();
+    check('on a phone the list opens as a peek sheet, and the map keeps more than 35%', sh.open.join() === 'forge-panel:peek' && sh.map >= 0.35, JSON.stringify(sh));
+    await pp.locator('#forge-panel > .hx-sheet-handle').tap(); await sleep(900);
+    sh = await sheetsNow();
+    check('expanded, it is one sheet and the map keeps at least 35% of the screen', sh.open.join() === 'forge-panel:expanded' && sh.map >= 0.35, JSON.stringify(sh));
+    await shot('phone-dark-list', pp);
+    await pp.locator('#forge-list [data-work-ref]:visible').first().tap(); await sleep(1500);
+    sh = await sheetsNow();
+    check('a row selects its node: the node\'s sheet takes the list\'s place (they take turns), the node is selected, and the map keeps 35%', sh.open.length <= 2 && sh.open.some((x) => x.startsWith('spec-drawer')) && !sh.open.some((x) => x.startsWith('forge-panel')) && sh.selected !== null && sh.map >= 0.35, JSON.stringify(sh));
+    await shot('phone-dark-node-sheet', pp);
+    await pList.tap(); await sleep(1500);
+    sh = await sheetsNow();
+    check('the List toggle brings the list back, the node stays selected, and never more than two sheets are open', sh.open.length <= 2 && sh.open.some((x) => x.startsWith('forge-panel')) && sh.selected !== null && sh.map >= 0.35, JSON.stringify(sh));
+    check('on a phone, with the list open, no control is over another', (await controlsOverlap(pp)).length === 0, (await controlsOverlap(pp)).join(' | '));
+    const axePhone = await runAxe(pp);
+    check('axe: none on a phone with the list open and a node selected', axePhone.length === 0, axePhone.join(' | '));
     await phoneContext.close();
 
     check('no page error', errors.length === 0, errors.slice(0, 2).join(' | '));
+    await finalShots(browser);
     await loadingProof(browser);
   } finally {
     await browser.close();
@@ -376,6 +569,54 @@ async function main() {
   const failed = checks.filter((c) => !c.ok);
   console.log(`\n${checks.length - failed.length} of ${checks.length} checks passed`);
   process.exit(failed.length ? 1 : 0);
+}
+
+/** The finals of step 3, at a device scale factor of 2, from the rig's synthetic fixture only */
+async function finalShots(browser) {
+  if (!FINAL) return;
+  fs.mkdirSync(FINAL, { recursive: true });
+  const open = async (opts, search = '?view=work') => {
+    const context = await browser.newContext({ reducedMotion: 'reduce', deviceScaleFactor: 2, ...opts });
+    const sign = await context.newPage();
+    await sign.goto(`${BASE}/auth/start`); await sign.waitForURL(`${BASE}/**`); await sign.close();
+    const pg = await context.newPage();
+    await pg.goto(`${BASE}/${search}`);
+    await until(pg, async () => { const { state } = await import('/explorer/state.js'); return state.view === 'work' && state.nodes.some((n) => n.work); }, null, 60_000);
+    await sleep(1500);
+    return { context, pg };
+  };
+  const pickOn = async (pg, id) => { await pg.evaluate(async (i) => { const { pick: p } = await import('/explorer/work-view.js'); p(i); }, id); await sleep(1500); };
+  const listOn = async (pg) => { await pg.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1500); };
+  for (const scheme of ['dark', 'light']) {
+    const { context, pg } = await open({ viewport: { width: 1440, height: 900 }, colorScheme: scheme });
+    await listOn(pg);
+    await pickOn(pg, 'pull:13');
+    await pg.screenshot({ path: path.join(FINAL, `desktop-${scheme}-list-and-node.png`) });
+    if (scheme === 'dark') {
+      await pickOn(pg, 'proposal:0013-meals');
+      await pg.screenshot({ path: path.join(FINAL, 'desktop-dark-proposal-actions.png') });
+      await pickOn(pg, 'run:run-01RIGRUN000000000000000003');
+      await pg.fill('#forge-detail [data-run-reply]', 'Use the second plan.');
+      await pg.screenshot({ path: path.join(FINAL, 'desktop-dark-run-answer.png') });
+    } else {
+      await pickOn(pg, 'proposal:0013-meals');
+      await pg.screenshot({ path: path.join(FINAL, 'desktop-light-proposal-actions.png') });
+      await pickOn(pg, 'run:run-01RIGRUN000000000000000003');
+      await pg.screenshot({ path: path.join(FINAL, 'desktop-light-run-answer.png') });
+    }
+    await context.close();
+  }
+  for (const scheme of ['dark', 'light']) {
+    const { context, pg } = await open({ viewport: { width: 390, height: 844 }, colorScheme: scheme, hasTouch: true, isMobile: true });
+    await pg.locator('.hx-work-bar [data-action="toggle-forge"]').tap(); await sleep(1500);
+    await pg.locator('#forge-panel > .hx-sheet-handle').tap(); await sleep(900);
+    await pg.screenshot({ path: path.join(FINAL, `phone-${scheme}-list-sheet.png`) });
+    await pg.locator('#forge-list [data-work-ref]:visible').nth(1).tap(); await sleep(1500);
+    await pg.locator('#spec-drawer > .hx-sheet-handle').tap(); await sleep(900);
+    await pg.screenshot({ path: path.join(FINAL, `phone-${scheme}-node-sheet.png`) });
+    await context.close();
+  }
+  console.log(`     finals saved in ${FINAL}`);
 }
 
 /** A second rig whose forge is slow: the first answer shows its loading state at once, the page works meanwhile, and a refresh keeps the last answer */

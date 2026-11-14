@@ -110,7 +110,7 @@ export const markup = () => ({
     + '<a data-corn="open-link" id="drawer-file-btn" data-corn-kind="primary" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open file ↗</a>'
     + '<a data-corn="open-link" id="drawer-open-btn" data-corn-kind="primary" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open route ↗</a>'
     + '<button data-corn-kind="secondary" type="button" id="drawer-run-btn" class="hx-btn hx-foot-btn" data-action="start-run" data-corn-string="startRun" hidden>Start a run</button>'
-    + '<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>'
+    + '<button data-corn-kind="quiet" type="button" id="drawer-copy-btn" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>'
     + '<p id="copy-spec-result" class="hx-forge-result" data-corn="result" hidden></p>'
     + '</div>'
     + '</aside>',
@@ -437,7 +437,8 @@ export function mount(root, inst, options = {}) {
     fileBtn.textContent = `${t(inst, 'openFile')} ↗`;
     own('drawer-run-btn').hidden = !(state.proposalSlug && inst.ask('forge:can-start'));
     // The Work view (spec 0012 D5): a piece of work is shown by the page's own answer (work-view.js); a node of code in it keeps its own sections, with the work touching it first
-    const work = state.view === 'work' ? inst.ask('work:panel', node) : null;
+    const work = inst.ask('work:panel', node);
+    own('drawer-copy-btn').hidden = !!(work && work.replace); // a piece of work is no spec to copy: its JSON is the forge's, not the map's
     if (work && work.replace) {
       title.textContent = work.title;
       title.classList.remove('hx-mono');
@@ -537,10 +538,12 @@ export function mount(root, inst, options = {}) {
   scope.listen(drawer, 'click', (e) => {
     const target = e.target.closest && e.target.closest('[data-action]');
     if (!target) return;
+    const shut = target.dataset.action === 'close-drawer';
+    const back = shut && inst.ask('node:back'); // the Work list's row that chose the node, asked before the panel lets go
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
-    // The panel's ✕: the focus would be left on a hidden button, so it goes back to the map
-    if (target.dataset.action === 'close-drawer' && state.canvas) scope.timeout(() => state.canvas.focus(), 0);
+    // The panel's ✕: the focus would be left on a hidden button, so it goes back to that row, else to the map
+    if (shut) scope.timeout(() => { if (!(back && back()) && state.canvas) state.canvas.focus(); }, 0);
   });
   // A thread listed in the panel opens in the Work panel, and "Start a thread about this" opens its New idea form (the Work panel hears both)
   scope.listen(drawer, 'click', (e) => {
@@ -563,8 +566,9 @@ export function mount(root, inst, options = {}) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (e.target.closest && e.target.closest('select, input, textarea')) return; // a field's own Escape first
     e.preventDefault();
+    const back = inst.ask('node:back');
     clearSelection(inst, { source: 'keyboard' });
-    if (state.canvas) state.canvas.focus();
+    if (!(back && back()) && state.canvas) state.canvas.focus();
     announce(inst, 'Panel closed');
   });
 

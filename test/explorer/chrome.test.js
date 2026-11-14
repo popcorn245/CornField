@@ -242,19 +242,18 @@ describe('the House view is offered only where there is a house (F47)', () => {
 });
 
 describe('numbers have a hook and a face (F51)', () => {
-  it('puts data-corn="count" on the tab counts, the Layers count and the Work button\'s lit tag', () => {
+  it('puts data-corn="count" on the tab counts and the Layers count', () => {
     expect(document.querySelectorAll('.hx-forge-count[data-corn="count"]').length).toBe(document.querySelectorAll('.hx-forge-count').length);
     expect($('layers-count').getAttribute('data-corn')).toBe('count');
-    expect($('forge-btn-lit').getAttribute('data-corn')).toBe('count');
   });
 
   it('sets numbers in --corn-font-num, with tabular figures', () => {
     // one rule in the one file, split by piece: each selector is in a rule of its piece's file, with the number face
-    for (const sel of ['.hx-count', '.hx-layers-count', '.hx-forge-count', '.hx-forge-lit', '.hx-player-count', '.hx-ms', '.hx-row-meta', '.hx-run-limits dd']) {
+    for (const sel of ['.hx-count', '.hx-layers-count', '.hx-forge-count', '.hx-player-count', '.hx-ms', '.hx-row-meta', '.hx-run-limits dd']) {
       expect(css, sel).toMatch(new RegExp(`(^|[\\s,}])${sel.replace(/[.]/g, '\\.')}(,[^{}]*)?\\s*\\{ font-family: var\\(--corn-font-num\\); font-variant-numeric: tabular-nums; \\}`));
     }
     // and no earlier rule still names the code face for them (it would only be overridden)
-    for (const sel of ['.hx-count', '.hx-forge-lit', '.hx-ms']) expect(css, sel).not.toMatch(new RegExp(`\\n\\${sel} \\{[^}]*--corn-mono`));
+    for (const sel of ['.hx-count', '.hx-ms']) expect(css, sel).not.toMatch(new RegExp(`\\n\\${sel} \\{[^}]*--corn-mono`));
   });
 });
 

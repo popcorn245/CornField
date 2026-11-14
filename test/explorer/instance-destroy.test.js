@@ -571,7 +571,13 @@ describe('the Work panel', () => {
     const q = (sel) => one.root.querySelector(sel);
     one.work.openForge({ tab: 'pulls' });
     await settle();
-    click(q('[data-forge-pr="7"]'));
+    // the pull request in the node panel (the page's node panel and work-view.js do this: a place for its actions, and the news that it is shown)
+    const box = document.createElement('section');
+    box.id = 'forge-detail';
+    box.dataset.corn = 'work-detail';
+    box.dataset.workKind = 'pull';
+    one.root.append(box);
+    one.inst.emit('node:painted', { node: { id: 'pull:7', work: 'pull', item: { kind: 'pull', id: 'pull:7', number: 7, title: 'Seven', open: true, state: 'open' } } });
     await settle();
     if (dialog === 'confirm') click(q('[data-forge-merge]'));
     one.work.openForge({ tab: 'issues' }); // the Issues list is asked for and not answered
@@ -590,12 +596,14 @@ describe('the Work panel', () => {
     expect(s.timers).toBeGreaterThan(0);
     expect(one.root.querySelector('#forge-confirm').hidden).toBe(false);
     one.work.destroy();
+    one.root.querySelector('#forge-detail')?.remove(); // the node panel's place for the actions is the page's, not the piece's
     expect(one.root.children).toHaveLength(0);
     const again = make(srv);
     await settle();
     await halfDone(again, 'agent');
     expect(again.root.querySelector('#agent-start').hidden).toBe(false);
     again.work.destroy();
+    again.root.querySelector('#forge-detail')?.remove();
     expect(again.root.children).toHaveLength(0);
     srv.release();
   });
@@ -648,20 +656,17 @@ describe('the Work panel', () => {
     }
     click(q('[data-forge-kind="pulls"]'));
     await settle();
-    click(q('[data-forge-pr="7"]'));
+    click(q('[data-work-ref="pull:7"]')); // with no node panel there is nothing to show it in: the row says nothing, and nothing throws
     await settle();
-    expect(q('#forge-detail').textContent).toContain('Seven');
-    click(q('[data-action="clear-forge-pr"]'));
     click(q('[data-forge-kind="threads"]'));
     await settle();
     click(q('#idea-open'));
     expect(q('#idea-form').hidden).toBe(false);
-    // the node panel's questions are answered with no node panel there, and a thread opened from nowhere is a thread opened
+    // the node panel's questions are answered with no node panel there, and a thread opened from nowhere opens nothing
     expect(one.inst.ask('threads:index', 'nobody')).toMatchObject({ forge: 'GitHub', start: true });
     expect(one.inst.ask('forge:can-start')).toBe(true);
     one.inst.emit('thread:open', { number: 5 });
     await settle();
-    expect(q('#forge-detail').hidden).toBe(false);
     one.work.destroy();
     one.inst.destroy();
   });

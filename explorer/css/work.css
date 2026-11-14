@@ -6,18 +6,9 @@
  * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
  * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
  */
-/* The Work toggle: opens the Work panel (forge-panel.js says in the tag which pull request is lit) */
-.hx-work { display: inline-flex; align-items: center; gap: var(--corn-space-2); height: var(--hx-control-h); padding: 0 var(--corn-space-4); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 600; white-space: nowrap; }
-.hx-work:hover { background: var(--corn-surface-3); color: var(--corn-text); }
-.hx-work[aria-expanded="true"] { background: var(--corn-accent); border-color: var(--corn-accent-text); color: var(--corn-text-on-accent); }
-.hx-forge-lit { padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-warn); background: var(--corn-ground); color: var(--corn-warn); font-size: var(--corn-text-2xs); }
-@container corn-box (max-width: 767px) {
-  .hx-work { height: var(--hx-control-h); min-width: var(--hx-control-h); justify-content: center; padding: 0 var(--corn-space-3); }
-  .hx-forge-lit { display: none; }
-}
-/* ---- the issues and PRs panel (forge-panel.js, CF-07) -------------------------------------------
+/* ---- the Work list (pieces/work-list.js; spec 0012 D6; first CF-07's issues and PRs panel) -------------------------------------------
    A slide-over from the left from 768px (the node panel is the one from the right), a bottom sheet in #sheet-dock below.
-   Closed, it is inert (forge-panel.js), and off screen or not displayed. Only the tokens above are used, so it follows the theme. */
+   Closed, it is inert, and off screen or not displayed. Only the tokens above are used, so it follows the theme. */
 .hx-forge { --hx-forge-status-w: 56px; }
 .hx-forge { display: flex; flex-direction: column; z-index: 40; border-color: var(--corn-line); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
 .hx-forge * { touch-action: pan-y; }
@@ -93,7 +84,6 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-forge-check { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--corn-space-1) / 2) var(--corn-space-2); }
 .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 24px; }
 .hx-forge-lights { flex-basis: 100%; font-size: var(--corn-text-xs); line-height: 1.5; }
-.hx-forge-key { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--corn-space-1) / 2) var(--corn-space-1); font-size: var(--corn-text-xs); }
 .hx-forge-file { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--corn-space-1) / 2) var(--corn-space-2); padding: var(--corn-space-1) 0; border-top: var(--corn-border) solid var(--corn-line-soft); overflow-wrap: anywhere; }
 .hx-forge-fstatus { flex: none; min-width: var(--hx-forge-status-w); color: var(--corn-text-3); font-size: var(--corn-text-xs); }
 .hx-forge-del { color: var(--corn-bad); }
@@ -137,7 +127,6 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 /* A selection replaces the list, with a back control named by the list; Land it is the one primary action */
 .hx-forge-back { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 28px; margin-left: calc(var(--corn-space-2) * -1); padding: 0 var(--corn-space-3) 0 var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
 .hx-forge-back:hover { background: var(--corn-surface-3); color: var(--corn-text); }
-.hx-forge-dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1) var(--corn-space-3); }
 .hx-forge-cta { display: flex; flex-wrap: wrap; gap: var(--corn-space-3); }
 .hx-forge-cta .hx-btn { min-height: 32px; justify-content: center; }
 .hx-forge-cta .hx-btn[disabled] { background: var(--corn-surface-3); border-color: var(--corn-line); color: var(--corn-text-3); box-shadow: none; cursor: default; }
@@ -176,20 +165,11 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-run-timeline li { color: var(--corn-text-2); }
 .hx-run-timeline time { color: var(--corn-text-2); margin-right: var(--corn-space-2); }
 .hx-run-note { display: block; color: var(--corn-text-2); white-space: pre-wrap; }
-.hx-run-compare { border: var(--corn-border) solid var(--corn-line); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-added-text); border-radius: var(--corn-radius); padding: var(--corn-space-3); display: flex; flex-direction: column; gap: var(--corn-space-2); }
-.hx-run-compare-title { margin: 0; font-size: var(--corn-text-sm); font-weight: 700; color: var(--corn-text); }
-.hx-run-columns { display: grid; grid-template-columns: 1fr; gap: var(--corn-space-3); margin: 0; padding: 0; list-style: none; }
-@container corn-box (min-width: 1100px) {
-  .hx-run-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@container corn-box (min-width: 1100px) and (max-width: 1599px) {
-  .hx-stage:has(.drawer-open) .hx-run-columns { grid-template-columns: 1fr; }
-}
 /* A scroll container never cuts a focus ring: a row that is tabbed to stops short of the edge by the ring's width and offset */
 .hx-forge-body { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
 /* The Work tabs scroll sideways: a tab brought into view stops short of the edge by the strip's own padding */
 .hx-forge-tabs { scroll-padding-inline: var(--corn-space-4); }
-.hx-forge-count, .hx-forge-lit, .hx-run-limits dd { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+.hx-forge-count, .hx-run-limits dd { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   .hx-forge { transition: none; animation: none; }
 }
@@ -256,7 +236,6 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
    right padding, by a margin that gives the room back (content-box, so the padding is added to the count's 2ch and the margin takes exactly that away
    again), and keeps the tab's gap from its word on the left */
 .hx-forge-tab .hx-forge-count.hx-forge-count--waiting, .hx-forge-tab[aria-pressed="true"] .hx-forge-count.hx-forge-count--waiting { box-sizing: content-box; padding: 0 var(--corn-space-1); margin: 0 calc(var(--corn-space-1) * -2) 0 0; text-align: center; background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); }
-.hx-work .hx-waiting-badge { margin-right: calc(var(--corn-space-2) * -1); }
 /* A group of the Specs list: its header says who must act and how many; Drafts past ten rows fold behind it */
 .hx-spec-group > .hx-forge-list { margin: 0; padding: 0; }
 .hx-spec-group > .hx-forge-list[hidden] { display: none; }
@@ -278,8 +257,6 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
   .hx-forge-gtoggle { min-height: 44px; }
   .hx-forge-unread .hx-btn { min-height: 44px; }
 }
-.hx-runner-dot { display: inline-block; width: 8px; height: 8px; margin-left: var(--corn-space-1); border-radius: 50%; background: var(--corn-warn); vertical-align: middle; }
-.hx-runner-dot[hidden] { display: none; }
 .hx-forge-detail-title, .hx-forge-notes-title { font-size: var(--corn-text-lg); font-weight: 700; line-height: 1.25; letter-spacing: normal; }
 /* The head of a panel: its title row. The Work panel and the node panel start at one edge (the padding is --corn-panel-pad) and the head is at least this tall */
 .hx-forge-head { min-height: var(--corn-panel-head-height); }

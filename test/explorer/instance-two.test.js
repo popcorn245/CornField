@@ -736,8 +736,20 @@ describe('two Work panels in one document (step 6)', () => {
   const panelOn = (name, topology, n) => {
     const srv = server(name, n);
     const one = mount(name, topology, {}, { fetch: srv.fetch });
+    // the Work view's List toggle is what opens the list (explorer/work-view.js): a host's box has one of its own
+    one.root.insertAdjacentHTML('beforeend', '<button type="button" id="forge-btn" data-action="toggle-forge" aria-expanded="false" hidden>List</button>');
     const work = workPiece.mount(one.root, one.inst, { config: CONFIG, clock: () => NOW });
     return { ...one, work, srv };
+  };
+  /** What the node panel and the Work view do for a piece of work: a place for its actions, and the news that it is shown (the Work piece draws the actions into the place) */
+  const painted = (one, item) => {
+    one.root.querySelector('#forge-detail')?.remove();
+    const box = document.createElement('section');
+    box.id = 'forge-detail';
+    box.dataset.corn = 'work-detail';
+    box.dataset.workKind = item.kind;
+    one.root.append(box);
+    one.inst.emit('node:painted', { node: { id: item.id, work: item.kind, item } });
   };
 
   beforeEach(async () => {
@@ -751,12 +763,10 @@ describe('two Work panels in one document (step 6)', () => {
   });
   afterEach(() => { a.work.destroy(); b.work.destroy(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-  it('each has its own markup, its own button and its own count, with the same ids twice in the document', () => {
+  it('each has its own markup, its own toggle and its own count, with the same ids twice in the document', () => {
     expect(document.querySelectorAll('#forge-panel')).toHaveLength(2);
     expect(document.querySelectorAll('#forge-btn')).toHaveLength(2);
     expect(q(a, '#forge-btn').hidden).toBe(false);
-    expect(q(a, '#forge-btn-waiting')).toBeNull(); // the number is the view switch's, not this button's
-    expect(q(a, '#forge-btn').getAttribute('aria-label')).toBe('Work panel');
     for (const one of [a, b]) for (const el of one.root.querySelectorAll('[data-corn]')) expect(el.getAttribute('part'), el.outerHTML.slice(0, 80)).toBe(el.getAttribute('data-corn'));
   });
 
@@ -769,12 +779,9 @@ describe('two Work panels in one document (step 6)', () => {
     click(q(a, '[data-forge-kind="pulls"]'));
     await settle();
     expect(q(a, '#forge-list').textContent).toContain('Pull of alpha');
-    click(q(a, '[data-forge-pr="21"]'));
+    painted(a, { kind: 'pull', id: 'pull:21', number: 21, title: 'Pull of alpha', open: true, state: 'open' });
     await settle();
-    expect(q(a, '#forge-detail').hidden).toBe(false);
-    expect(q(a, '#forge-detail').textContent).toContain('Pull of alpha');
-    expect(a.state.forgeLit).not.toBeNull();
-    expect(b.state.forgeLit).toBeNull();
+    expect(q(a, '#forge-detail').textContent).toContain('Land it');
     expect(b.root.innerHTML).toBe(before);
     expect(sb.calls.filter((c) => c.path.startsWith('/api/forge/pulls'))).toEqual([]);
     expect(sa.calls.some((c) => c.path === '/api/forge/pulls/21')).toBe(true);
@@ -786,7 +793,7 @@ describe('two Work panels in one document (step 6)', () => {
     click(q(b, '#forge-btn'));
     click(q(a, '[data-forge-kind="pulls"]'));
     await settle();
-    click(q(a, '[data-forge-pr="21"]'));
+    painted(a, { kind: 'pull', id: 'pull:21', number: 21, title: 'Pull of alpha', open: true, state: 'open' });
     await settle();
     click(q(a, '[data-forge-merge]'));
     expect(q(a, '#forge-confirm').hidden).toBe(false);
@@ -807,8 +814,11 @@ describe('two Work panels in one document (step 6)', () => {
     click(q(a, '#forge-btn'));
     click(q(a, '[data-forge-kind="work"]'));
     await settle();
-    expect(q(a, '#forge-runs-list').textContent).toContain('Plan 21 ready');
+    expect(q(a, '#forge-runs-list').textContent).toContain('code on issue #21');
     expect(q(b, '[data-forge-kind="work"] .hx-forge-count').textContent).toBe('1');
+    painted(a, { kind: 'run', id: `run:${ID(21)}`, runId: ID(21), title: 'Plan 21', open: true, waiting: true });
+    await settle();
+    expect(q(a, '#forge-run-card').textContent).toContain('Plan 21 ready');
     click(q(a, `[data-run-answer="continue"][data-run-id="${ID(21)}"]`));
     await settle();
     expect(sa.calls.filter((c) => c.method === 'POST').map((c) => [c.path, c.body])).toEqual([[`/api/agent-runs/${ID(21)}/answer`, { action: 'continue' }]]);

@@ -1404,7 +1404,7 @@
       "label": "forge-panel.js",
       "type": "core",
       "file": "explorer/forge-panel.js",
-      "summary": "A bridge (spec 0011 D2 and D3, step 6): the Work panel is a piece on the instance (pieces/work.js, with a part per tab in pieces/work-*.js) and its pure half is forge-panel-model.js.",
+      "summary": "A bridge (spec 0011 D2 and D3, step 6): the Work list and the actions of a piece of work are the Work piece on the instance (pieces/work.js, with a part per tab in pieces/work-*.js) and its pure ha…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t… (explorer/forge-panel.js)"
@@ -1874,7 +1874,7 @@
       "label": "deep-link.js",
       "type": "core",
       "file": "explorer/deep-link.js",
-      "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Runs tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent bu…",
+      "summary": "The link from chat that starts an agent on a proposal (issue #103, docs/agents.md \"Deep links\"): ?proposal=<slug>&start=1 the proposal opened (proposal.js) and the Start dialog on it (`?run=`, `?is…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent … (explorer/deep-link.js)"
@@ -2883,7 +2883,7 @@
       "label": "work-data.js",
       "type": "core",
       "file": "explorer/pieces/work-data.js",
-      "summary": "The Work panel's asking: every request, the list a tab shows, what a selection lights on the map, the counts read quietly.",
+      "summary": "The Work list's asking: every request, the list a tab shows, what the piece of work in the node panel holds, the counts read quietly.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work panel's asking: every request, the list a tab shows, what a selection lights on the map, the counts read quietly. (explorer/pieces/work-data.js)"
@@ -2893,27 +2893,17 @@
       "label": "work-deploys.js",
       "type": "core",
       "file": "explorer/pieces/work-deploys.js",
-      "summary": "The Deploys tab: the list and a deploy's detail, lit on the map.",
+      "summary": "The Deploys tab: the list, and a deploy's detail in the node panel (what it restarted, its logs on the forge).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Deploys tab: the list and a deploy's detail, lit on the map. (explorer/pieces/work-deploys.js)"
-    },
-    {
-      "id": "core-explorer-pieces-work-events",
-      "label": "work-events.js",
-      "type": "core",
-      "file": "explorer/pieces/work-events.js",
-      "summary": "Opening and closing the panel, and what a click, a change, an input and a key in it do.",
-      "r": 20,
-      "color": "#14b8a6",
-      "desc": "Opening and closing the panel, and what a click, a change, an input and a key in it do. (explorer/pieces/work-events.js)"
     },
     {
       "id": "core-explorer-pieces-work-issues",
       "label": "work-issues.js",
       "type": "core",
       "file": "explorer/pieces/work-issues.js",
-      "summary": "The Issues tab and the deep link to an issue (its rows are drawn with the PRs' in work-prs.js).",
+      "summary": "The Issues tab (its rows are drawn with the PRs' in work-prs.js), an issue's actions in the node panel, and an issue older than the Work view's 14 days.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Issues tab and the deep link to an issue (its rows are drawn with the PRs' in work-prs.js). (explorer/pieces/work-issues.js)"
@@ -2923,7 +2913,7 @@
       "label": "work-markup.js",
       "type": "core",
       "file": "explorer/pieces/work-markup.js",
-      "summary": "The Work piece's markup (spec 0011 D3), moved out of explorer/index.html unchanged: the Work button (its stand-in stays in the header, held equal to this by test/explorer/page-pieces.test.js), the …",
+      "summary": "The Work piece's markup (spec 0011 D3, spec 0012 D6): the Work list (the panel's lists, opened by the List toggle of the Work view), the layer of marks over the map, and the two dialogs the actions…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work piece's markup (spec 0011 D3), moved out of explorer/index.html unchanged: the Work button (its stand-in stays in the header, held equal to this by test/explorer/page-pieces.test.js), the … (explorer/pieces/work-markup.js)"
@@ -2943,7 +2933,7 @@
       "label": "work-paint.js",
       "type": "core",
       "file": "explorer/pieces/work-paint.js",
-      "summary": "Drawing the panel from its state: tabs, counts, filters, the list, the detail, the Work button.",
+      "summary": "Drawing the Work list from its state (tabs, counts, filters, the rows) and the node panel's actions for the piece of work it shows.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Drawing the panel from its state: tabs, counts, filters, the list, the detail, the Work button. (explorer/pieces/work-paint.js)"
@@ -2953,7 +2943,7 @@
       "label": "work-prs.js",
       "type": "core",
       "file": "explorer/pieces/work-prs.js",
-      "summary": "The PRs tab: the list rows, a pull request's detail (files, checks, merge, rerun, landing) and the lights it puts on the map.",
+      "summary": "The PRs tab: the list rows, and a pull request's detail in the node panel (its files, checks, Land it, Re-run, landing).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The PRs tab: the list rows, a pull request's detail (files, checks, merge, rerun, landing) and the lights it puts on the map. (explorer/pieces/work-prs.js)"
@@ -2963,7 +2953,7 @@
       "label": "work-runs.js",
       "type": "core",
       "file": "explorer/pieces/work-runs.js",
-      "summary": "The Runs tab: the groups, a run, Stop, answer, the brief, the poll, and the runs on the map.",
+      "summary": "The Runs tab: the groups and the runs' rows; a run in the node panel (its card: Stop, answer, Start again, the timeline); the poll, and the runs on the map.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Runs tab: the groups, a run, Stop, answer, the brief, the poll, and the runs on the map. (explorer/pieces/work-runs.js)"
@@ -2973,7 +2963,7 @@
       "label": "work-specs.js",
       "type": "core",
       "file": "explorer/pieces/work-specs.js",
-      "summary": "The Specs tab: the proposals the server finds, merged into one row each, and the number of those that wait on a decision.",
+      "summary": "The Specs tab: the proposals the server finds, merged into one row each, the number of those that wait on a decision, and a proposal's actions in the node panel.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Specs tab: the proposals the server finds, merged into one row each, and the number of those that wait on a decision. (explorer/pieces/work-specs.js)"
@@ -2983,7 +2973,7 @@
       "label": "work-threads.js",
       "type": "core",
       "file": "explorer/pieces/work-threads.js",
-      "summary": "The Threads tab: the list, a thread's messages, and the New idea form.",
+      "summary": "The Threads tab: the list, a thread's messages in the node panel, and the New idea form.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Threads tab: the list, a thread's messages, and the New idea form. (explorer/pieces/work-threads.js)"
@@ -2993,7 +2983,7 @@
       "label": "work.js",
       "type": "core",
       "file": "explorer/pieces/work.js",
-      "summary": "The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the panel with its tabs (Specs, PRs, Issues, Threads, …",
+      "summary": "The Work piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010, spec 0012 D5 and D6): the Work list with its tabs (Specs, PRs, Issues, Threads, Runs, Deploys, and…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the panel with its tabs (Specs, PRs, Issues, Threads, … (explorer/pieces/work.js)"
@@ -3187,6 +3177,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work view in cornfield's page (spec 0012 D1 to D5 and D8); its pure half is work-model.js, the server's half `GET /api/forge/work-graph` (server/work-graph.js). (explorer/work-view.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-list",
+      "label": "work-list.js",
+      "type": "core",
+      "file": "explorer/pieces/work-list.js",
+      "summary": "The Work list (spec 0012 D6): opening and closing it (the List toggle of the Work view), what a click, a change, an input and a key in it do, and how a row selects its node.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work list (spec 0012 D6): opening and closing it (the List toggle of the Work view), what a click, a change, an input and a key in it do, and how a row selects its node. (explorer/pieces/work-list.js)"
     }
   ],
   "edges": [
@@ -5195,12 +5195,6 @@
     {
       "from": "core-explorer-forge-panel",
       "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-scene",
-      "to": "core-explorer-forge-panel-model",
       "dashed": true,
       "label": "imports"
     },
@@ -9559,10 +9553,6 @@
     },
     {
       "from": "pkg-explorer",
-      "to": "core-explorer-pieces-work-events"
-    },
-    {
-      "from": "pkg-explorer",
       "to": "core-explorer-pieces-work-issues"
     },
     {
@@ -9647,12 +9637,6 @@
     },
     {
       "from": "core-explorer-pieces-work-common",
-      "to": "core-explorer-engine-piece",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-common",
       "to": "core-explorer-forge-panel-model",
       "dashed": true,
       "label": "imports"
@@ -9700,12 +9684,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-pieces-work-data",
-      "to": "core-explorer-runs-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-pieces-work-deploys",
       "to": "core-core-text",
       "dashed": true,
@@ -9714,12 +9692,6 @@
     {
       "from": "core-explorer-pieces-work-deploys",
       "to": "core-explorer-corn-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-deploys",
-      "to": "core-explorer-engine-layers",
       "dashed": true,
       "label": "imports"
     },
@@ -9737,37 +9709,7 @@
     },
     {
       "from": "core-explorer-pieces-work-deploys",
-      "to": "core-explorer-layer-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-deploys",
       "to": "core-explorer-pieces-work-common",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-events",
-      "to": "core-explorer-agents-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-events",
-      "to": "core-explorer-forge-panel-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-events",
-      "to": "core-explorer-pieces-work-common",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-events",
-      "to": "core-explorer-waiting-model",
       "dashed": true,
       "label": "imports"
     },
@@ -9876,12 +9818,6 @@
     {
       "from": "core-explorer-pieces-work-prs",
       "to": "core-explorer-pieces-work-common",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work-prs",
-      "to": "core-explorer-review-model",
       "dashed": true,
       "label": "imports"
     },
@@ -10031,12 +9967,6 @@
     },
     {
       "from": "core-explorer-pieces-work",
-      "to": "core-explorer-engine-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work",
       "to": "core-explorer-engine-piece",
       "dashed": true,
       "label": "imports"
@@ -10098,12 +10028,6 @@
     {
       "from": "core-explorer-pieces-work",
       "to": "core-explorer-pieces-work-deploys",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-work",
-      "to": "core-explorer-pieces-work-events",
       "dashed": true,
       "label": "imports"
     },
@@ -10877,12 +10801,6 @@
     },
     {
       "from": "core-explorer-work-model",
-      "to": "core-explorer-forge-panel-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-work-model",
       "to": "core-explorer-review-model",
       "dashed": true,
       "label": "imports"
@@ -10938,12 +10856,6 @@
     {
       "from": "core-explorer-work-view",
       "to": "core-explorer-engine-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-work-view",
-      "to": "core-explorer-forge-panel-model",
       "dashed": true,
       "label": "imports"
     },
@@ -11030,7 +10942,81 @@
       "to": "core-explorer-keyboard-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-list"
+    },
+    {
+      "from": "core-explorer-pieces-work-issues",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-list",
+      "to": "core-explorer-agents-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-list",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-list",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-list",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-list",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-list",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-specs",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-list",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0012-work-as-a-view",
+      "to": "page-doc-docs-agents",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-14T00:25:44.946Z"
+  "updatedAt": "2026-11-14T02:55:11.151Z"
 }

@@ -150,7 +150,6 @@ export function install(ctx) {
     const notice = $('forge-notice');
     const words = n.error || (n.data && n.data.stale ? `Showing an older answer. ${n.data.stale}` : '');
     fn.setNotice(notice, words, !!words);
-    $('forge-detail').hidden = true;
     fn.paintIdea();
     $('forge-rate').textContent = (n.data && n.data.rate) || '';
     paintNotes();

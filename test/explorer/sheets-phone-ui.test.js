@@ -13,7 +13,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -76,7 +78,7 @@ function mount() {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 390, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 844, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -86,7 +88,9 @@ function mount() {
   initKeyboard();
   initSheets();
   resetForgePanelForTests();
+  resetWorkViewForTests();
   initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } });
+  initWorkView({ offered: true });
 }
 const sheet = (id) => $(id);
 const stateOf = (id) => sheet(id).dataset.sheetState;
@@ -107,10 +111,9 @@ describe('every sheet opens as a peek, and only a deep link opens one expanded',
     expect($('forge-panel').dataset.sheetAway).toBeUndefined();
   });
 
-  it('opens Work expanded for a deep link (openForge with a tab, then expanded by openTab)', async () => {
+  it('opens the Work list expanded for a link that names a tab (openForge with a tab)', async () => {
     mount();
-    const { openRunLink } = await import('../../explorer/forge-panel.js');
-    openRunLink('run-none');
+    openForge({ tab: 'specs' });
     await flush();
     expect(stateOf('forge-panel')).toBe('expanded');
   });
@@ -120,7 +123,9 @@ describe('a sheet registered twice', () => {
   it('still answers one tap on its handle once: the sheets set up again (a re-init) add no second listener', async () => {
     mount();
     initSheets();
+    resetWorkViewForTests();
     initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } });
+    initWorkView({ offered: true });
     openProposal();
     click($('proposal-bar').querySelector('.hx-sheet-handle'));
     expect(stateOf('proposal-bar')).toBe('expanded'); // two listeners would expand it and fold it straight back
@@ -153,7 +158,7 @@ describe('one expanded at a time: the other folds to a stub, and a tap on the st
     expect(stateOf('proposal-bar')).toBe('expanded');
     expect(stateOf('forge-panel')).toBe('stub');
     expect(document.activeElement).toBe($('proposal-bar').querySelector(':scope > .hx-sheet-handle')); // the focus goes with it, not to the page (so Escape folds it)
-    expect($('forge-panel').querySelector('[data-corn="sheet-stub"]').textContent).toContain('Work');
+    expect($('forge-panel').querySelector('[data-corn="sheet-stub"]').textContent).toContain('Work list');
     click($('proposal-bar').querySelector('.hx-sheet-handle')); // fold back
     expect([stateOf('proposal-bar'), stateOf('forge-panel')]).toEqual(['peek', 'peek']);
   });
@@ -167,7 +172,7 @@ describe('one expanded at a time: the other folds to a stub, and a tap on the st
     click($('proposal-bar').querySelector('.hx-sheet-handle'));
     const stub = $('forge-panel').querySelector('[data-corn="sheet-stub"]');
     expect(stub.querySelector('[data-corn="waiting-badge"]').textContent).toBe('2');
-    expect(stub.getAttribute('aria-label')).toBe('Work, 2 waiting on you');
+    expect(stub.getAttribute('aria-label')).toBe('Work list, 2 waiting on you');
   });
 
   it('caps the expanded sheet so the map keeps 296 px of 844: the dock says its room under a stub', async () => {

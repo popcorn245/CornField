@@ -317,7 +317,7 @@ describe('the node panel (D5)', () => {
     expect(p.pills[0]).toMatchObject({ text: 'Open', state: 'open' });
     expect(p.links.map((l) => `${l.rel}|${l.id}`)).toEqual(expect.arrayContaining(['closes|issue:14', 'opened by|run:run-0123456789ABCDEFGHIJKLMNOP', 'shipped in|deploy:9', 'changes|api-billing', 'changes|invoices']));
     expect(p.links[0].work).toBeTruthy(); // work before code
-    expect(p.says).toMatch(/Work panel/);
+    expect(p.says).toMatch(/Land it/);
   });
   it('a proposal waiting on you says so; a node of code lists the work touching it', () => {
     const p = panelOf(nodes.find((n) => n.id === 'proposal:0100-flow'), nodes, edges);
@@ -364,13 +364,14 @@ describe('the panel keeps the forge\'s words as text and its links as web links 
       { id: 'pull:8', kind: 'pull', stage: 'build', title: '<script>alert(2)</script>', state: 'open', open: true, waiting: false, number: 8, url: 'https://forge.example.test/pull/8"><script>x</script>', updated: '2026-11-12T00:00:00Z' },
       { id: 'run:run-0123456789ABCDEFGHIJKLMNOP', kind: 'run', stage: 'build', title: 'ok', state: 'done', open: false, waiting: false, runId: 'run-0123456789ABCDEFGHIJKLMNOP', url: 'data:text/html,<b>x</b>', updated: '2026-11-12T00:00:00Z' },
       { id: 'deploy:1', kind: 'deploy', stage: 'ship', title: 'd', state: 'success', open: false, waiting: false, deployId: 1, url: null, updated: '2026-11-12T00:00:00Z' },
+      { id: 'thread:9', kind: 'thread', stage: 'talk', title: 'p', state: 'open', open: true, waiting: false, number: 9, threadKind: 'idea', url: 'https://forge.example.test/pull/9"><script>x</script>', updated: '2026-11-12T00:00:00Z' },
     ],
     edges: [{ from: 'issue:7', to: 'pull:8', rel: 'closes' }],
   };
   const html = (id) => {
     const { nodes, edges } = workScene(hostile, map);
     const node = nodes.find((n) => n.id === id);
-    return workPanelHtml(panelOf(node, nodes, edges), node, { checks: '<i>checks</i>' });
+    return workPanelHtml(panelOf(node, nodes, edges), node);
   };
   it('escapes every title, author and label', () => {
     for (const id of ['issue:7', 'pull:8']) {
@@ -383,8 +384,9 @@ describe('the panel keeps the forge\'s words as text and its links as web links 
     expect(html('issue:7')).not.toContain('href=');
     expect(html('run:run-0123456789ABCDEFGHIJKLMNOP')).not.toContain('href=');
     expect(html('deploy:1')).not.toContain('href=');
-    const out = html('pull:8');
-    expect(out).toMatch(/href="https:\/\/forge\.example\.test\/pull\/8&quot;&gt;&lt;script&gt;x&lt;\/script&gt;"/);
+    expect(html('pull:8')).not.toContain('href='); // a pull request's link is in its actions, which the Work piece draws from the pull request's own route, through `safeUrl`
+    const out = html('thread:9');
+    expect(out).toMatch(/href="https:\/\/forge\.example\.test\/pull\/9&quot;&gt;&lt;script&gt;x&lt;\/script&gt;"/);
     expect(out).toContain('rel="noreferrer"');
     expect((out.match(/href=/g) || []).length).toBe(1);
   });
@@ -440,6 +442,6 @@ describe('two spec pull requests with one slug (the server\'s second id form)', 
     const laid = layoutWork(nodes, { width: 1440, height: 800 });
     expect(new Set(laid.order).size).toBe(2);
     const out = workPanelHtml(panelOf(nodes[1], nodes, []), nodes[1], {});
-    expect(out).toContain('data-id="proposal:0100-flow@23"');
+    expect(out).toContain('data-work-ref="proposal:0100-flow@23"');
   });
 });

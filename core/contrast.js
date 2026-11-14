@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { MIN_SHAPE_DELTA_E, NODE_SHAPES, NODE_THEMES } from './schema.js';
-import { WORK_KINDS, WORK_THEMES } from './schema.js';
+import { WORK_KINDS, WORK_THEMES, WORK_EDGES, WORK_EDGE_THEMES } from './schema.js';
 import { deltaE2000 } from './delta-e.js';
 import { LAYER_KEY_RE, MAX_KEY, mapFillNames, parseKindToken } from './layers.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, GREY_MIN_RATIO, markOpacity } from '../explorer/diff-marks.js';
@@ -572,6 +572,17 @@ function mapFindings(props, theme, mode, grounds, extra = []) {
     const onFill = ratio(luminance(over(stroke.color, over(fill, ground))), luminance(over(fill, ground)));
     const weakest = onGround.ratio <= onFill ? { r: onGround.ratio, on: '--corn-ground', value: onGround.bgValue } : { r: onFill, on: name, value: toHex(over(fill, ground)) };
     out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries ${use}, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
+  }
+  // The lines of the Work view (spec 0012 D3): each is drawn at full strength where it joins the selection, and read at 3:1 against the ground, as a map's line is
+  for (const edge of WORK_EDGES) {
+    const name = `--corn-work-edge-${edge}`;
+    const t = mapToken(props, name);
+    const use = `the ${edge === 'work' ? 'line between two pieces of work' : edge === 'code' ? 'line from a piece of work to the code it touches' : 'dashed line to the code a proposal adds'} in the Work view, where it joins the selection`;
+    if (t.problem) { out.push({ ...base, fg: name, bg: GROUND, min: MIN_UI, kind: 'ui', use, problem: t.problem }); continue; }
+    const own = !t.color;
+    const line = own ? readColor(mode === 'light' ? lightColor(WORK_EDGE_THEMES[edge]) : WORK_EDGE_THEMES[edge]) : t.color;
+    const f = worstOnGrounds(line, grounds);
+    out.push({ ...base, fg: own ? `${name}, auto: the line's own colour` : name, bg: GROUND, min: MIN_UI, kind: 'ui', use, fgValue: f.fgValue, bgValue: f.bgValue, ratio: f.ratio, ...(f.image ? { groundImage: true } : {}) });
   }
   // The ink of a glyph and of a finer kind's letters (spec 0008 D8), when the theme sets one: against every fill it can sit on (`auto` picks white or dark per fill, which a test holds)
   const glyph = mapToken(props, '--corn-map-glyph');

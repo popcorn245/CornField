@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  nodesForRestarts, litForDeploy, matchesDeploy, filterItems, deployWords, deployMeta, listUrl, listKeyOf, defaultFilters, STATES, paintForge, FORGE_FAIL_COLOR,
+  nodesForRestarts, litForDeploy, matchesDeploy, filterItems, deployWords, deployMeta, listUrl, listKeyOf, defaultFilters, STATES,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/forge-panel-model.js';
 
@@ -62,22 +62,6 @@ describe('litForDeploy', () => {
     const none = litForDeploy(deploy(), NODES);
     expect([none.nodes, none.changed.size, none.failing.size]).toEqual([[], 0, 0]);
     expect(litForDeploy({ state: 'success' }, NODES).nodes).toEqual([]);
-  });
-
-  it('paints through the pull request path: lit nodes bright (a failed deploy red), the rest faded', () => {
-    const make = (lit) => {
-      const s = { nodes: NODES.map((n) => ({ id: n.id, alpha: 1, labelAlpha: 1, glow: 0, halo: null, color: '#336699' })), edges: [{ from: 'root', to: 'machine-nas', alpha: 1 }, { from: 'root', to: 'stack-web', alpha: 1 }] };
-      paintForge(s, lit);
-      return s;
-    };
-    const ok = make(litForDeploy(deploy({ restarts: ['nas'] }), NODES));
-    expect(ok.nodes.find((n) => n.id === 'machine-nas')).toMatchObject({ alpha: 1, halo: 'match' });
-    expect(ok.nodes.find((n) => n.id === 'root').alpha).toBeLessThan(0.5);
-    expect(ok.edges[1].alpha).toBeLessThan(0.2);
-    const bad = make(litForDeploy(deploy({ state: 'failure', restarts: ['nas'] }), NODES));
-    expect(bad.nodes.find((n) => n.id === 'machine-nas').color).toBe(FORGE_FAIL_COLOR);
-    const none = make(litForDeploy(deploy(), NODES));
-    expect(none.nodes.every((n) => n.alpha === 1)).toBe(true);
   });
 });
 

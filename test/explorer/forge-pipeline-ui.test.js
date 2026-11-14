@@ -16,7 +16,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -89,7 +91,7 @@ function mount() {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -99,41 +101,48 @@ function mount() {
   initKeyboard();
   initSheets();
   resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock: () => NOW });
+  resetWorkViewForTests();
+  const forgeOn = initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock: () => NOW });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work (work:panel): the actions are in it
+  return forgeOn;
 }
 
-const openIssues = async () => {
+/** A piece of work in the node panel (no Work view in this page: it is shown there alone, as work older than the graph's 14 days is) */
+const showWork = async (kind, key) => { await showWorkRef(kind, String(key)); await settle(); };
+/** The Issues list, and issue `n` in the node panel, where its Start a spec is */
+const openIssues = async (n = 7) => {
   openForge({ tab: 'pulls' });
   await settle();
   click(q('[data-forge-kind="issues"]'));
   await settle();
+  if (n) await showWork('issue', n);
 };
 const openSpec = async () => {
   openForge({ tab: 'pulls' });
   await settle();
-  click(q('[data-forge-pr="40"]'));
-  await settle();
+  await showWork('pull', 40);
 };
 
 beforeEach(() => { localStorage.clear(); history.replaceState(null, '', '/'); });
 afterEach(() => { closeForge({ restoreFocus: false }); closeDrawer(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('step 1: Start a spec, on an issue', () => {
-  it('an open issue has the button, named for its issue; a closed one has none', async () => {
+  it('an open issue\'s node panel has the button, named for its issue; a closed one has none, and a row has none', async () => {
     fakeServer();
     mount();
-    await openIssues();
-    click(q('[data-forge-kind="issues"]'));
+    await openIssues(7);
+    const buttons = qa('#forge-detail [data-forge-spec]');
+    expect(buttons.map((b) => b.dataset.forgeSpec)).toEqual(['7']);
+    expect(buttons[0].textContent).toBe('Start a spec …');
+    expect(buttons[0].getAttribute('aria-label')).toBe('Start a spec for issue 7');
+    expect(qa('#forge-list [data-forge-spec]')).toHaveLength(0); // the actions are the node panel's
     const state_ = q('#forge-state');
     state_.value = 'all';
     state_.dispatchEvent(new Event('change', { bubbles: true }));
     await settle();
-    const buttons = qa('[data-forge-spec]');
-    expect(buttons.map((b) => b.dataset.forgeSpec)).toEqual(['7', '5']);
-    expect(buttons[0].textContent).toBe('Start a spec …');
-    expect(buttons[0].getAttribute('aria-label')).toBe('Start a spec for issue 7');
     expect(qa('#forge-list .hx-forge-item').length).toBe(3);
-    expect(q('#forge-list .hx-forge-item:last-child [data-forge-spec]')).toBe(null);
+    await showWork('issue', 5);
+    expect(qa('#forge-detail [data-forge-spec]').map((b) => b.dataset.forgeSpec)).toEqual(['5']);
   });
 
   it('shows the plan the server read, exactly: the issue, the branch, the file, the draft pull request, with the file and the description in full', async () => {
@@ -218,6 +227,24 @@ describe('step 1: Start a spec, on an issue', () => {
     expect(await said()).toBe('Spec started for issue #7: draft pull request #50.');
     expect(server.urls().filter((u) => u.startsWith('/api/forge/issues?'))).toHaveLength(2);
     expect(document.activeElement).toBe(q('[data-forge-spec="7"]'));
+  });
+
+  it('what a step came to stays with the issue it was for: another piece of work in the node panel does not show it', async () => {
+    fakeServer({ posts: { '/api/forge/issues/7/spec': { status: 201, body: { ok: true, action: 'spec', created: true, number: 7, branch: 'spec/7-meals-page', path: SPEC_PLAN.path, pull: { number: 50, title: SPEC_PLAN.title, url: 'https://git.example.test/owner/name/pull/50', draft: true } } } } });
+    mount();
+    await openIssues();
+    click(q('[data-forge-spec="7"]'));
+    await settle();
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    expect(q('#forge-detail').textContent).toContain('Spec started for issue #7');
+    await showWork('issue', 5);
+    expect($('drawer-title').textContent).toBe('Sign-in');
+    expect(q('#forge-detail').textContent).not.toContain('Spec started for issue #7');
+    await showWork('pull', 40);
+    expect(q('#forge-detail').textContent).not.toContain('Spec started for issue #7');
+    await showWork('issue', 7);
+    expect(q('#forge-detail').textContent).toContain('Spec started for issue #7'); // back on its issue, it is there
   });
 
   it('three clicks on the button send one plan request, and three on confirm send one post', async () => {
@@ -377,7 +404,7 @@ describe('step 3 and the rest of the panel are as they were', () => {
     expect($('forge-confirm').hidden).toBe(true);
     click(q('[data-forge-kind="pulls"]'));
     await settle();
-    click(q('[data-forge-pr="40"]'));
+    click(q('[data-work-ref="pull:40"]'));
     await settle();
     click(q('[data-forge-build="0040-meals"]'));
     await settle();

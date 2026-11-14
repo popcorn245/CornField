@@ -47,14 +47,6 @@ body {
   /* The panel's width is the stage's `--hx-forge-w`, so what makes room for it reads the same number (the Runs view's compare widens it, below) */
   .hx-stage { --hx-forge-w: min(400px, calc(100% - 24px)); }
 }
-@media (min-width: 1100px) {
-  .hx-stage:has(.hx-forge .hx-run-compare) { --hx-forge-w: min(780px, calc(100% - 24px)); }
-}
-@media (min-width: 1100px) and (max-width: 1599px) {
-  /* With the node panel open as well, a 780px compare only fits beside it from 1600px: below that the panel keeps its width and the
-     profiles stack, so neither panel nor the proposal bar between them is covered */
-  .hx-stage:has(.hx-forge .hx-run-compare):has(.drawer-open) { --hx-forge-w: min(400px, calc(100% - 24px)); }
-}
 /* The scenario player is one bar under the map (spec 0006 D6). From 768px it sits at the foot of the map area, to the right of the review column;
    the stage tells it how wide the column is */
 @media (min-width: 768px) {

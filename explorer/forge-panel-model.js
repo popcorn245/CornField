@@ -12,7 +12,6 @@
  *   nodesForFile              the node(s) whose `file` holds a path: the deepest `file` that is the path or a folder of it
  *   testFilesOf               the test files a check's name names
  *   litFor                    for one pull request: which nodes its files are, and which a failing check's tests are
- *   paintForge                lights those in a built scene (scene.js calls it): the rest fades back
  *   nodesForRestarts, litForDeploy   for one deploy (PIPE-03): the nodes the config says it restarted (a stack brings its containers),
  *                             and the refs that are on no node; the deploys list's filters and words (matchesDeploy, deployWords, deployMeta)
  *   errorWords                a failed request, in words
@@ -43,11 +42,6 @@ export const STATES = Object.freeze({
 });
 /** How many a list asks for (the server's own default; its most is 300) */
 export const LIST_LIMIT = 100;
-/** How bright what the selected pull request does not touch is, once some nodes are lit */
-export const FORGE_DIM_ALPHA = 0.2;
-/** A node a failing check's test is: red (the light theme deepens it like any node colour) */
-export const FORGE_FAIL_COLOR = '#f87171';
-
 export const defaultFilters = (kind = 'pulls') => ({ state: kind === 'deploys' ? 'all' : 'open', label: '', author: '', text: '' });
 
 /** What the server is asked for: a merged pull request is a closed one, filtered after */
@@ -354,34 +348,6 @@ export function ideaWords(forgeName, res) {
 //  The picture
 // ---------------------------------------------------------------------------
 
-/**
- * Lights a pull request's (or a deploy's) nodes in a built scene: the nodes its files are get the amber glow of a search match, the
- * tests of a failing check turn red as well, and everything else fades back (nodes and the lines between them), so
- * the lit ones stand out whatever the selection or a proposal did before. Changes alpha, glow, halo, colour and label
- * only. Nothing lit (a pull request whose files are on no node) leaves the scene as it is.
- * @param {import('./scene.js').Scene} scene
- * @param {{ changed: Set<string>, failing: Set<string> } | null} lit
- */
-export function paintForge(scene, lit) {
-  if (!lit || (!lit.changed.size && !lit.failing.size)) return;
-  const on = (id) => lit.changed.has(id) || lit.failing.has(id);
-  for (const n of scene.nodes) {
-    if (on(n.id)) {
-      n.alpha = 1;
-      n.labelAlpha = 1;
-      n.glow = Math.max(n.glow, 14);
-      n.labelKeep = true;
-      if (n.halo !== 'selected') n.halo = 'match';
-      if (lit.failing.has(n.id)) n.color = FORGE_FAIL_COLOR;
-    } else {
-      n.alpha = Math.min(n.alpha, FORGE_DIM_ALPHA);
-      n.labelAlpha = n.alpha;
-      n.glow = 0;
-    }
-  }
-  for (const e of scene.edges) if (!on(e.from) && !on(e.to)) e.alpha = Math.min(e.alpha, FORGE_DIM_ALPHA / 2);
-}
-
 // ---------------------------------------------------------------------------
 //  Actions: land a green pull request, re-run a failed check (the server decides again, see server/forge-actions.js)
 // ---------------------------------------------------------------------------
@@ -423,7 +389,7 @@ export function mergeBlock(detail) {
 export function approvalWarning(detail) {
   if (!detail || detail.pull.state !== 'open') return '';
   const open = (detail.specs || []).filter((s) => !s.approved).map((s) => s.slug);
-  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (Specs, open the proposal, Approve), then land this.` : '';
+  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (Review in the node panel, then Approve), then land this.` : '';
 }
 
 /**
@@ -515,7 +481,7 @@ export function errorWords(status, body, { offline = false, what = '' } = {}) {
 /** What a list says when it has nothing in it: what would appear here and how to make one (the `kind` is the tab) */
 export function emptyWords(kind, forgeName = 'the forge') {
   return {
-    specs: 'No proposals yet. A proposal is a change to the map written down before it is built. Start one from an issue (Issues, then Start a spec), or push one as a file to the proposals folder.',
+    specs: 'No proposals yet. A proposal is a change to the map written down before it is built. Start one from an issue (select it, then Start a spec in the node panel), or push one as a file to the proposals folder.',
     pulls: `No open pull requests. Agents open one when a run makes code, and you can open one on ${forgeName}.`,
     issues: `No open issues. Open one on ${forgeName}, or write a New idea in Threads.`,
     threads: 'No threads. A thread is an idea or a spec conversation; start one with New idea below.',

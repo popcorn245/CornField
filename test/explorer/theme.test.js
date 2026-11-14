@@ -325,7 +325,7 @@ describe('tokens.css: the light tokens', () => {
   // A light hue too pale for that (the diff's added and edit) is mixed toward the text colour first.
   const SOLID_FILLS = [
     '.hx-btn--active', '.hx-view-btn[aria-pressed="true"]', '.hx-account-seg-btn[aria-pressed="true"]', '.hx-seg-btn[aria-pressed="true"]', '.hx-forge-tab[aria-pressed="true"]',
-    '.hx-work[aria-expanded="true"]', '.hx-avatar', '.hx-open', '.hx-chip--primary', '.hx-chip--danger', '.hx-chip--success', '.hx-chip--warning',
+     '.hx-avatar', '.hx-open', '.hx-chip--primary', '.hx-chip--danger', '.hx-chip--success', '.hx-chip--warning',
     '.hx-whatif .hx-btn--active', '.hx-house-chip[aria-pressed="true"]', '.hx-house-more:hover',
   ];
   it.each(SOLID_FILLS)('gives the text on the solid fill %s at least 4.5:1 in both themes', (selector) => {

@@ -13,9 +13,9 @@ import { specGroupTitle, runGroupTitle, groupCountWords } from './waiting-model.
  * The Specs tab's groups, each a heading with its count and its rows. Drafts past ten rows are folded behind a button on the header
  * (`draftsOpen` says whether the person opened it). With a search, a group's count reads "2 of 6".
  * @param {ReturnType<import('./waiting-model.js').specGroups>} groups
- * @param {{ current?: { slug: string, source: string } | null, nowMs?: number, draftsOpen?: boolean | null, say?: (key: string) => string }} [opts]
+ * @param {{ shown?: string | null, nowMs?: number, draftsOpen?: boolean | null, say?: (key: string) => string }} [opts]
  */
-export function specGroupsHtml(groups, { current = null, nowMs = Date.now(), draftsOpen = null, say } = {}) {
+export function specGroupsHtml(groups, { shown = null, nowMs = Date.now(), draftsOpen = null, say } = {}) {
   return groups.map((g) => {
     const id = `spec-group-${g.key}`;
     const words = `${specGroupTitle(g.key, say)} · ${groupCountWords(g)}`;
@@ -24,7 +24,7 @@ export function specGroupsHtml(groups, { current = null, nowMs = Date.now(), dra
     const title = foldable
       ? `<button type="button" class="hx-forge-gtoggle" data-spec-group-toggle="${escHtml(g.key)}" aria-expanded="${!folded}" aria-controls="${id}-list" data-corn-kind="quiet">${escHtml(words)}</button>`
       : escHtml(words);
-    const rows = g.rows.map((r) => specRowHtml(r.entry, { current, nowMs })).join('');
+    const rows = g.rows.map((r) => specRowHtml(r.entry, { shown, nowMs })).join('');
     return `<li class="hx-forge-group hx-spec-group" data-key="${id}" data-corn="spec-group" data-group="${escHtml(g.key)}"><h3 class="hx-forge-gtitle" id="${id}">${title}</h3>`
       + `<ul class="hx-forge-list" id="${id}-list" aria-labelledby="${id}"${folded ? ' hidden' : ''}>${rows}</ul></li>`;
   }).join('');

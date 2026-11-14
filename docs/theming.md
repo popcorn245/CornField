@@ -360,6 +360,9 @@ There are 69 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-work-run` | an agent run (a hexagon; `#818cf8`) |
 | `--corn-work-pull` | a pull request (a rounded square; `#60a5fa`) |
 | `--corn-work-deploy` | a deploy (a square; `#4ade80`) |
+| `--corn-work-edge-work` | the line from one piece of work to another (`became`, `closes`, `opened` ...; default `#818cf8`). Drawn at full strength where it joins the selection, so it is checked at 3:1 against the ground |
+| `--corn-work-edge-code` | the line from a piece of work to the code it touches (`changes`, `mentions`, `restarts`; `#cbd5e1`) |
+| `--corn-work-edge-adds` | the dashed line to the code a proposal adds (`#2dd4bf`) |
 | **Node fill by kind** | |
 | `--corn-map-node-root` | the fill of a `root` node |
 | `--corn-map-node-app` | the fill of an `app` node |
@@ -421,7 +424,7 @@ A button that does an ordinary job has no `data-corn` of its own (a region's but
 | Value | What it is |
 |---|---|
 | `primary` | the accent-filled action: Retry, Play or Pause (in the scenario player), Add node, Open file |
-| `secondary` | the ordinary bordered button: Send back (in the review column's decision), Edit in the proposal bar, Previous, Next and Next scenario in the scenario player, Light on the map and Timeline on a run, Start a spec, Cancel in a dialog, Start a run |
+| `secondary` | the ordinary bordered button: Send back (in the review column's decision), Edit in the proposal bar, Previous, Next and Next scenario in the scenario player, Timeline on a run, Start a spec, Cancel in a dialog, Start a run |
 | `quiet` | a low-key button: Close, Refresh, Cancel, Sign out, "and 15 more" |
 | `danger` | a button that stops or removes: Stop a run, Revoke, Forget token |
 | `approve` | a button that commits: Approve, Land it, Open the build issue |
@@ -455,6 +458,8 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-
 
 **Changed for a theme: the Work panel is made by a piece (spec 0011 D3).** Nothing on cornfield's page looks or behaves differently, and no token, hook, kind, state or `strings` key is added or removed. The Work button, the panel, the layer of marks over the map and the two dialogs (the confirm step and Start an agent) are made by `pieces/work.js` instead of being written in `index.html`, so every element of them that has a `data-corn` hook also has a `part` of the same name (`::part(row)`), as the other pieces' elements do. The words `Work` and the badge are in the page before its scripts run (a stand-in of the same markup without ids), so the header does not move when the piece comes. The browser tab's title ("(3) " while something waits) is written by cornfield's own page, not by the piece.
 
+**Changed for a theme: the Work panel is the Work list, and its detail is the node panel's (spec 0012, step 3).** The header's **Work panel** button is gone: its hook `forge-button`, its `count` tag (`#21`), its runner dot and the `workPanel` string go with it (the view switch's **Work** button, with its `waiting-badge`, is the way in, and the **List** toggle at the top left of the Work view, a `work-chip`, opens the list; a theme that styled `.hx-work` or `forge-button` styles `work-chip` now). The side panel is the **Work list**: the same element (`work-panel`, `forge-panel` still its inner box), the same tabs, filters, rows and hooks, but a row **selects its node** and the list has no detail of its own: a pull request's, thread's, deploy's and run's detail, and every action (Land it, Re-run, Start an agent, a run's answer field ...), are in the **node panel**, in a `work-detail` place, with the hooks they had (`state-pill`, `run`, `run-actions`, `node-chip`, `file`, `notice`, `message`, `open-link`; `back` and `detail-title` are gone with the detail's own page, and `mark-dot` keys no longer explain lit nodes, since nothing is lit on the map). A run's row in the Runs tab is a plain `row` with a `state-pill`; its card is the node panel's. The Runs tab's side-by-side compare of profiles (`.hx-run-compare`) is gone with the cards. `work-checks` and the "Open in Work" button are gone from the node panel. The Work view's lines have three colour tokens, `--corn-work-edge-work`, `--corn-work-edge-code` and `--corn-work-edge-adds` (each `auto`, today's colour; checked at 3:1 like a map line). No other token, state or `strings` key is added or removed.
+
 **A state is never told by colour alone.** A run's or a check's pill says the state in a word and draws a `state-icon` inside it, a shape of its own: a dashed ring (requested, queued), a ring with a dot (claimed), an arc that turns (working, running), a warning triangle (waiting, solid and heavier than the rest, since it needs the maintainer), a tick (done, success), a cross (failed, failure), a square that does not move (stopped), a dash (skipped) and a slashed ring (cancelled). A theme may restyle the icon (`[data-corn="state-icon"]`) or hide it, but the word stays. A button is never drawn as a pill: a pill is a status, and a button has a square corner.
 
 ## The hooks
@@ -472,7 +477,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-
 | `layers-all`, `layers-none` | All and None in the Layers menu's title: they switch every layer on or off, never an overlay |
 | `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `preset-work`, `fit-button` | the View switch (Map, Flow, House, Work, then Fit), and its buttons (Work carries the `waiting-badge`, the number waiting on you); the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
 | `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
-| `forge-button`, `tokens-button` | the Work panel's toggle, named "Work panel" while the view switch has a Work of its own (its lit tag, "#21", is a `count`; it has no `waiting-badge`, and it is not on a phone), the Review tokens entry of the account menu |
+| `tokens-button` | the Review tokens entry of the account menu. (`forge-button`, the header's Work panel button, is gone: the Work list opens from the **List** toggle of the Work view, a `work-chip`.) |
 | `account-button`, `avatar`, `account-menu` | the account button, the initial of who is signed in inside it, and the menu |
 | `account-who`, `account-row` | the line that says who is signed in; a labelled setting of the menu (Theme, with its options) |
 | `live-chip`, `live-dot`, `live-menu` | the live layer's chip, the dot in it, and its dropdown. The chip has a `data-corn-state`: `success` (fresh), `waiting` (as of a while ago), `stopped` (off), `failure` (unavailable) or `running` (loading) |
@@ -515,18 +520,18 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `node-title`, `node-host`, `diff-pill`, `node-foot`, `open-link` | in the node panel: its heading (a file name, an id or a route, so it may hold digits), the host after the kind badge (" · app.example.test"), the pill that says what the open proposal does to the node ("Added by Checkout"; `data-corn-state` is `added`, `changed`, `removed` or `edit`; there only while a proposal is open), the foot with its actions, and Open file / Open route (`data-corn-kind` `primary`, or `quiet` for the route when there is a file). `open-link` is also the PR detail's "Open on" the forge |
 | `diff-block` | the key / value rows of the node panel's "In this proposal" (`data-corn-state` as for the pill) |
 | `more` | the capped list's "and 15 more" button (`data-corn-kind="quiet"`, `aria-expanded`) |
-| `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
+| `work-panel` | the Work list: Specs, PRs, Issues, Threads, Runs and Deploys; a row selects its node |
 | `waiting-badge` | the one number of what waits on you (specs to decide plus runs that need an answer), as a filled badge: on the view switch's Work button ("Work 3", spoken "Work, 3 waiting on you"; hidden at 0; the Work panel's own button has none) and on the Specs and Runs tabs (their share; a tab with nothing waiting shows its plain total, a `count`). A tab's count span changes from `count` to `waiting-badge` and back. Takes `--corn-run-waiting` and `--corn-run-waiting-ink` |
 | `spec-group`, `review-state`, `specs-search` | on the Specs tab: a group of rows with its heading (`data-group` is `decide`, `agent`, `approved` or `drafts`: To decide, With the agent, Approved, Drafts; Drafts fold behind their heading past ten rows); a row's pill that says its review state in words (To decide, Changed since approved, Sent back, Approved, Draft PR, Local, Review state unknown; its `data-corn-state` is `waiting`, `sent-back`, `success`, `draft` or `failure`); the search field above the list |
 | `waiting-line` | in the proposal bar, under the buttons, when a run is waiting on the open proposal: "A run is waiting on you: Plan ready: approve to build, … · Answer" (`data-corn-state="waiting"`; the runner's words are cut to 90 characters; Answer is a `secondary` button that opens Work on Runs at that run with its reply field focused) |
-| `work-bar`, `work-chip`, `work-note` | in the Work view (spec 0012), at the top left of the map: the group of toggles ("All work", "Waiting on you · 3"; `aria-pressed` says which is on; "Updating…" follows them while a refresh is on its way and the last answer stays drawn), each toggle, and the line naming what the server could not read or what could not be updated |
+| `work-bar`, `work-chip`, `work-note` | in the Work view (spec 0012), at the top left of the map: the group of toggles ("All work", "Waiting on you · 3"; `aria-pressed` says which is on; "List", which opens the Work list, says `aria-expanded`; "Updating…" follows them while a refresh is on its way and the last answer stays drawn), each toggle, and the line naming what the server could not read or what could not be updated |
 | `work-lanes` | the lanes' titles ("Talk 9", "Decide 7", "Drafts 64", "Build 8", "Ship 1", "Code it touches 44"): lines of the page over the map in screen space, so they read at any zoom (the map draws the lanes' panels); decorative, the node panel and the live region say the rest |
 | `work-loading` | while the Work view's first answer is on its way: the lanes, empty, and the words ("Reading the work from the forge…", a `role="status"`); nothing on the page waits for it |
-| `work-links`, `work-link`, `work-pills`, `work-checks`, `work-actions` | in the node panel for a piece of work: what it is connected to (the list, and one row: its words, its kind's dot and a button that selects that node), its state pills, the words of a pull request's checks, and the words saying what the action will do with "Open in Work" |
+| `work-links`, `work-link`, `work-pills`, `work-actions`, `work-detail` | in the node panel for a piece of work: what it is connected to (the list, and one row: its words, its kind's dot and a button that selects that node), its state pills, the words saying what the actions will do, and the place of the actions themselves (`work-detail`: Land it, the checks, Start an agent, a run's card with its answer field; they carry the Work list's own hooks: `state-pill`, `run`, `run-actions`, `notice`, `message` ...). `work-checks` and the "Open in Work" button are gone |
 | `run-group` | a heading of the Runs list (`data-group` is `needs`, `motion` or `finished`: Needs you, In motion, Finished). It is an item of the flat list, so a run's card is never moved into a section |
-| `work-head`, `work-title`, `work-foot` | in the Work panel: the title row (the title, Refresh, close), the title itself (focus lands on it), the foot of the list (Release notes, New idea) |
+| `work-head`, `work-title`, `work-foot` | in the Work list: the title row (the title, Refresh, close), the title itself (focus lands on it), the foot of the list (Release notes, New idea) |
 | `filter-chip`, `filters`, `check-field` | the Filter chip on a list (`aria-expanded`; its count is a `count`), the box of fields it opens, a check box with its words ("Agent-made only"; the box itself is a `control`) |
-| `back`, `detail-title` | in a detail view (a pull request, a thread, a deploy, a run's issue, the release notes): the back control ("All pull requests"), and the title |
+| `back`, `detail-title` | the Release notes view of the Work list: its back control ("All pull requests") and its title. (A pull request's, thread's or deploy's detail is the node panel's now, with no page of its own.) |
 | `tag` | a short tag on an item of a list: a pull request's or an issue's label ("spec"), a thread's kind, what a deploy lights |
 | `out-link`, `text-link` | the ↗ that opens an item on the forge in a new tab; a link inside text (a check's run, a thread's reply, the node's route, "Where to set a token") |
 | `lines-by-kind`, `lines-kind`, `lines-switch`, `frame-button` | in the node panel (spec 0008 D5, D6): the block of what the selection lights (a `section` of its own), one chip per kind of line ("Calls 12"; `aria-pressed` while that kind is lit alone; its number is a `count`), the check box "Include its children's lines" (the `strings` key `throughChildren`; there only for a node that has children), and Frame them (`data-corn-kind="secondary"`; the `strings` key `frame`; the `F` key does the same) |
@@ -534,7 +539,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `file` | a changed file in a pull request's detail, with its nodes |
 | `thread-message` | one message of a thread, in the Threads tab's detail |
 | `field-change` | in "In this proposal" (the node panel): a field a change touches, with what it was and what it is |
-| `run-actions`, `run-totals` | the buttons of a run card (Light on the map, Timeline, Stop, Reply and the rest: each has a `data-corn-kind`), the totals of what the runners reported |
+| `run-actions`, `run-totals` | the buttons of a run card in the node panel (Timeline, Stop, Reply and the rest: each has a `data-corn-kind`; Light on the map is gone), the totals of what the runners reported |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar`, `proposal-head` | the open proposal's bar, and its toolbar row |
 | `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name (an `h2`), the counts ("5 nodes, 6 edges added · 5 scenarios": its parts are `quiet` buttons that take the focus to the Changes or the Scenarios section of the review column; on a phone they move its switch. Until spec 0006 it was one button that opened the list of changes (`aria-expanded`): a rule that styled it as a button, its hover or `[aria-expanded]` now goes on `[data-corn="proposal-counts"] button`; its font and colour still apply), and on a phone the button that shows Before / Diff / After (it says which is on) |
@@ -590,7 +595,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `state-pill` | a state word (`data-corn-state`); a scenario step's verdict in the review column carries `success` (allowed, or refused as expected) or `failure` (refused, or not as expected), and none when it was not checked: its words always say which |
 | `state-icon` | the icon inside a run's or a check's `state-pill`: a shape for each state, drawn in the pill's colour |
 | `result` | what an action came to, under the control that was used (a run's Reply, Continue or Stop; Copy spec); it stays until the next action and is also announced |
-| `work-top` | the Work panel's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
+| `work-top` | the Work list's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
 | `skeleton`, `empty` | a list's placeholder rows while it loads (they hold the list's height), and the placeholder lines of the Runs tab's runner line and totals while the runs load; what a list says when it has nothing, and how to make something; in the review piece, the line over a map whose topology has no nodes |
 | `field` | a labelled form field, its control inside |
 | `control` | a text field, a number field, a select, a check box or a text area: the control inside a `field`, or on its own. The search fields are `search-input` and the note on Send back is `review-note`; the named-theme menu is `theme-picker` |
@@ -733,7 +738,6 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `house` | House |
 | `proposals` | Proposals |
 | `issuesAndPrs` | Work |
-| `workPanel` | Work panel |
 | `searchPlaceholder` | Search... |
 | `searchNoMatch` | No match for |
 | `signOut` | Sign out |

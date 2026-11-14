@@ -1,9 +1,10 @@
-/* The Work view (explorer/work-view.js, spec 0012): the toggle at the top left of the stage, the line of what could not be read, and the node panel's work detail. */
+/* The Work view (explorer/work-view.js, spec 0012): the toggles at the top left of the stage (All work, Waiting on you, List), the line of what could not be read, and the node panel's work detail. */
 .hx-work-bar { position: absolute; z-index: 4; left: var(--corn-space-4); top: var(--corn-space-4); display: flex; gap: var(--corn-space-2); }
 .hx-work-bar { align-items: center; }
 .hx-work-bar[hidden] { display: none; }
 .hx-work-chip { box-sizing: border-box; min-height: 2rem; padding: 0 var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); color: var(--corn-text-2); font-family: inherit; font-size: var(--corn-text-xs); font-weight: 600; cursor: pointer; }
-.hx-work-chip[aria-pressed="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+.hx-work-chip[aria-pressed="true"], .hx-work-chip[aria-expanded="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+.hx-work-chip[hidden] { display: none; }
 .hx-work-chip:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
 .hx-work-note { position: absolute; z-index: 3; left: var(--corn-space-4); bottom: var(--corn-space-4); max-width: min(32rem, calc(100% - var(--corn-space-8))); margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text-2); font-size: var(--corn-text-xs); }
 .hx-work-note[hidden] { display: none; }
@@ -44,8 +45,6 @@
   .hx-stage.is-work .hx-hint { display: none; } /* the toggles' row is where the hint would sit */
   .hx-work-skeleton { grid-template-columns: 1fr; grid-auto-rows: min-content; top: calc(var(--corn-space-4) + var(--hx-control-h) * 2 + var(--corn-space-6)); overflow: hidden; }
   .hx-work-skel-lane i:nth-of-type(n + 3) { display: none; }
-  /* The header's own Work button (the panel, until step 3 of spec 0012 retires it) is not on a phone: the view switch's Work carries the badge */
-  .hx-work[data-corn="forge-button"] { display: none; }
 }
 /* The Layers menu in the Work view lists the Work view's rows; the map's keys (its kinds of line, the cloud's, the runs' and the proposal marks') are about the map */
 body:has(.hx-stage.is-work) .hx-layers :is([data-corn="legend-key"], [data-corn="menu-section"]) { display: none; }

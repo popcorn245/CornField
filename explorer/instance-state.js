@@ -145,12 +145,6 @@ export function createState() {
     scenario: null,
 
     /**
-     * What the selected pull request lights (forge-panel.js, forge-panel-model.js `litFor`): `{ changed, failing }`, sets of
-     * node ids (the nodes its files are; the nodes of the tests a failing check names), or null with none selected.
-     */
-    forgeLit: null,
-
-    /**
      * The runs on the map (explorer/runs-map.js): `{ flight: Map<nodeId, runId[]>, collide: Map<nodeId, runId[]>, runs }` for the open runs'
      * nodes, or null when there are none. The map's marks over the nodes are drawn from it.
      */

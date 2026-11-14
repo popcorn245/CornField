@@ -19,7 +19,8 @@ import { ensurePagePieces } from '../../explorer/page-pieces.js';
 // @ts-expect-error plain JS modules, no declarations
 import { proposalRowHtml } from '../../explorer/proposal.js';
 // @ts-expect-error plain JS modules, no declarations
-import { runsHtml } from '../../explorer/runs-view.js';
+import { runHtml } from '../../explorer/runs-view.js';
+const runsHtml = (ctx, runs) => runs.map((r) => runHtml(ctx, r, runs)).join(''); // the cards, one after another, as the node panel draws each
 // @ts-expect-error plain JS modules, no declarations
 import { mockupsSectionHtml } from '../../explorer/mockups-model.js';
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
@@ -201,8 +202,6 @@ describe('the parts 0.35 added hooks to', () => {
     ['explorer/capped.js', 'more', /<button data-corn="more" data-corn-kind="quiet"/],
     ['explorer/pieces/work-prs.js', 'tag', /class="hx-forge-label" data-corn="tag"/],
     ['explorer/pieces/work-prs.js', 'out-link', /data-corn="out-link" class="hx-forge-out"/],
-    ['explorer/pieces/work-common.js', 'back', /<button data-corn="back"/],
-    ['explorer/pieces/work-prs.js', 'detail-title', /class="hx-forge-detail-title" data-corn="detail-title"/],
     ['explorer/pieces/work-prs.js', 'node-chip', /<button data-corn="node-chip"/],
     ['explorer/pieces/work-prs.js', 'file', /class="hx-forge-file" data-corn="file"/],
     ['explorer/runs-view.js', 'run-actions', /class="hx-run-actions" data-corn="run-actions"/],
@@ -284,7 +283,6 @@ describe('the mounted page', () => {
     expect(hook('preset-dataflow')).toBe(document.getElementById('preset-dataflow-btn'));
     expect(hook('preset-house')).toBe(document.getElementById('preset-house-btn'));
     expect(hook('proposals-button')).toBe(document.getElementById('proposal-btn'));
-    expect(hook('forge-button')).toBe(document.getElementById('forge-btn'));
     expect(hook('theme-toggle').getAttribute('aria-labelledby')).toBe('theme-label');
     expect(hook('links')).toBe(document.getElementById('cf-links'));
     expect(hook('account-button')).toBe(document.getElementById('account-btn'));

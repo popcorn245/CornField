@@ -102,7 +102,7 @@ export const CONVERTED = [
   'pieces/work-confirm.js',
   'pieces/work-agent.js',
   'pieces/work-paint.js',
-  'pieces/work-events.js',
+  'pieces/work-list.js',
   'forge-panel-model.js',
   'waiting-view.js',
   'runs-model.js',
