@@ -20,7 +20,7 @@ export function install(ctx) {
   const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 
   /** Loads the Agents tab: everything it groups, in one answer */
-  async function loadWork(refresh, token) {
+  async function loadWork(refresh, token, quiet = false) {
     ui.loading = true;
     ui.error = '';
     fn.paint();
@@ -30,10 +30,10 @@ export function install(ctx) {
     if (res.ok) {
       const b = res.body;
       ui.work = { grouped: groupWork(b), problem: b.specsProblem || '', at: b.at, rate: b.rate || '', stale: b.stale || '' };
-      announce(`${workStatus(groupsShown(), '', m.now())}${ui.work.stale ? '. This is an older answer' : ''}`);
+      if (!quiet) announce(`${workStatus(groupsShown(), '', m.now())}${ui.work.stale ? '. This is an older answer' : ''}`);
     } else {
       ui.error = fn.failWords(res, 'the work');
-      announce(ui.error);
+      if (!quiet) announce(ui.error);
     }
     fn.paint();
   }

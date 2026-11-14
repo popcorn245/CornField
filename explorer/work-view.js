@@ -386,7 +386,7 @@ function arrive(body, { select, ask, quiet }) {
     if (ask.bad) announce(i, `${ask.bad} ${opened}`.trim());
     else {
       announce(i, `${KIND_WORDS[ask.kind]} ${ask.key} is not in the work drawn here: the Work list looks for it. ${opened}`.trim());
-      openForge({ tab: LIST_TAB[ask.kind] });
+      openForge({ tab: LIST_TAB[ask.kind], quiet: true }); // what the node panel shows is said, not the list's count
       showWorkRef(ask.kind, ask.key).catch(() => {});
     }
   } else if (opened) announce(i, opened);

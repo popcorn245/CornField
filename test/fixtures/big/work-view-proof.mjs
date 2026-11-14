@@ -462,8 +462,9 @@ async function main() {
     await until(page, async () => (await import('/explorer/state.js')).state.nodes.some((n) => n.work));
     await until(page, () => document.querySelector('#spec-drawer').classList.contains('drawer-open') && !!document.querySelector('#forge-detail'));
     await sleep(800);
-    const oldAddr = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { view: state.view, selected: state.selectedNode ? state.selectedNode.id : null, listOpen: document.querySelector('#forge-panel').classList.contains('forge-open'), tab: document.querySelector('[data-forge-kind="issues"]').getAttribute('aria-pressed'), badge: document.querySelector('#drawer-badge').textContent, title: document.querySelector('#drawer-title').textContent, search: location.search }; });
+    const oldAddr = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { view: state.view, selected: state.selectedNode ? state.selectedNode.id : null, listOpen: document.querySelector('#forge-panel').classList.contains('forge-open'), tab: document.querySelector('[data-forge-kind="issues"]').getAttribute('aria-pressed'), badge: document.querySelector('#drawer-badge').textContent, title: document.querySelector('#drawer-title').textContent, search: location.search, said: (document.querySelector('#map-announcer') || {}).textContent }; });
     check('?issue=<old> opens the Work view, the list on Issues, and the issue in the node panel with nothing selected; the address is spent', oldAddr.view === 'work' && oldAddr.selected === null && oldAddr.listOpen && oldAddr.tab === 'true' && oldAddr.badge === 'Issue' && oldAddr.search === '', JSON.stringify(oldAddr));
+    check('and the live region says the issue it shows, not the count of the list', /^Issue 2: .+\. It is closed\.$/.test(oldAddr.said || ''), oldAddr.said);
     await page.goto(`${BASE}/?pr=999`);
     await until(page, async () => (await import('/explorer/state.js')).state.nodes.some((n) => n.work));
     await sleep(2500);

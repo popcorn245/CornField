@@ -171,6 +171,7 @@ describe.each([['a desktop', false], ['a phone', true]])('on %s', (_name, onPhon
     expect(q('#spec-drawer img')).toBeNull();
     expect(q('#forge-detail [data-forge-agent]')).toBeNull();
     expect(q('#forge-detail').textContent).toContain('closed');
+    expect(await said()).toBe('Issue 12: <img src=x onerror="window.pwned=1">Old. It is closed.'); // what the side panel said of it: its number, its title, closed
     expect(q('#spec-drawer a[href="https://git.example.test/owner/name/issues/12"]')).not.toBeNull();
     expect(srv.urls().filter((u) => u.startsWith('/api/forge/issues/'))).toEqual(['/api/forge/issues/12']);
     // An open issue the list does not reach is shown as open, with its Start an agent

@@ -66,7 +66,7 @@ export function install(ctx) {
   /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
   async function loadList(refresh = false, quiet = false) {
     const token = ++m.listToken;
-    if (ui.kind === 'work') return fn.loadWork(refresh, token);
+    if (ui.kind === 'work') return fn.loadWork(refresh, token, quiet);
     if (ui.kind === 'specs') return fn.loadSpecs(token, quiet);
     const key = listKey();
     ui.loading = true;

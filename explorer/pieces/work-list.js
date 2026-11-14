@@ -24,9 +24,10 @@ export function install(ctx) {
 
   /**
    * Opens the list with the focus on its title; the first time, loads what its tab shows (the proposals, to start with).
-   * `tab` opens it on that tab ('specs', 'pulls', 'issues', 'threads', 'work' for Runs, 'deploys'), whichever was shown last otherwise.
+   * `tab` opens it on that tab ('specs', 'pulls', 'issues', 'threads', 'work' for Runs, 'deploys'), whichever was shown last otherwise. `quiet`: the list is read without
+   * saying how many it holds (an address for old work: what the node panel shows is what is said).
    */
-  function openForge({ load = true, tab } = {}) {
+  function openForge({ load = true, tab, quiet = false } = {}) {
     const panel = $('forge-panel');
     if (!panel || panel.hidden) return;
     if (tab && tab !== (ui.kind === 'notes' ? 'pulls' : ui.kind) && TABS.includes(tab)) { // the Release notes are one level down on PRs
@@ -55,7 +56,7 @@ export function install(ctx) {
     if (!load) return; // a deep link loads the list it wants itself
     if (!tab) fn.primeCounts(); // opened by a toggle, not for a tab: the other tabs' counts are read quietly
     if (ui.kind === 'notes') { if (!ui.notes.data && !ui.notes.loading) fn.loadNotes(); else fn.paint(); return; }
-    if (ui.kind === 'specs' || !fn.current()) { fn.paintFilters(); fn.loadList(); } else fn.paint();
+    if (ui.kind === 'specs' || !fn.current()) { fn.paintFilters(); fn.loadList(false, quiet); } else fn.paint();
   }
 
   /** What a link names is not there: a line in the list, said through the live region */
@@ -367,8 +368,8 @@ export function install(ctx) {
       case 'deploy': return fn.showDeploy(item.deployId);
       case 'run': return fn.showRun(item.runId);
       // A spec pull request is a proposal here: its Review, and what its pull request has (Land it, the checks, Open the build issue, a landing waiting on its approval)
-      case 'proposal': if (Number.isInteger(item.number)) { fn.paint(); return fn.selectPull(item.number); } fn.paint(); return Promise.resolve();
-      default: fn.paint(); return Promise.resolve();
+      case 'proposal': if (Number.isInteger(item.number)) { fn.paint(); return fn.selectPull(item.number); } fn.paint(); sayDetail(`Proposal ${item.slug}: ${node.title}.`); return Promise.resolve();
+      default: fn.paint(); sayDetail(`Issue ${item.number}: ${node.title}${item.state ? `. It is ${item.state}` : ''}.`); return Promise.resolve(); // the words the side panel said of an issue a link named
     }
   }
 
