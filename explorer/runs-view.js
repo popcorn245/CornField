@@ -94,7 +94,7 @@ function answerHtml(ctx, run) {
   const say = ctx.t || t; // the words of the instance that draws it (the Work piece hands its own), else the page's
   const id = ctx.esc(run.runId);
   const name = ctx.esc(runName(run, ctx.now));
-  const off = ctx.busy ? ' disabled' : '';
+  const off = ctx.busy ? ' aria-disabled="true"' : ''; // not `disabled`: the pressed button keeps the focus (a click on it is dropped: pieces/work-list.js `onDetailClick`)
   const reply = ctx.replies && ctx.replies.get(run.runId) || '';
   return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" data-corn="run-actions" role="group" aria-label="Answer: ${name}">
       <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(say('continueRun'))}: ${name}"${off}>${ctx.esc(say('continueRun'))}</button>
@@ -147,7 +147,7 @@ export function runHtml(ctx, run, all) {
   const name = ctx.esc(runName(run, ctx.now));
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
-  const off = ctx.busy ? ' disabled' : '';
+  const off = ctx.busy ? ' aria-disabled="true"' : ''; // not `disabled`: the pressed button keeps the focus (a click on it is dropped: pieces/work-list.js `onDetailClick`)
   const retry = canRetry(run) ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('startAgain'))}: ${name}"${off}>${ctx.esc(say('startAgain'))}</button>` : '';
   const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);

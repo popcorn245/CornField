@@ -58,7 +58,7 @@ export function install(ctx) {
     $('agent-start-msg').textContent = '';
     $('agent-start-words').textContent = confirmStartWords(refs, fn.forgeName());
     const go = $('agent-start-go');
-    go.disabled = false;
+    go.removeAttribute('aria-disabled');
     go.removeAttribute('aria-busy');
     go.textContent = fn.askRunnerWords();
     m.agentTrap = trapFocus(keepFocusInAgent);
@@ -129,7 +129,7 @@ export function install(ctx) {
     if (!ui.agent || ui.agent.posting) return;
     ui.agent.posting = true;
     const go = $('agent-start-go');
-    go.disabled = true;
+    go.setAttribute('aria-disabled', 'true'); // not `disabled`: the focus stays on it while the request runs (`ui.agent.posting` guards a second press)
     go.setAttribute('aria-busy', 'true');
     go.textContent = 'Asking …';
     $('agent-start-msg').hidden = true;
@@ -144,7 +144,7 @@ export function install(ctx) {
     }
     if (limits === null) {
       ui.agent.posting = false;
-      go.disabled = false;
+      go.removeAttribute('aria-disabled');
       go.removeAttribute('aria-busy');
       go.textContent = fn.askRunnerWords();
       const bad = $('agent-start-msg');
@@ -170,7 +170,7 @@ export function install(ctx) {
       fn.paint();
       return;
     }
-    go.disabled = false;
+    go.removeAttribute('aria-disabled');
     go.removeAttribute('aria-busy');
     go.textContent = fn.askRunnerWords();
     const msg = $('agent-start-msg');

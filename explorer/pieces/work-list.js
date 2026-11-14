@@ -168,6 +168,8 @@ export function install(ctx) {
   function onDetailClick(e) {
     const t = e.target;
     if (!t.closest) return;
+    // A button that waits on its request is `aria-disabled`, not `disabled` (it keeps the focus): a press on it does nothing, so a second press is never a second request
+    if (t.closest('button[aria-disabled="true"]')) return;
     const nodeBtn = t.closest('[data-forge-node]');
     if (nodeBtn) {
       const node = nodeById(nodeBtn.dataset.forgeNode);
