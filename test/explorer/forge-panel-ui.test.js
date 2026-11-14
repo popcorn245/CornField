@@ -491,6 +491,73 @@ describe('a pull request in the node panel', () => {
   });
 });
 
+describe('a forge\'s words in the node panel (the actions\' place, `forge-detail`)', () => {
+  const BAD = '<img src=x onerror="alert(1)">';
+  const EVIL = 'javascript:alert(1)';
+  /** Nothing the forge wrote became markup, and every link in the node panel goes to an http(s) address */
+  const clean = () => {
+    const drawer = $('spec-drawer');
+    expect(drawer.querySelectorAll('img, script, iframe, [onerror], [onclick]').length).toBe(0);
+    const hrefs = [...drawer.querySelectorAll('a[href]')].filter((a) => !a.hidden).map((a) => a.getAttribute('href'));
+    expect(hrefs.every((h) => /^https?:\/\//.test(h))).toBe(true);
+    return drawer.textContent;
+  };
+
+  it('a pull request: its title, branch, checks, files and links are text, and a link that is not a web address is none', async () => {
+    const pull = pr(66, `Title ${BAD}`, { head: { ref: `branch-${BAD}`, sha: 'sha66' }, url: EVIL, author: user(BAD) });
+    fakeServer({ answers: { '/api/forge/pulls/66': { body: { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', pull, files: [{ path: `server/${BAD}.js`, status: 'added', previousPath: null, additions: 1, deletions: 0 }], checks: [{ id: 'run:9', name: `check ${BAD}`, state: 'failure', url: EVIL, rerunnable: true, canRerun: true }], specs: [{ slug: `0099-${BAD}`, path: 'docs/specs/proposals/0099.json', approved: false }] } } } });
+    mount();
+    openForge({ tab: 'pulls' });
+    await settle();
+    await show('pull', 66);
+    expect(q('#forge-detail').dataset.workKind).toBe('pull');
+    const text = clean();
+    expect(text).toContain(`check ${BAD}`);
+    expect(text).toContain(`server/${BAD}.js`);
+    expect(text).toContain(`0099-${BAD}`);
+    expect($('drawer-title').textContent).toBe(`Title ${BAD}`);
+  });
+
+  it('an issue older than the graph, read from its own route: its title is text, and its address is no link', async () => {
+    fakeServer({ answers: { '/api/forge/issues/66': { body: { ok: true, issue: issue(66, `Issue ${BAD}`, { url: EVIL, author: user(BAD) }) } } } });
+    mount();
+    openForge({ tab: 'issues' });
+    await settle();
+    await show('issue', 66);
+    expect(q('#forge-detail').dataset.workKind).toBe('issue');
+    expect($('drawer-title').textContent).toBe(`Issue ${BAD}`);
+    expect(q('#forge-detail [data-forge-agent="issue:66"]')).not.toBe(null);
+    clean();
+  });
+
+  it('a deploy: its title, branch and restarts are text, and its logs are a link only to a web address', async () => {
+    fakeServer({ deploys: [run('9666', `Deploy ${BAD}`, 'failure', { title: `Deploy ${BAD}`, branch: BAD, url: EVIL, restarts: [BAD] })] });
+    mount();
+    openForge({ tab: 'deploys' });
+    await settle();
+    await show('deploy', '9666');
+    expect(q('#forge-detail').dataset.workKind).toBe('deploy');
+    const text = clean();
+    expect(text).toContain(BAD);
+    expect(q('#forge-detail a[href]')).toBe(null); // no logs link: the address is not a web one
+  });
+
+  it('a proposal from the specs list: its title and slug are text, and Review carries them as data', async () => {
+    const slug = `0099-a"b'${BAD}`;
+    fakeServer({ proposals: [{ slug, title: `Spec ${BAD}`, summary: BAD, spec: '0099', source: `w-${BAD}`, counts: { added: 0, changed: 0, removed: 0, scenarios: 0 }, errors: 0, review: null }] });
+    mount();
+    openForge({ tab: 'specs' });
+    await settle();
+    await show('proposal', slug);
+    expect(q('#forge-detail').dataset.workKind).toBe('proposal');
+    expect($('drawer-title').textContent).toBe(`Spec ${BAD}`);
+    const review = q('#forge-detail [data-work-action="review"]');
+    expect(review.dataset.slug).toBe(slug);
+    expect(review.dataset.source).toBe(`w-${BAD}`);
+    clean();
+  });
+});
+
 describe('when the forge or the server cannot answer', () => {
   it('says a rate limit in the server\'s words, and keeps the panel usable', async () => {
     fakeServer({ answers: { '/api/forge/pulls?state=open&limit=100': { status: 429, body: { ok: false, error: 'GitHub\'s limit for this sign-in is used up; it resets at 21:14 UTC (in about 6 minutes).', code: 'rate-limited' } } } });
