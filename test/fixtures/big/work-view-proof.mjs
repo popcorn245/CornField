@@ -332,6 +332,20 @@ async function main() {
       check(`${tab}: the list stays open and the focus stays on the row, pressed`, r.listOpen && r.pressed === 'true' && r.focusRef !== null, JSON.stringify({ focus: r.focusRef, pressed: r.pressed }));
       await clear();
     }
+    // by the keyboard, from a row into the node panel and back: Enter on the row shown goes in, Escape comes back to the row, and Escape again closes the list
+    {
+      await page.click('[data-forge-kind="pulls"]'); await sleep(1200);
+      const row = page.locator('#forge-list [data-work-ref]').first();
+      const ref = await row.getAttribute('data-work-ref');
+      await row.focus(); await page.keyboard.press('Enter'); await sleep(1400);
+      await page.keyboard.press('Enter'); await sleep(400);
+      check('Enter again on the row shown goes into the node panel', await page.evaluate(() => document.activeElement && document.activeElement.id === 'drawer-title'));
+      await page.keyboard.press('Escape'); await sleep(400);
+      check('Escape in the node panel closes it and gives the focus back to the row', await page.evaluate((r) => document.activeElement && document.activeElement.dataset.workRef === r && !document.querySelector('#spec-drawer').classList.contains('drawer-open'), ref));
+      await page.keyboard.press('Escape'); await sleep(400);
+      check('and Escape in the list closes the list, back on the List toggle', await page.evaluate(() => !document.querySelector('#forge-panel').classList.contains('forge-open') && document.activeElement && document.activeElement.dataset.action === 'toggle-forge'));
+      await page.click('[data-action="toggle-forge"]'); await sleep(800);
+    }
     check('the list does not repeat the detail: it holds no action button', (await page.locator('#forge-panel [data-forge-merge], #forge-panel [data-forge-agent], #forge-panel [data-forge-stop], #forge-panel [data-run-answer], #forge-panel [data-forge-rerun], #forge-panel [data-work-action]').count()) === 0);
     await shot('desktop-dark-list');
 

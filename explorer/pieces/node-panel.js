@@ -538,10 +538,12 @@ export function mount(root, inst, options = {}) {
   scope.listen(drawer, 'click', (e) => {
     const target = e.target.closest && e.target.closest('[data-action]');
     if (!target) return;
+    const shut = target.dataset.action === 'close-drawer';
+    const back = shut && inst.ask('node:back'); // the Work list's row that chose the node, asked before the panel lets go
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
-    // The panel's ✕: the focus would be left on a hidden button, so it goes back to the map
-    if (target.dataset.action === 'close-drawer' && state.canvas) scope.timeout(() => state.canvas.focus(), 0);
+    // The panel's ✕: the focus would be left on a hidden button, so it goes back to that row, else to the map
+    if (shut) scope.timeout(() => { if (!(back && back()) && state.canvas) state.canvas.focus(); }, 0);
   });
   // A thread listed in the panel opens in the Work panel, and "Start a thread about this" opens its New idea form (the Work panel hears both)
   scope.listen(drawer, 'click', (e) => {
@@ -564,8 +566,9 @@ export function mount(root, inst, options = {}) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (e.target.closest && e.target.closest('select, input, textarea')) return; // a field's own Escape first
     e.preventDefault();
+    const back = inst.ask('node:back');
     clearSelection(inst, { source: 'keyboard' });
-    if (state.canvas) state.canvas.focus();
+    if (!(back && back()) && state.canvas) state.canvas.focus();
     announce(inst, 'Panel closed');
   });
 

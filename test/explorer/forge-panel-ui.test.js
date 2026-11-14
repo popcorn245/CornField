@@ -342,6 +342,41 @@ describe('a pull request in the node panel', () => {
     await show('pull', n);
   }
 
+  it('from a row into the node panel and back, by the keyboard: Enter on the row shown goes in, and Escape or ✕ gives the row the focus again', async () => {
+    fakeServer();
+    mount();
+    openForge({ tab: 'pulls' });
+    await settle();
+    const row = () => q('[data-work-ref="pull:12"]');
+    row().focus();
+    click(row());
+    await settle();
+    expect(document.activeElement).toBe(row()); // the first Enter selects: the list can be read down
+    click(row());
+    await settle();
+    expect(document.activeElement).toBe($('drawer-title')); // the second goes into the node panel, as Enter on the map does
+    expect(key($('drawer-title'), 'Escape').defaultPrevented).toBe(true);
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect(document.activeElement).toBe(row()); // back on the row it came from, with the list open
+    expect(await said()).toBe('Panel closed');
+    key(row(), 'Escape'); // and the list's own Escape closes the list
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    openForge({ tab: 'pulls' });
+    await settle();
+    click(row());
+    await settle();
+    click(q('#spec-drawer [data-action="close-drawer"]'));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(document.activeElement).toBe(row());
+    // a node chosen elsewhere (the map) is not the row's: Escape goes to the map
+    click(row());
+    await settle();
+    click(q('[data-forge-node="core-server"]'));
+    await settle();
+    key($('drawer-title'), 'Escape');
+    expect(document.activeElement).toBe(state.canvas);
+  });
+
   it('asks for its files and checks and shows them in the node panel, with what the files are on the map', async () => {
     const server = fakeServer();
     mount();
@@ -554,11 +589,25 @@ describe('on a phone', () => {
     await settle();
     expect($('forge-panel').classList.contains('forge-open')).toBe(false);
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
-    console.log('CHIP', !!q('[data-forge-node="core-server"]'), $('forge-detail') && $('forge-detail').innerHTML.slice(0, 200));
     expandSheet('drawer'); // a tap on a sheet at its peek expands it first (spec 0010 D7)
     click(q('[data-forge-node="core-server"]'));
     await settle();
     expect(state.selectedNode.id).toBe('core-server');
+  });
+
+  it('a row chosen from the keyboard: the list gives way, and the focus goes into the node panel, never to the page', async () => {
+    phone(true);
+    fakeServer();
+    mount();
+    openForge({ tab: 'pulls' });
+    await settle();
+    const row = q('[data-work-ref="pull:12"]');
+    row.focus();
+    click(row);
+    row.blur(); // the list went inert under it: a browser takes the focus away
+    await settle();
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    expect(document.activeElement).toBe($('drawer-title'));
   });
 });
 

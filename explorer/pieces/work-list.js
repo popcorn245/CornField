@@ -118,8 +118,16 @@ export function install(ctx) {
     }
     const row = t.closest('[data-work-ref]');
     if (row) {
-      const at = row.dataset.workRef.indexOf(':');
-      fn.showRef(row.dataset.workRef.slice(0, at), row.dataset.workRef.slice(at + 1)).catch(() => {});
+      const ref = row.dataset.workRef;
+      // A row already shown goes into the node panel, as Enter on the map does: the focus otherwise stays on the row, so the list can be read down
+      if (m.rowRef === ref && isShown(ref)) { inst.emit('node:focus'); return; }
+      m.rowRef = ref; // the row the node panel's Escape gives the focus back to (`rowBack`)
+      const at = ref.indexOf(':');
+      fn.showRef(ref.slice(0, at), ref.slice(at + 1)).then((shown) => {
+        // On a phone the list gave way to the node's sheet: the focus, left in a list that is gone, goes into the node panel
+        const now = inst.active();
+        if (shown && !ctx.dead && (!now || now === inst.doc.body || now.closest('[inert]'))) inst.emit('node:focus');
+      }).catch(() => {});
       return;
     }
     const action = t.closest('[data-action]');
@@ -364,6 +372,21 @@ export function install(ctx) {
     }
   }
 
+  /**
+   * Where the focus goes when the node panel closes (`node:back`): to the row of the open list that chose what it shows. Asked before the panel lets go, it answers with
+   * what gives that row the focus once the list is drawn again (true when it did), or nothing: the map has it.
+   */
+  function rowBack() {
+    const ref = m.rowRef;
+    if (!ui.open || !ref || !isShown(ref)) return undefined;
+    return () => {
+      const row = ui.open && [...$('forge-panel').querySelectorAll('[data-work-ref]')].find((r) => r.dataset.workRef === ref);
+      if (!row || row.closest('[hidden]')) return false;
+      row.focus();
+      return true;
+    };
+  }
+
   /** The node panel shows something else, or closed: what it held is let go of */
   function dropDetail() {
     if (!ui.node && !ui.selected && ui.thread === null && !ui.deployItem && !ui.runShown) return;
@@ -378,5 +401,5 @@ export function install(ctx) {
     fn.paint();
   }
 
-  Object.assign(fn, { isForgeOpen, openForge, linkMissing, closeForge, toggleForge, filtersChanged, onClick, onDetailClick, onChange, onInput, onDetailInput, onDetailKey, onKey, refOf, isShown, sayDetail, showRef, showDetail, dropDetail });
+  Object.assign(fn, { isForgeOpen, openForge, linkMissing, closeForge, toggleForge, filtersChanged, onClick, onDetailClick, onChange, onInput, onDetailInput, onDetailKey, onKey, refOf, isShown, sayDetail, showRef, showDetail, rowBack, dropDetail });
 }

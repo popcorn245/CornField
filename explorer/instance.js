@@ -102,6 +102,7 @@
  *   work:list       { open }  the Work list opened or closed (pieces/work-list.js)
  *   work:pick       { kind, key } -> true  (ask, answered by the Work view: explorer/work-view.js) select the node of that piece of work (`pull`, `issue`, `thread`, `run`, `deploy`, `proposal`, and its number, id or slug) on the map; no answer: the Work piece shows it in the node panel alone, as it shows work older than the graph's 14 days
  *   work:panel      node -> { replace, badge, title, html } | undefined  (ask, answered by the Work view) what the node panel shows for a piece of work or, in the Work view, a node of code; the html holds `forge-detail`, where the Work piece draws the actions
+ *   node:back       (none) -> (() => boolean) | undefined  (ask, answered by the Work list) the node panel is about to close: what gives the focus back to the row of the open list that chose what it shows (true when it did); else the map has it
  *   work:on         (none) -> boolean  whether the Work piece has started (a piece mounted after it asks rather than waits for `work:available`)
  *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the run is shown in the node panel, its reply field focused
  *   work:open-specs (none) -> true  the Work list opened on Specs for a bad link's way on; map:set { nodes, edges } -> true  the page (or the review, or a scope's map: pieces/map.js) laid the map out from these

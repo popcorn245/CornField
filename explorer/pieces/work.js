@@ -189,6 +189,7 @@ export function mount(root, inst, options = {}) {
     // The node panel shows a piece of work (the Work view's node, or one the lists read): its actions are drawn into it; anything else, or closed, lets go of it
     scope.on('node:painted', ({ node }) => { m.shown = node && node.work && node.item ? fn.showDetail(node) : (fn.dropDetail(), Promise.resolve()); });
     scope.on('node:close', () => fn.dropDetail());
+    scope.on('node:back', () => fn.rowBack()); // the node panel closing gives the focus back to the row that chose it
     scope.on('thread:start', ({ node }) => { if (ui.threadsOn && node) fn.startThread(node); });
     // The map or the proposal changed the nodes: the lights follow them. The header's Proposals menu reads the same list: the Specs tab and its count follow
     scope.on('scene', fn.onNodesChange);
