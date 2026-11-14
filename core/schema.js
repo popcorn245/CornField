@@ -48,6 +48,24 @@ export const NODE_SHAPES = Object.freeze({
   stack: 'square', machine: 'square', container: 'square', device: 'square', floor: 'square', room: 'square',
   persona: 'diamond',
 });
+/**
+ * The six kinds of work the Work view draws as nodes (spec 0012 D2): their default colour (written for the dark ground, deepened for the light one as the
+ * map's are), the silhouette (the same five the map has, core/schema.js NODE_SHAPES; an issue is a circle with a mark, its letters), the letters in the node's core,
+ * and its radius. A theme sets the colour with `--corn-work-<kind>` (explorer/tokens.css, docs/theming.md); the silhouette says what the node is, so it is not a token.
+ * The list is its own export so the map's bundle carries the six names and not the table.
+ */
+export const WORK_KINDS = Object.freeze(['thread', 'issue', 'proposal', 'run', 'pull', 'deploy']);
+export const WORK_THEMES = Object.freeze({
+  thread:   Object.freeze({ color: '#a78bfa', shape: 'circle', letters: 'T', r: 20 }),
+  issue:    Object.freeze({ color: '#fbbf24', shape: 'circle', letters: '!', r: 20 }),
+  proposal: Object.freeze({ color: '#2dd4bf', shape: 'diamond', letters: 'S', r: 20 }),
+  run:      Object.freeze({ color: '#818cf8', shape: 'hexagon', letters: 'R', r: 20 }),
+  pull:     Object.freeze({ color: '#60a5fa', shape: 'rounded-square', letters: 'PR', r: 20 }),
+  deploy:   Object.freeze({ color: '#4ade80', shape: 'square', letters: 'D', r: 20 }),
+});
+/** The node type a kind of work has in the Work view (`work-pull`): never in topology.json */
+export const workType = (kind) => `work-${kind}`;
+
 /** The silhouettes, in the order the renderers number them (0 is the circle) */
 export const SHAPES = Object.freeze(['circle', 'rounded-square', 'hexagon', 'square', 'diamond']);
 /** The silhouette of a node type: `circle` for one the table does not know (a type is project data, so it only selects from the table) */

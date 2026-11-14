@@ -21,7 +21,7 @@ export const TYPE_NAMES = Object.freeze({
 const capital = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /** The name of the group a node is listed under: its layer's name */
-export const groupName = (node) => TYPE_NAMES[node.type] || capital(String(node.type || ''));
+export const groupName = (node) => (typeof node.groupName === 'string' && node.groupName) || TYPE_NAMES[node.type] || capital(String(node.type || '')); // a piece of work names its own group (the Work view)
 
 const lower = (s) => (typeof s === 'string' ? s.toLowerCase() : '');
 const WORD_BREAK = /[^\p{L}\p{N}]+/u;
@@ -38,7 +38,8 @@ export function rankOf(node, query) {
   if (label.startsWith(term)) return RANK.labelStart;
   if (label.split(WORD_BREAK).some((w) => w && w.startsWith(term))) return RANK.wordStart;
   if (label.includes(term)) return RANK.label;
-  if (lower(node.id).includes(term) || lower(node.file).includes(term)) return RANK.idOrFile;
+  if (Array.isArray(node.terms) && node.terms.some((x) => lower(x) === term)) return RANK.labelStart; // what a piece of work is also called: `#21`, `pr 21`, its slug (the Work view)
+  if (lower(node.id).includes(term) || lower(node.file).includes(term) || (Array.isArray(node.terms) && node.terms.some((x) => lower(x).includes(term)))) return RANK.idOrFile;
   if (lower(node.type).includes(term) || lower(groupName(node)).includes(term) || lower(node.kind).includes(term)) return RANK.typeOrKind;
   return -1;
 }

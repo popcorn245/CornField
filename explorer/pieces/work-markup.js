@@ -13,11 +13,10 @@ export const markup = () => Object.fromEntries(Object.entries(markupOf()).map(([
 
 const markupOf = () => ({
   /** The Work toggle: opens the panel; hidden until the config names a forge and somebody is signed in */
-  button: `<button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
-  <span data-corn-string="issuesAndPrs">Work</span>
+  button: `<button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work panel" data-corn-string-aria-label="workPanel" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
+  <span data-corn-string="workPanel">Work panel</span>
   <span id="forge-btn-lit" class="hx-forge-lit" data-corn="count" hidden></span>
   <span id="forge-btn-dot" class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
-  <span id="forge-btn-waiting" class="hx-waiting-badge" data-corn="waiting-badge" aria-hidden="true" hidden></span>
 </button>`,
   /** Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop: a slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge. `forge-panel` on the inner box is the old name of the hook, kept for one release (docs/theming.md) */
   panel: `<aside id="forge-panel" class="hx-forge glass" aria-label="Work" inert hidden data-corn="work-panel">

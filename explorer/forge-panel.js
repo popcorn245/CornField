@@ -52,4 +52,5 @@ export const selectDeploy = (id) => { const p = piece(); if (p) p.selectDeploy(i
 export const openRunLink = (id) => { const p = piece(); return p && p.isOn() ? p.openRunLink(id) : Promise.resolve(false); };
 export const openIssueLink = (n) => { const p = piece(); return p && p.isOn() ? p.openIssueLink(n) : Promise.resolve(false); };
 export const openProposalStart = (slug, opener) => { const p = piece(); return p && p.isOn() ? p.openProposalStart(slug, opener) : Promise.resolve(false); };
+export const openWorkAt = (item) => { const p = piece(); return p && p.isOn() ? p.openWorkAt(item) : Promise.resolve(false); };
 export const canStartAgent = () => { const p = piece(); return !!p && p.canStartAgent(); };

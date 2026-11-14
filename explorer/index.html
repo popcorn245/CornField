@@ -26,6 +26,8 @@
   <link rel="stylesheet" href="/explorer/css/work.css" />
   <link rel="stylesheet" href="/explorer/css/page.css" />
   <link rel="stylesheet" href="/explorer/house.css" />
+  <link rel="stylesheet" href="/explorer/work-view.css" />
+  <link rel="stylesheet" href="/explorer/pieces/status.css" />
   <!-- The config's brand (server/server.js puts it here): the favicon, the web app manifest and the tab colour -->
   <!--@brand-->
   <!-- The config's theme (server/server.js puts it here, so it comes after cornfield's own CSS): font stylesheets, the repo's theme.css, a named theme -->
@@ -54,6 +56,8 @@
         <button type="button" id="preset-dataflow-btn" class="hx-view-btn" data-action="preset-dataflow" aria-pressed="false" data-corn-string="dataFlow" title="Show only how data moves: browser, app servers, API, tables, services, outside systems" data-corn="preset-dataflow">Flow</button>
         <!-- The House preset (explorer/house.js, spec 0029): the floor plan with its devices, machines and people, the software around it -->
         <button type="button" id="preset-house-btn" class="hx-view-btn" data-action="preset-house" aria-pressed="false" data-corn-string="house" title="Show the house: each floor's rooms with their devices and machines, the people beside it, the software around it" data-corn="preset-house">House</button>
+        <!-- The Work view (explorer/work-view.js, spec 0012): the map of issues, pull requests, proposals, runs, threads and deploys; its badge is what waits on you -->
+        <button type="button" id="preset-work-btn" class="hx-view-btn" data-action="preset-work" aria-pressed="false" data-corn="preset-work" hidden title="Work: issues, pull requests, proposals, agent runs, threads and deploys, and the code they touch"><span data-corn-string="issuesAndPrs">Work</span><span class="hx-waiting-badge hx-view-badge" data-corn="waiting-badge" aria-hidden="true" hidden></span></button>
         <button type="button" id="fit-btn" class="hx-view-fit" data-corn="fit-button" data-action="fit" title="Fit to the screen" aria-label="Fit to the screen" data-corn-kind="icon">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" /></svg>
         </button>
@@ -129,11 +133,10 @@
 
       <!-- The Work toggle (explorer/pieces/work.js): opens the Work panel; shown only when the config names a forge. It is a piece: page.js mounts it here, and until then this stand-in keeps its place (the piece's markup without ids) -->
       <!--corn-placeholder:work/button-->
-      <button type="button" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button" part="forge-button">
-  <span data-corn-string="issuesAndPrs">Work</span>
+      <button type="button" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-label="Work panel" data-corn-string-aria-label="workPanel" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button" part="forge-button">
+  <span data-corn-string="workPanel">Work panel</span>
   <span class="hx-forge-lit" data-corn="count" part="count" hidden></span>
   <span class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
-  <span class="hx-waiting-badge" data-corn="waiting-badge" part="waiting-badge" aria-hidden="true" hidden></span>
 </button>
       <!--corn-piece:work/button-->
 

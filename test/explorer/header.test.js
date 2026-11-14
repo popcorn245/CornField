@@ -26,7 +26,7 @@ beforeEach(() => { document.body.innerHTML = body; ensurePagePieces(); Object.as
 
 describe('the header, left to right', () => {
   it('has the brand, the View switch, the Layers chip, search, Work and the account menu, in that order', () => {
-    const order = ['cf-brand', 'preset-map-btn', 'preset-dataflow-btn', 'preset-house-btn', 'fit-btn', 'legend-toggle-btn', 'node-search', 'forge-btn', 'account-btn'];
+    const order = ['cf-brand', 'preset-map-btn', 'preset-dataflow-btn', 'preset-house-btn', 'preset-work-btn', 'fit-btn', 'legend-toggle-btn', 'node-search', 'forge-btn', 'account-btn'];
     const at = order.map((id) => [...header().querySelectorAll('*')].indexOf($(id)));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
@@ -34,7 +34,7 @@ describe('the header, left to right', () => {
 
   it('is a switch of three, one of which is on, with Fit at its end', () => {
     const group = document.querySelector('[role="group"][aria-label="View"]');
-    expect([...group.querySelectorAll('button')].map((b) => b.id)).toEqual(['preset-map-btn', 'preset-dataflow-btn', 'preset-house-btn', 'fit-btn']);
+    expect([...group.querySelectorAll('button')].map((b) => b.id)).toEqual(['preset-map-btn', 'preset-dataflow-btn', 'preset-house-btn', 'preset-work-btn', 'fit-btn']);
     expect(group.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
     expect($('fit-btn').getAttribute('aria-label')).toBe('Fit to the screen');
     expect($('fit-btn').dataset.action).toBe('fit');

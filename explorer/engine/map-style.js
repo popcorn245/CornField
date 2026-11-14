@@ -36,6 +36,7 @@
  */
 
 import { NODE_THEMES } from '../../core/schema.js';
+import { WORK_KINDS } from '../../core/schema.js';
 import { parseColor } from '../theme-model.js';
 import { cssColor, rgbaText } from '../css-color.js';
 export { cssColor };
@@ -85,6 +86,8 @@ export const ICON_RATIO = 1.2;
 export const ICON_URL_PREFIX = '/cornfield/theme/assets/';
 
 export const nodeToken = (kind) => `--corn-map-node-${kind}`;
+/** The fill token of a kind of work in the Work view (spec 0012 D2) */
+export const workToken = (kind) => `--corn-work-${kind}`;
 export const groupToken = (group) => `--corn-map-group-${group}`;
 /** The fill token of a finer kind: `--corn-map-kind-service-timer`, or null for a kind that cannot be a part of a name (core/layers.js) */
 export const kindToken = (type, kind) => mapKindToken(type, kind);
@@ -95,6 +98,7 @@ export const stateToken = (name) => `--corn-map-${name}`;
 export const MAP_COLOR_TOKENS = Object.freeze([
   ...MAP_KINDS.map(nodeToken),
   ...MAP_GROUPS.map(groupToken),
+  ...WORK_KINDS.map(workToken),
   STROKE_TOKEN,
   LABEL_TOKEN,
   LABEL_HALO_TOKEN,
@@ -481,7 +485,7 @@ function compute(scene, style) {
   const painted = scene.painted || { nodes: new Set(), edges: new Set() };
   const nodes = scene.nodes.map((n) => {
     // Which fill wins, most specific first (spec 0009 D6): the finer kind, the project layer, the type, the starting layer
-    const fill = !painted.nodes.has(n.id) && fillOf(values, n);
+    const fill = !painted.nodes.has(n.id) && (n.work ? values[workToken(n.work)] : fillOf(values, n));
     const icon = style.icons ? iconKeysFor(n.type, n.kind, n.layer).find((k) => style.icons.get(k)) || null : null; // the same order: kind, layer, type
     const glows = style.glow != null && style.glow !== 1 && n.glow > 0;
     const grey = !!n.greyed && !painted.nodes.has(n.id); // a review greys what the change does not involve; a colour a painter gave means something and stays

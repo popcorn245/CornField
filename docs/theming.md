@@ -353,6 +353,13 @@ There are 69 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-map-edge-runs-on` | code running on a stack or a machine |
 | `--corn-map-edge-uses` | a use of a design token |
 | `--corn-map-edge-extends` | a token group extending another |
+| **Work view** (spec 0012) | |
+| `--corn-work-thread` | the fill of a thread in the Work view (a circle; default `#a78bfa`) |
+| `--corn-work-issue` | an issue (a circle with a `!`; `#fbbf24`) |
+| `--corn-work-proposal` | a proposal (a diamond; `#2dd4bf`) |
+| `--corn-work-run` | an agent run (a hexagon; `#818cf8`) |
+| `--corn-work-pull` | a pull request (a rounded square; `#60a5fa`) |
+| `--corn-work-deploy` | a deploy (a square; `#4ade80`) |
 | **Node fill by kind** | |
 | `--corn-map-node-root` | the fill of a `root` node |
 | `--corn-map-node-app` | the fill of an `app` node |
@@ -463,9 +470,9 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-
 | `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
 | `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
 | `layers-all`, `layers-none` | All and None in the Layers menu's title: they switch every layer on or off, never an overlay |
-| `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `fit-button` | the View switch (Map, Flow, House, then Fit), and its four buttons; the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
+| `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `preset-work`, `fit-button` | the View switch (Map, Flow, House, Work, then Fit), and its buttons (Work carries the `waiting-badge`, the number waiting on you); the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
 | `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
-| `forge-button`, `tokens-button` | the Work toggle (its lit tag, "#21", is a `count`), the Review tokens entry of the account menu |
+| `forge-button`, `tokens-button` | the Work panel's toggle, named "Work panel" while the view switch has a Work of its own (its lit tag, "#21", is a `count`; it has no `waiting-badge`, and it is not on a phone), the Review tokens entry of the account menu |
 | `account-button`, `avatar`, `account-menu` | the account button, the initial of who is signed in inside it, and the menu |
 | `account-who`, `account-row` | the line that says who is signed in; a labelled setting of the menu (Theme, with its options) |
 | `live-chip`, `live-dot`, `live-menu` | the live layer's chip, the dot in it, and its dropdown. The chip has a `data-corn-state`: `success` (fresh), `waiting` (as of a while ago), `stopped` (off), `failure` (unavailable) or `running` (loading) |
@@ -509,9 +516,13 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `diff-block` | the key / value rows of the node panel's "In this proposal" (`data-corn-state` as for the pill) |
 | `more` | the capped list's "and 15 more" button (`data-corn-kind="quiet"`, `aria-expanded`) |
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
-| `waiting-badge` | the one number of what waits on you (specs to decide plus runs that need an answer), as a filled badge: on the Work button ("Work 3", spoken "Work, 3 waiting on you"; hidden at 0) and on the Specs and Runs tabs (their share; a tab with nothing waiting shows its plain total, a `count`). A tab's count span changes from `count` to `waiting-badge` and back. Takes `--corn-run-waiting` and `--corn-run-waiting-ink` |
+| `waiting-badge` | the one number of what waits on you (specs to decide plus runs that need an answer), as a filled badge: on the view switch's Work button ("Work 3", spoken "Work, 3 waiting on you"; hidden at 0; the Work panel's own button has none) and on the Specs and Runs tabs (their share; a tab with nothing waiting shows its plain total, a `count`). A tab's count span changes from `count` to `waiting-badge` and back. Takes `--corn-run-waiting` and `--corn-run-waiting-ink` |
 | `spec-group`, `review-state`, `specs-search` | on the Specs tab: a group of rows with its heading (`data-group` is `decide`, `agent`, `approved` or `drafts`: To decide, With the agent, Approved, Drafts; Drafts fold behind their heading past ten rows); a row's pill that says its review state in words (To decide, Changed since approved, Sent back, Approved, Draft PR, Local, Review state unknown; its `data-corn-state` is `waiting`, `sent-back`, `success`, `draft` or `failure`); the search field above the list |
 | `waiting-line` | in the proposal bar, under the buttons, when a run is waiting on the open proposal: "A run is waiting on you: Plan ready: approve to build, … · Answer" (`data-corn-state="waiting"`; the runner's words are cut to 90 characters; Answer is a `secondary` button that opens Work on Runs at that run with its reply field focused) |
+| `work-bar`, `work-chip`, `work-note` | in the Work view (spec 0012), at the top left of the map: the group of toggles ("All work", "Waiting on you · 3"; `aria-pressed` says which is on; "Updating…" follows them while a refresh is on its way and the last answer stays drawn), each toggle, and the line naming what the server could not read or what could not be updated |
+| `work-lanes` | the lanes' titles ("Talk 9", "Decide 7", "Drafts 64", "Build 8", "Ship 1", "Code it touches 44"): lines of the page over the map in screen space, so they read at any zoom (the map draws the lanes' panels); decorative, the node panel and the live region say the rest |
+| `work-loading` | while the Work view's first answer is on its way: the lanes, empty, and the words ("Reading the work from the forge…", a `role="status"`); nothing on the page waits for it |
+| `work-links`, `work-link`, `work-pills`, `work-checks`, `work-actions` | in the node panel for a piece of work: what it is connected to (the list, and one row: its words, its kind's dot and a button that selects that node), its state pills, the words of a pull request's checks, and the words saying what the action will do with "Open in Work" |
 | `run-group` | a heading of the Runs list (`data-group` is `needs`, `motion` or `finished`: Needs you, In motion, Finished). It is an item of the flat list, so a run's card is never moved into a section |
 | `work-head`, `work-title`, `work-foot` | in the Work panel: the title row (the title, Refresh, close), the title itself (focus lands on it), the foot of the list (Release notes, New idea) |
 | `filter-chip`, `filters`, `check-field` | the Filter chip on a list (`aria-expanded`; its count is a `count`), the box of fields it opens, a check box with its words ("Agent-made only"; the box itself is a `control`) |
@@ -722,6 +733,7 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `house` | House |
 | `proposals` | Proposals |
 | `issuesAndPrs` | Work |
+| `workPanel` | Work panel |
 | `searchPlaceholder` | Search... |
 | `searchNoMatch` | No match for |
 | `signOut` | Sign out |

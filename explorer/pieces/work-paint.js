@@ -10,7 +10,7 @@ import { workStatus } from '../agents-model.js';
 import { loadingRowsHtml } from '../runs-view.js';
 import { STATES, defaultFilters, filterItems, facetsOf, emptyWords } from '../forge-panel-model.js';
 import { relativeTime } from '../review-model.js';
-import { waiting, specGroups, workButtonName, waitingWords, runWaitingOn } from '../waiting-model.js';
+import { waiting, specGroups, waitingWords, runWaitingOn } from '../waiting-model.js';
 import { specGroupsHtml } from '../waiting-view.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { plural, safeUrl, option } from './work-common.js';
@@ -247,17 +247,12 @@ export function install(ctx) {
       tag.hidden = !lit;
       tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
     }
-    const n = fn.waitingNow().total;
     // A run would wait for a runner that is not there: a dot, and the name says so (issue #183); it sits beside the waiting badge, not on it
     const away = fn.runnerAway();
     const dot = $('forge-btn-dot');
     if (dot) dot.hidden = !away;
-    const badge = $('forge-btn-waiting');
-    if (badge) {
-      badge.hidden = n === 0;
-      badge.textContent = n ? String(n) : '';
-    }
-    btn.setAttribute('aria-label', `${workButtonName(t('issuesAndPrs'), n, t)}${away ? ', no runner online' : ''}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
+    // What waits on the maintainer is the badge of the view switch's Work (work-view.js): this button opens the panel, and says so while both exist (spec 0012 D1, until step 3)
+    btn.setAttribute('aria-label', `${t('workPanel')}${away ? ', no runner online' : ''}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
   }
 
   /** Whether the Filter chip applies to the view: the proposals and the release notes have nothing to filter */

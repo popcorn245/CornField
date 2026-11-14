@@ -173,6 +173,7 @@ export function createMap(inst, opts = {}) {
     });
     if (state.view === 'dataflow' && state.flow) minY = Math.min(minY, state.flow.top - 10); // and the tier titles above
     if (state.view === 'house' && state.house && state.house.fit && !only) ({ minX, maxX, minY, maxY } = state.house.fit); // the House view fits its plan and bands (house-model.js)
+    if (state.view === 'work' && state.work && state.work.fit && !only) ({ minX, maxX, minY, maxY } = state.work.fit); // the Work view fits its lanes, and the room its names and toggles need (work-model.js)
 
     const availWidth = Math.max(160, width - padding * 2);
     const availHeight = Math.max(160, mapHeight - padding * 2);
@@ -217,7 +218,7 @@ export function createMap(inst, opts = {}) {
     render();
   }
 
-  const fitPadding = () => (state.width < 640 ? 24 : 48);
+  const fitPadding = () => (state.view === 'work' ? (state.width < 640 ? 44 : 96) : state.width < 640 ? 24 : 48); // the Work view leaves room for the names under the nodes at the edge, in a fit and in a selection's framing
 
   const screenToWorld = (sx, sy) => ({ x: (sx - state.camera.x) / state.camera.zoom, y: (sy - state.camera.y) / state.camera.zoom });
 

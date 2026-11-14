@@ -174,6 +174,7 @@ import { paintVerdict } from './verdict-paint.js';
 import { externalLayer, whenTicks } from './cloud-model.js';
 import { greying, lettersOf, projectLayerKey, shownByProposal, layersOf } from './layer-model.js';
 import { NODE_THEMES, shapeOf } from '../core/schema.js';
+import { WORK_KINDS } from '../core/schema.js';
 import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
@@ -287,6 +288,7 @@ export { GREY_ALPHA }; // how much of a greyed node is left (diff-marks.js): its
  */
 export function isNodeVisible(state, node, { viewer = false } = {}) {
   if (state.proposal && !showsNode(state.proposalView || 'diff', node)) return false; // Before hides what is added, After what is removed
+  if (state.view === 'work') return node.hidden !== true; // the Work view (spec 0012): its layers set `hidden` on the nodes (work-view.js)
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
   if (node.type === 'root') return true;
@@ -498,6 +500,7 @@ function buildEdges(state, subgraph, reduceMotion) {
     const target = byId.get(edge.to);
     if (!source || !target || !isNodeVisible(state, source) || !isNodeVisible(state, target)) return;
 
+    if (state.view === 'work') { out.push(state.workEdge(edge, source, target, subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true, !!subgraph, edgeKeyOf(edge), { PROPOSED_DASH, USAGE_DASH })); return; } // the Work view's lines are work-model.js's (the page installs `workEdge`)
     if (preset) return flow(edge, source, target);
     if (state.view === 'house') { const how = houseEdgeStyle(edge, source, target); if (how === 'flow') flow(edge, source, target); else if (how === 'link') out.push(linkEdge(edge, source, target, subgraph)); return; }
 
@@ -581,27 +584,32 @@ function buildNodes(state, subgraph) {
     const selected = !!selectedNode && selectedNode.id === node.id;
     const connected = subgraph ? subgraph.connectedNodeIds.has(node.id) : true;
     const child = subgraph && subgraph.childIds ? subgraph.childIds.has(node.id) : false;
-    const mark = view ? markIn(view, node) : 'none';
+    const mark = node.planned === true ? 'added' : view ? markIn(view, node) : 'none'; // a node a proposal adds that the map does not hold yet is drawn as planned (spec 0012 D2)
     const look = MARK[mark];
     const gone = mark === 'edit' && node.editOp === 'removed'; // a node a what-if edit removes: violet ring, faded, label struck through
     // deep dimming for what is not connected; a proposal's Diff view fades what it does not touch, less deeply, and a removed node is faded too
     // A search's matches are what the reader asked for: a selection's focus does not dim them, so each keeps its label (spec 0008 D4)
-    let alpha = subgraph && !connected && !(searching && match) ? DIM_ALPHA : 1;
-    if (searching && !match && !selected && !(subgraph && connected)) alpha = DIM_ALPHA; // a search dims what it did not find, as a focus does
+    const dimmed = state.view === 'work' ? PROPOSAL_DIM_ALPHA : DIM_ALPHA; // the Work view dims to what the mock shows: the rest is still readable
+    let alpha = subgraph && !connected && !(searching && match) ? dimmed : 1;
+    if (searching && !match && !selected && !(subgraph && connected)) alpha = dimmed; // a search dims what it did not find, as a focus does
+    if (node.dim === true) alpha = Math.min(alpha, dimmed); // "Waiting on you" (work-view.js)
     const greyed = grey && !!focus && !focus.touched.has(node.id);
     if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, greyed ? GREY_ALPHA : PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
     const big = shown.type === 'root' || shown.type === 'app';
     // A finer kind (spec 0009): its letters, drawn in the node's core by the renderers (kind-letters.js), and the project layer that takes the node
-    const letters = lettersOf(state, shown);
+    const work = WORK_KINDS.includes(shown.work) ? shown.work : ''; // a kind of work carries its own shape and letters (work-model.js)
+    const shape = work && Object.hasOwn(SHAPE_REACH, shown.shape) ? shown.shape : shapeOf(shown.type);
+    const letters = work ? String(shown.letters || '') : lettersOf(state, shown);
     const layer = projectLayerKey(state, shown);
 
     out.push({
       id: node.id, type: shown.type, group: groupOf(shown),
       ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
       ...(letters ? { letters } : {}),
-      shape: shapeOf(shown.type), // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
-      hitR: shown.r * SHAPE_REACH[shapeOf(shown.type)], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
+      ...(work ? { work } : {}), // a kind of work (the Work view): its colour is its own token (map-style.js)
+      shape, // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
+      hitR: shown.r * SHAPE_REACH[shape], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
       ...(hasGlyph(shown.type) ? { glyph: shown.type } : {}), // its built-in glyph, drawn where the core dot is once the node is wide enough (glyphs.js)
       ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: fillOfNode(shown),
@@ -612,13 +620,13 @@ function buildNodes(state, subgraph) {
       ...(greyed ? { greyed: true } : {}), // not involved in the change: its colour is taken away at draw time, glyph and letters stay (map-style.js)
       selected, match, current, connected,
       degree: node.degree || 0,
-      label: shown.label,
+      label: shown.labelText || shown.label, // a node of the Work view is drawn as the start of its name; the whole of it is the node panel's (work-model.js)
       labelSize: big && !greyed ? 12 : 11, // a greyed node's label recedes (issue #232): plain, at the least size, placed last (labels.js)
       labelBold: big && !greyed,
       labelAlpha: greyed && !(subgraph && !connected) ? GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] // a greyed node's label: at the dimmed-label floor on either ground
         : focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
       labelColor: connected ? '#f8fafc' : 'rgba(255, 255, 255, 0.3)',
-      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || selected || match || mark !== 'none' || !!(subgraph && connected),
+      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || (!!work && shown.waiting === true) || selected || match || mark !== 'none' || !!(subgraph && connected),
       labelStrike: !!look && (look.strike || gone),
       live: !!node.live,
       box: node.box || null,
@@ -744,6 +752,7 @@ export function buildScene(state, opts = {}) {
     version: state.sceneVersion || 0,
   };
   if (state.view === 'house') decorateHouseScene(scene, state); // its bands and tray as lanes, rooms unlabelled (house-model.js)
+  if (state.view === 'work' && state.workLanes) scene.decor.lanes = state.workLanes; // its lanes and their titles (work-model.js)
   if (state.scenario) emphasiseScenario(scene, state.scenario, opts);
   scene.greying = scene.nodes.some((n) => n.greyed) || scene.edges.some((e) => e.greyed);
   const colours = { nodes: scene.nodes.map((n) => n.color), edges: scene.edges.map((e) => e.color) };

@@ -3167,6 +3167,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map of work in one answer (spec 0012 D2, D3 and D7): the pieces of work of six kinds as nodes, how they link to each other and to the code they touch as edges, and a line for everything that co… (server/work-graph.js)"
+    },
+    {
+      "id": "core-explorer-work-model",
+      "label": "work-model.js",
+      "type": "core",
+      "file": "explorer/work-model.js",
+      "summary": "The pure half of the Work view (spec 0012 D1 to D5, D8): the map of work, from the server's answer to `GET /api/forge/work-graph` (server/work-graph.js: `{ ok, nodes, edges, problems }`) to nodes t…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of the Work view (spec 0012 D1 to D5, D8): the map of work, from the server's answer to `GET /api/forge/work-graph` (server/work-graph.js: `{ ok, nodes, edges, problems }`) to nodes t… (explorer/work-model.js)"
+    },
+    {
+      "id": "core-explorer-work-view",
+      "label": "work-view.js",
+      "type": "core",
+      "file": "explorer/work-view.js",
+      "summary": "The Work view in cornfield's page (spec 0012 D1 to D5 and D8); its pure half is work-model.js, the server's half `GET /api/forge/work-graph` (server/work-graph.js).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work view in cornfield's page (spec 0012 D1 to D5 and D8); its pure half is work-model.js, the server's half `GET /api/forge/work-graph` (server/work-graph.js). (explorer/work-view.js)"
     }
   ],
   "edges": [
@@ -10816,7 +10836,201 @@
       "from": "page-doc-docs-specs-0012-work-as-a-view",
       "to": "page-doc-docs-issues-and-prs",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-work-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-work-view"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-work-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-pieces-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T22:44:35.797Z"
+  "updatedAt": "2026-11-14T00:25:44.946Z"
 }

@@ -192,6 +192,13 @@
   --corn-map-node-device: auto;
   --corn-map-node-floor: auto;
   --corn-map-node-room: auto;
+  /* The Work view's nodes (spec 0012 D2): the fill of each kind of work; auto is the kind's own colour (core/schema.js WORK_THEMES) */
+  --corn-work-thread: auto;
+  --corn-work-issue: auto;
+  --corn-work-proposal: auto;
+  --corn-work-run: auto;
+  --corn-work-pull: auto;
+  --corn-work-deploy: auto;
   /* Node fill by group */
   --corn-map-group-app: auto;
   --corn-map-group-pkg: auto;

@@ -293,8 +293,8 @@ describe('the mounted page', () => {
     expect(hook('zoom')).toBeNull(); // the zoom buttons are gone (CF-41)
   });
 
-  it('has the header\'s View switch in full: Map, Flow, House, then Fit; and the account menu\'s theme options', () => {
-    expect([...hook('view-switch').querySelectorAll('[data-corn]')].map((e) => e.getAttribute('data-corn'))).toEqual(['preset-map', 'preset-dataflow', 'preset-house', 'fit-button']);
+  it('has the header\'s View switch in full: Map, Flow, House, Work with its badge, then Fit; and the account menu\'s theme options', () => {
+    expect([...hook('view-switch').querySelectorAll('[data-corn]')].map((e) => e.getAttribute('data-corn'))).toEqual(['preset-map', 'preset-dataflow', 'preset-house', 'preset-work', 'waiting-badge', 'fit-button']);
     expect(hook('fit-button').getAttribute('data-corn-kind')).toBe('icon');
     expect(hook('avatar').closest('[data-corn="account-button"]')).not.toBeNull();
     expect(hook('account-menu').contains(hook('account-who'))).toBe(true);

@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { MIN_SHAPE_DELTA_E, NODE_SHAPES, NODE_THEMES } from './schema.js';
+import { WORK_KINDS, WORK_THEMES } from './schema.js';
 import { deltaE2000 } from './delta-e.js';
 import { LAYER_KEY_RE, MAX_KEY, mapFillNames, parseKindToken } from './layers.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, GREY_MIN_RATIO, markOpacity } from '../explorer/diff-marks.js';
@@ -555,6 +556,22 @@ function mapFindings(props, theme, mode, grounds, extra = []) {
       const weakest = onGround.ratio <= onFill ? { r: onGround.ratio, on: '--corn-ground', value: onGround.bgValue } : { r: onFill, on: name, value: toHex(over(fill, ground)) };
       out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries the fill of ${anOf(label)} ${label} node, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
     }
+  }
+  // The fill of each kind of work in the Work view (spec 0012 D2): the kind's token, else its own colour (deepened for the light ground), against the ground
+  for (const kind of WORK_KINDS) {
+    const name = `--corn-work-${kind}`;
+    const t = mapToken(props, name);
+    const use = `the fill of ${anOf(kind)} ${kind} node in the Work view`;
+    if (t.problem) { out.push({ ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use, problem: t.problem }); continue; }
+    const own = !t.color;
+    const fill = own ? readColor(mode === 'light' ? lightColor(WORK_THEMES[kind].color) : WORK_THEMES[kind].color) : t.color;
+    const f = worstOnGrounds(fill, grounds);
+    const finding = { ...base, fg: own ? `${name}, auto: the node's own colour` : name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use, fgValue: f.fgValue, bgValue: f.bgValue, ratio: f.ratio, ...(f.image ? { groundImage: true } : {}) };
+    if (f.ratio >= MAP_FILL_MIN || !strokeOn) { out.push(f.ratio >= MAP_FILL_MIN ? finding : { ...finding, use: `${use}; set --corn-map-stroke, an outline at ${MAP_FILL_MIN}:1 on the fill and on the ground, or a deeper fill` }); continue; }
+    const onGround = worstOnGrounds(stroke.color, grounds);
+    const onFill = ratio(luminance(over(stroke.color, over(fill, ground))), luminance(over(fill, ground)));
+    const weakest = onGround.ratio <= onFill ? { r: onGround.ratio, on: '--corn-ground', value: onGround.bgValue } : { r: onFill, on: name, value: toHex(over(fill, ground)) };
+    out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries ${use}, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
   }
   // The ink of a glyph and of a finer kind's letters (spec 0008 D8), when the theme sets one: against every fill it can sit on (`auto` picks white or dark per fill, which a test holds)
   const glyph = mapToken(props, '--corn-map-glyph');

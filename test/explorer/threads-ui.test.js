@@ -16,7 +16,7 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge, refreshForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, refreshForge, openWorkAt } from '../../explorer/forge-panel.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -421,6 +421,37 @@ describe('a node\'s panel lists the threads that mention it', () => {
     expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
     expect($('forge-detail').textContent).toContain('Spec: Meals');
     expect([...state.forgeLit.changed]).toEqual(['core-hooks']);
+  });
+
+  it('opens on the Threads tab even when a run waits on you (a closed panel would otherwise open on the oldest thing waiting)', async () => {
+    fakeServer({ runs: [{ runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDE2', status: 'waiting', open: true, requestedAt: '2026-10-19T09:00:00Z', target: 41, refs: { thread: 41 }, thread: { number: 41, mirror: null } }] });
+    mount();
+    openForge({ tab: 'work' }); // the runs are read, so one waits on you
+    await settle();
+    closeForge({ restoreFocus: false });
+    selectNode(pick('core-hooks'));
+    await settle();
+    click(q('[data-thread-open="40"]'));
+    await settle();
+    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-detail').textContent).toContain('Spec: Meals');
+  });
+
+  it('the Work view\'s "Open in Work" opens the tab of the piece of work, with it selected (spec 0012 step 2)', async () => {
+    fakeServer({ runs: [{ runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDE2', status: 'waiting', open: true, requestedAt: '2026-10-19T09:00:00Z', target: 41, refs: { thread: 41 }, thread: { number: 41, mirror: null } }] });
+    mount();
+    openForge({ tab: 'work' });
+    await settle();
+    closeForge({ restoreFocus: false });
+    await openWorkAt({ kind: 'pull', number: 12 });
+    await settle();
+    expect(q('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-detail').textContent).toContain('Meals page');
+    closeForge({ restoreFocus: false });
+    await openWorkAt({ kind: 'thread', number: 40 });
+    await settle();
+    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-detail').textContent).toContain('Spec: Meals');
   });
 
   it('shares the list with the tab: opening the tab afterwards does not ask twice for the same state', async () => {
