@@ -186,6 +186,14 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     if (hit) return hit;
     if (method === 'GET' && rest === `/repos/${REPO}/issues`) return base[`GET /repos/${REPO}/issues?state=open&sort=created&direction=desc&per_page=100`] ? { body: base[`GET /repos/${REPO}/issues?state=open&sort=created&direction=desc&per_page=100`].body } : { body: [] };
     if (method === 'GET' && /\/issues\/\d+\/comments$/.test(rest)) return { body: [] };
+    // One issue, whatever its state (the Work list reaches an issue older than the work graph's 14 days): found in the recorded lists
+    if (method === 'GET' && (m = new RegExp(`^/repos/${REPO}/issues/(\\d+)$`).exec(rest))) {
+      for (const [key, value] of Object.entries(base)) {
+        if (!key.startsWith(`GET /repos/${REPO}/issues?`) || !value || !Array.isArray(value.body)) continue;
+        const found = value.body.find((i) => i.number === Number(m[1]) && !i.pull_request);
+        if (found) return { body: found };
+      }
+    }
     if (method === 'POST' && (m = /\/issues\/(\d+)\/comments$/.exec(rest))) {
       // A comment is kept (in memory), so what is posted reads back: an approval shows in the Work panel and on the proposal
       const at = new Date().toISOString();

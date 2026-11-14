@@ -1,6 +1,6 @@
 # Deploys on the map
 
-The **Deploys** list in the [issues and PRs panel](issues-and-prs.md) shows the repo's latest deploys and, when you select one, lights the nodes it restarted. It is read-only: cornfield reads the forge's workflow runs and never starts, re-runs or cancels one ([ADR 0006](adr/0006-safe-actions-only.md)). It needs what the panel needs: a `forge` in the [config](config.md) and a maintainer signed in ([sign-in](sign-in.md)).
+The **Deploys** list in the [Work list](issues-and-prs.md#the-work-list) shows the repo's latest deploys and, when you select one, its node panel names the nodes it restarted. It is read-only: cornfield reads the forge's workflow runs and never starts, re-runs or cancels one ([ADR 0006](adr/0006-safe-actions-only.md)). It needs what the panel needs: a `forge` in the [config](config.md) and a maintainer signed in ([sign-in](sign-in.md)).
 
 ## What is a deploy, and what did it restart
 
@@ -49,14 +49,13 @@ GET /api/forge/deploys?limit=100    the deploys among the latest runs, each with
 
 Like every `/api/forge/…` route it is a `GET`, signed-in only, and answers `{ ok: false, error, code }` in words when it cannot.
 
-## In the panel
+## In the Work list and the node panel
 
-- **Deploys** is a third tab beside Pull requests and Issues. Each row: the workflow, what it ran for, its state (a word as well as a colour), the branch or tag, the commit, who started it and when, a link out to the run, and what it lights ("Lights 3 nodes", "Not mapped to a node"). Filters: state (succeeded, failed, running or waiting, cancelled or skipped) and a search; there are no labels or authors to pick.
-- **Selecting a deploy** lights the nodes it restarted through the same paint as a pull request: amber with the search-match glow, the rest of the map faded back. A deploy that **failed** lights them red, as a failing check lights its tests. The panel lists the nodes, each with a button that selects it on the map. The back control ("‹ All deploys") lets go; closing the panel leaves the lights on and the header button says `deploy`.
-- Containers, stacks and machines are on layers that start off. Selecting a deploy turns on the layers of the nodes it lights (and says which), because nothing would light otherwise; letting go leaves them as they are.
-- Only one thing is lit at a time: selecting a deploy lets go of a selected pull request, and the other way round.
+- **Deploys** is a tab of the Work list beside Pull requests and Issues. Each row: the workflow, what it ran for, its state (a word as well as a colour), the branch or tag, the commit, who started it and when, a link out to the run, and what it restarts ("Restarts 3 nodes", "Not mapped to a node"). Filters: state (succeeded, failed, running or waiting, cancelled or skipped) and a search; there are no labels or authors to pick. A row **selects the deploy's node** in the Work view (a deploy older than the 14 days the view draws opens in the node panel alone).
+- **The node panel** shows the deploy's state, **Open the logs on GitHub** (or Forgejo), and the nodes it restarted, each with a button that selects it on the map. There is no Re-run: cornfield has no route that runs a workflow again. The Work view draws the same links as `restarts` lines from the deploy to each node, and `shipped` from the pull request that landed at its commit.
+- Containers, stacks and machines are on layers of the Map view that start off; the Work view draws only the code that work touches, whatever its layer on the Map.
 - **Refresh** asks the forge again.
 
 ## By keyboard, on a phone
 
-The tab, the rows, the back control and the node buttons are buttons in the tab order; selecting a deploy, what it lights and which layers it turned on are said through the map's live region ([accessibility](accessibility.md)). On a phone the panel is the same bottom sheet; a node button collapses it so the map shows. Colours are the explorer's theme tokens, right in light and dark.
+The tab, the rows and the node buttons are buttons in the tab order; selecting a deploy and what it restarted are said through the map's live region ([accessibility](accessibility.md)). On a phone the list and the node panel are bottom sheets that take turns. Colours are the explorer's theme tokens, right in light and dark.

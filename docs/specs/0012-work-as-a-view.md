@@ -71,7 +71,8 @@ Status: **approved** (maintainer, in chat, 2026-11-13, on the mock: "That's fine
 
 ### D8. Addresses
 
-- `?view=work` opens the Work view. `?pr=21`, `?issue=14`, `?run=<id>`, `?thread=31`, `?spec=0100` open it with that node selected; the addresses the Work panel answers today (`?work=…&tab=…`) still work and land there.
+- `?view=work` opens the Work view. `?pr=21`, `?issue=14`, `?run=<id>`, `?thread=31`, `?spec=0100` open it with that node selected; for work older than the graph's 14 days they open it with the Work list on that kind's tab and the node panel showing the piece of work.
+- The addresses the Work panel answered were `?run=<id>`, `?issue=<n>` and `?proposal=<slug>&start=1` ([agents](../agents.md#deep-links)): the first two are the addresses above now, and the third is unchanged. The panel had no `?work=…&tab=…` address, and none is added.
 
 ## What a host app gets
 
@@ -79,15 +80,17 @@ A host uses `<corn-map view="work">` beside a `<corn-node-panel>` in a `<corn-sc
 
 ## Where it stands
 
-Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Step 2 built (with the loading state of a big repository's first answer, the drafts as a layer of their own, and the lanes made for the screen: see [issues-and-prs](../issues-and-prs.md#the-work-view)): the Work view in cornfield's page (`explorer/work-view.js`, `explorer/work-model.js`): the view switch's Work button with its badge, six kinds of node with their shapes and `--corn-work-<kind>` tokens, the lanes and the code they touch, the Waiting on you toggle, the Layers menu's own rows (the six kinds, Drafts, the code), the node panel's work detail with "Open in Work" (to today's panel, for the actions), search finding work, and `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=`. The checks of a pull request are not in the graph: the node panel reads them from the pull request's own route when it opens. The header's Work button and the side panel stay until step 3. Steps 3 and 4 are not built.
+Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Step 2 built (with the loading state of a big repository's first answer, the drafts as a layer of their own, and the lanes made for the screen: see [issues-and-prs](../issues-and-prs.md#the-work-view)): the Work view in cornfield's page (`explorer/work-view.js`, `explorer/work-model.js`): the view switch's Work button with its badge, six kinds of node with their shapes and `--corn-work-<kind>` tokens, the lanes and the code they touch, the Waiting on you toggle, the Layers menu's own rows (the six kinds, Drafts, the code), the node panel's work detail, search finding work, and `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=`.
+
+**Step 3 built:** the actions moved into the node panel (a proposal's Review, a pull request's Land it and Re-run, an issue's Start an agent, a run's answer field with Continue and Stop, a thread's Reply and Open on the forge, a deploy's logs: today's confirms and server checks, unchanged), and the lists became the Work list (`explorer/pieces/work-list.js`, the Work piece's list part), opened by the **List** toggle of the Work view. A row selects its node on the map; work older than the graph's 14 days opens in the node panel by the same path. The header's **Work panel** button and the side panel are gone, with the lighting of a selected pull request (the graph draws what it touches) and the tab names the deep links used. The Work view's lines have theme tokens (`--corn-work-edge-work`, `-code`, `-adds`), and the node panel's **Copy Spec** is not shown for a piece of work. Two limits, said where they bind: the list and the node panel are phone sheets that take turns under spec 0010 D7 (the review and one other), so a row selected on a phone shows the node's sheet and the **List** toggle brings the list back; and a deploy has **no Re-run** (cornfield has no route that runs a workflow again, so none was invented: its action is its logs on the forge). Step 4 is not built.
 
 ## What gets built, in order
 
 Each step is its own pull request and release; cornfield's page keeps working after each.
 
 1. **The server's work graph** (D7): `server/work-graph.js`, the route, the PR files kept per head, tests against the fake forge, the request in `docs/`.
-2. **The Work view** (D1 to D5, D8): the view, its layout, the node kinds, shapes and tokens, the layers, the node panel's work detail and actions, search finding work, the Waiting on you toggle, the addresses. The side panel stays reachable from the Work view while step 3 is built.
-3. **The Work list and the panel retired** (D6): the lists as the `work-list` piece in the Work view; the header's Work button and the side panel removed; the phone's sheets.
+2. **The Work view** (D1 to D5, D8): the view, its layout, the node kinds, shapes and tokens, the layers, the node panel's work detail, search finding work, the Waiting on you toggle, the addresses. The side panel stayed reachable from the Work view until step 3, which moved the actions into the node panel. *(Built.)*
+3. **The Work list and the panel retired** (D6): the lists as the `work-list` piece in the Work view; the header's Work button and the side panel removed; the phone's sheets. *(Built.)*
 4. **The Work layer on the Map view** (D4).
 
 ## What is not in this spec
