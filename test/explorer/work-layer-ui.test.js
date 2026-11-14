@@ -122,6 +122,23 @@ describe('one read and one poll (spec 0012 D4)', () => {
     expect(server.reads).toHaveLength(3);
   });
 
+  it('gives up a read that has had no answer for five minutes, and asks again', async () => {
+    const server = fakeServer();
+    mount();
+    layer(true);
+    await settle();
+    server.opts.hold = true;
+    await vi.advanceTimersByTimeAsync(POLL); // held, and never answered
+    await vi.advanceTimersByTimeAsync(4 * POLL);
+    expect(server.reads).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(POLL);
+    expect(server.reads).toHaveLength(3);
+    server.opts.hold = false;
+    server.release(); // the stalled one, late: its answer is dropped for the newer one's
+    await settle();
+    expect(state.work.status).toBe('ok');
+  });
+
   it('keeps the node an open asked for when a refresh replaces its read', async () => {
     const server = fakeServer();
     mount();

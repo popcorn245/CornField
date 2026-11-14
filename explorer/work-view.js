@@ -278,7 +278,8 @@ function armPoll() {
 function poll() {
   clearTimeout(timer);
   if (!on() && !layerWanted()) return;
-  if (document.visibilityState !== 'hidden' && !reading) load({ again: true, quiet: true }); // a read on its way is this minute's: a slow forge is never asked twice at once
+  // a read on its way is this minute's: a slow forge is never asked twice at once (one that has had no answer for five minutes is given up for a new one)
+  if (document.visibilityState !== 'hidden' && !(reading && Date.now() - reading.at < STALLED_MS)) load({ again: true, quiet: true });
   timer = setTimeout(poll, RUNS_POLL_MS);
 }
 
@@ -337,6 +338,8 @@ export function closeWork() {
 
 /** The read on its way, if there is one: what its answer is to be used for. The Work view and the Work layer share it: a second ask while it is on its way waits for it, never starts another */
 let reading = null;
+/** How long a read on its way keeps the minute's poll from asking again */
+const STALLED_MS = 5 * RUNS_POLL_MS;
 
 /**
  * Reads the graph (spec 0012 D7): once at a time. Asked while a read is on its way (the Work layer's, or the view's), it waits for that one and adds what it wants done with the answer
@@ -354,7 +357,7 @@ function load({ select = null, ask = null, again = false, quiet = false } = {}) 
     ask = ask || reading.ask;
     quiet = quiet && reading.quiet;
   }
-  const mine = { select, ask, quiet, done: null };
+  const mine = { select, ask, quiet, done: null, at: Date.now() };
   mine.done = fetchGraph(mine, again).finally(() => { if (reading === mine) reading = null; });
   reading = mine;
   return mine.done;
