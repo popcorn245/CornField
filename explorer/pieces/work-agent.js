@@ -32,7 +32,7 @@ export function install(ctx) {
     const type = ref.slice(0, at);
     const value = ref.slice(at + 1);
     const refs = again ? retryRefs(again) : type === 'proposal' ? { proposal: value } : { issue: Number(value) };
-    ui.agent = { opener, refs, posting: false, retryOf: again ? again.runId : null };
+    ui.agent = { opener, refs, posting: false, retryOf: again ? again.runId : null, ref: ui.ref }; // `ref`: the piece of work in the node panel, the one its note is shown with
     // The profiles the config lists come with the runs: asked for if the Agents tab has not been opened yet
     if (!ui.runs) { await fn.loadRuns(false); if (ui.kind === 'work') fn.paint(); }
     if (!ui.agent) return;
@@ -162,8 +162,9 @@ export function install(ctx) {
     ui.agent.posting = false;
     const text = startWords(res.status, res.body);
     if (res.ok) {
+      const { ref } = ui.agent;
       closeAgent();
-      ui.runNote = { text, ok: true };
+      ui.runNote = { text, ok: true, ref };
       announce(text);
       await fn.loadRuns(false);
       fn.paint();

@@ -94,10 +94,10 @@ export function install(ctx) {
 
   /** What the last step the actions took came to (a spec started, a build issue opened: with a link to it), and what the last request of a run said */
   function noteHtml(kind) {
-    const note = ui.actNote && kind !== 'thread' && kind !== 'deploy' && kind !== 'run' ? ui.actNote : null;
+    const note = ui.actNote && ui.actNote.ref === ui.ref && kind !== 'thread' && kind !== 'deploy' && kind !== 'run' ? ui.actNote : null; // a step's note is its piece of work's (a link that found nothing says so in the list)
     const link = note && safeUrl(note.url);
     const done = note ? `<p class="hx-forge-notice${note.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${note.ok ? ' data-corn-state="success"' : ''}>${escHtml(note.text)}${link ? ` <a data-corn="text-link" class="hx-link" href="${escHtml(link)}" target="_blank" rel="noreferrer">Open on ${escHtml(fn.forgeName())} ↗</a>` : ''}</p>` : '';
-    const started = ui.runNote && (kind === 'issue' || kind === 'proposal') ? `<p class="hx-forge-notice${ui.runNote.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${ui.runNote.ok ? ' data-corn-state="success"' : ''}>${escHtml(ui.runNote.text)}</p>` : '';
+    const started = ui.runNote && ui.runNote.ref === ui.ref && (kind === 'issue' || kind === 'proposal') ? `<p class="hx-forge-notice${ui.runNote.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${ui.runNote.ok ? ' data-corn-state="success"' : ''}>${escHtml(ui.runNote.text)}</p>` : '';
     return done + started;
   }
 

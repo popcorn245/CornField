@@ -874,6 +874,26 @@ describe('actions: landing a green pull request and re-running a failed check', 
     expect(await said()).toBe('vitest test/server/auth.test.js is running again.');
   });
 
+  it('what an action came to is said, and shown only with the pull request it was for: another chosen while it was sent does not carry it', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/13/rerun': { status: 202, body: { ok: true, rerun: true, number: 13, check: 'run:42', name: 'vitest test/server/auth.test.js' } } } });
+    const answer = /** @type {any} */ (globalThis.fetch);
+    let open = () => {};
+    const gate = new Promise((r) => { open = r; });
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => { if (init.method === 'POST') await gate; return answer(url, init); }));
+    mount();
+    await select(13);
+    click(q('[data-forge-rerun="run:42"]'));
+    await settle();
+    expect(q('[data-forge-rerun="run:42"]').disabled).toBe(true); // off while it is sent
+    click(q('[data-work-ref="pull:12"]')); // another pull request, while the re-run is on its way
+    await settle();
+    open();
+    await settle();
+    expect($('drawer-title').textContent).toBe('Meals page');
+    expect(q('#forge-detail').textContent).not.toContain('running again'); // #12's panel says nothing of #13's check
+    expect(await said()).toBe('vitest test/server/auth.test.js is running again.'); // it is said all the same
+  });
+
   it('a passing check has no Re-run and nothing to explain', async () => {
     fakeServer();
     mount();

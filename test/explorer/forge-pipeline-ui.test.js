@@ -229,6 +229,24 @@ describe('step 1: Start a spec, on an issue', () => {
     expect(document.activeElement).toBe(q('[data-forge-spec="7"]'));
   });
 
+  it('what a step came to stays with the issue it was for: another piece of work in the node panel does not show it', async () => {
+    fakeServer({ posts: { '/api/forge/issues/7/spec': { status: 201, body: { ok: true, action: 'spec', created: true, number: 7, branch: 'spec/7-meals-page', path: SPEC_PLAN.path, pull: { number: 50, title: SPEC_PLAN.title, url: 'https://git.example.test/owner/name/pull/50', draft: true } } } } });
+    mount();
+    await openIssues();
+    click(q('[data-forge-spec="7"]'));
+    await settle();
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    expect(q('#forge-detail').textContent).toContain('Spec started for issue #7');
+    await showWork('issue', 5);
+    expect($('drawer-title').textContent).toBe('Sign-in');
+    expect(q('#forge-detail').textContent).not.toContain('Spec started for issue #7');
+    await showWork('pull', 40);
+    expect(q('#forge-detail').textContent).not.toContain('Spec started for issue #7');
+    await showWork('issue', 7);
+    expect(q('#forge-detail').textContent).toContain('Spec started for issue #7'); // back on its issue, it is there
+  });
+
   it('three clicks on the button send one plan request, and three on confirm send one post', async () => {
     const server = fakeServer({ posts: { '/api/forge/issues/7/spec': { status: 201, body: { ok: true, created: true, number: 7, pull: { number: 50, url: null } } } } });
     mount();

@@ -182,7 +182,7 @@ export function install(ctx) {
   async function finishAction(action, res, n) {
     const text = actionWords(action, res.status, res.body, n);
     ui.busy = '';
-    ui.note = { text, ok: res.ok };
+    if (ui.selected === n) ui.note = { text, ok: res.ok }; // shown with its pull request only: another chosen while it was sent does not carry it (it is said all the same)
     announce(text);
     fn.paint();
     if (res.status === null) return;

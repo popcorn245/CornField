@@ -50,8 +50,8 @@ export function install(ctx) {
   }
 
   /** What a pipeline step came to, on the panel (with a link to what it made) and through the live region */
-  function stepNote(text, ok, url = null) {
-    ui.actNote = { text, ok, url };
+  function stepNote(text, ok, url = null, ref = ui.ref) {
+    ui.actNote = { text, ok, url, ref }; // `ref`: the piece of work it is about, the only one whose node panel shows it
     announce(text);
     fn.paint();
   }
@@ -67,6 +67,7 @@ export function install(ctx) {
    */
   async function askPlan(action, n, slug, opener) {
     if (ui.busy || ui.confirm || ui.agent || !confirmEl()) return;
+    const ref = ui.ref; // the node panel may show another piece of work by the time the plan is read
     ui.busy = `plan:${action}`;
     ui.actNote = null;
     announce(action === 'spec' ? `Looking at what a spec for issue ${n} would make` : `Looking at the build issue for ${slug}`);
@@ -76,26 +77,26 @@ export function install(ctx) {
     // The button was off while it asked; it has the focus again whatever the answer is
     const refocus = () => { const back = root.querySelector(opener); if (back && !back.disabled && !ui.confirm) back.focus(); };
     if (!res.ok || !res.body || !res.body.plan) {
-      stepNote(actionWords(action, res.status, res.body, n), false);
+      stepNote(actionWords(action, res.status, res.body, n), false, null, ref);
       refocus();
       return;
     }
     const { plan } = res.body;
     if (plan.existing) {
-      stepNote(existingWords(action, plan), true, plan.existing.url);
+      stepNote(existingWords(action, plan), true, plan.existing.url, ref);
       refocus();
       return;
     }
     fn.paint();
     if (ui.agent) return; // Start an agent was opened while the plan was read: one dialog at a time, and that one has the focus
     const what = action === 'spec' ? confirmSpec(plan, fn.forgeName()) : confirmBuild(plan, fn.forgeName());
-    showConfirm(what, what.go, { opener, kind: action, plan, n, slug });
+    showConfirm(what, what.go, { opener, kind: action, plan, n, slug, ref });
   }
 
   /** A pipeline step, second half: the plan that was shown is confirmed; the server plans again and must find the same */
   async function confirmedStep() {
     if (ui.busy || !ui.confirm || !ui.confirm.plan) return;
-    const { kind, plan, n } = ui.confirm;
+    const { kind, plan, n, ref } = ui.confirm;
     ui.busy = kind;
     ui.actNote = null;
     const go = confirmEl().querySelector('[data-action="forge-confirm-go"]');
@@ -107,7 +108,7 @@ export function install(ctx) {
     closeConfirm();
     ui.busy = '';
     const made = res.body && (kind === 'spec' ? res.body.pull : res.body.issue);
-    stepNote(actionWords(kind, res.status, res.body, n), res.ok, res.ok && made ? made.url : null);
+    stepNote(actionWords(kind, res.status, res.body, n), res.ok, res.ok && made ? made.url : null, ref);
     // Whatever it came to, it is read again: a refusal says the issue or the pull request is not what was shown
     if (res.status !== null) {
       forgetOtherLists();
