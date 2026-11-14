@@ -544,10 +544,17 @@ describe('cost and tokens are formatted (F40)', () => {
 describe('Can\'t land yet says what to do next (F41)', () => {
   const pull = (extra = {}) => ({ number: 12, state: 'open', draft: false, ...extra });
   it('warns of a spec whose proposal is not approved, in words only', () => {
-    expect(approvalWarning({ pull: pull(), specs: [{ slug: '0013-meals', approved: false }] })).toBe('Its proposal 0013-meals is not approved yet. Next: approve it first (Specs, open the proposal, Approve), then land this.');
+    expect(approvalWarning({ pull: pull(), specs: [{ slug: '0013-meals', approved: false }] })).toBe('Its proposal 0013-meals is not approved yet. Next: approve it first (Review in the node panel, then Approve), then land this.');
     expect(approvalWarning({ pull: pull(), specs: [{ slug: 'a', approved: true }] })).toBe('');
     expect(approvalWarning({ pull: pull(), specs: [] })).toBe('');
     expect(approvalWarning({ pull: pull({ state: 'merged' }), specs: [{ slug: 'a', approved: false }] })).toBe('');
+  });
+
+  it('names the way that is there now (spec 0012 step 3): no word points at the retired side panel or a path through its tabs', () => {
+    const retired = /Work panel|side panel|Specs, open|Issues, then|Light on the map|Open in Work/;
+    expect(approvalWarning({ pull: pull(), specs: [{ slug: 'a', approved: false }, { slug: 'b', approved: false }] })).not.toMatch(retired);
+    for (const kind of ['specs', 'pulls', 'issues', 'threads', 'deploys', 'work']) expect(emptyWords(kind, 'GitHub')).not.toMatch(retired);
+    expect(emptyWords('specs', 'GitHub')).toContain('Start a spec in the node panel');
   });
 });
 

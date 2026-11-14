@@ -389,7 +389,7 @@ export function mergeBlock(detail) {
 export function approvalWarning(detail) {
   if (!detail || detail.pull.state !== 'open') return '';
   const open = (detail.specs || []).filter((s) => !s.approved).map((s) => s.slug);
-  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (Specs, open the proposal, Approve), then land this.` : '';
+  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (Review in the node panel, then Approve), then land this.` : '';
 }
 
 /**
@@ -481,7 +481,7 @@ export function errorWords(status, body, { offline = false, what = '' } = {}) {
 /** What a list says when it has nothing in it: what would appear here and how to make one (the `kind` is the tab) */
 export function emptyWords(kind, forgeName = 'the forge') {
   return {
-    specs: 'No proposals yet. A proposal is a change to the map written down before it is built. Start one from an issue (Issues, then Start a spec), or push one as a file to the proposals folder.',
+    specs: 'No proposals yet. A proposal is a change to the map written down before it is built. Start one from an issue (select it, then Start a spec in the node panel), or push one as a file to the proposals folder.',
     pulls: `No open pull requests. Agents open one when a run makes code, and you can open one on ${forgeName}.`,
     issues: `No open issues. Open one on ${forgeName}, or write a New idea in Threads.`,
     threads: 'No threads. A thread is an idea or a spec conversation; start one with New idea below.',
