@@ -131,15 +131,6 @@
       </div>
       <!--corn-piece:search/field-->
 
-      <!-- The Work toggle (explorer/pieces/work.js): opens the Work panel; shown only when the config names a forge. It is a piece: page.js mounts it here, and until then this stand-in keeps its place (the piece's markup without ids) -->
-      <!--corn-placeholder:work/button-->
-      <button type="button" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-label="Work panel" data-corn-string-aria-label="workPanel" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button" part="forge-button">
-  <span data-corn-string="workPanel">Work panel</span>
-  <span class="hx-forge-lit" data-corn="count" part="count" hidden></span>
-  <span class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
-</button>
-      <!--corn-piece:work/button-->
-
       <!-- The one account menu (explorer/account-menu.js): who, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it -->
       <div class="hx-menu-wrap hx-account">
         <button type="button" id="account-btn" class="hx-account-btn" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu" data-corn="account-button">
@@ -200,7 +191,7 @@
     <!-- The review column (explorer/pieces/changes.js, spec 0006): what the proposal changes, and the personas and the scenarios that apply to them. Docked left of the map from 768px, the expanded proposal sheet's body on a phone. The decision (explorer/pieces/decision.js, spec 0007) is its foot: the column keeps its place -->
     <!--corn-piece:changes/column-->
 
-    <!-- The Work panel (explorer/pieces/work.js): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop. A slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge. It is a piece: page.js mounts it here -->
+    <!-- The Work list (explorer/pieces/work-list.js, part of the Work piece): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop. A slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the Work view's List toggle opens it. A row selects its node; the detail is the node panel's. The Work piece mounts it here -->
     <p id="offline-banner" class="hx-offline" data-corn="notice" hidden></p>
     <!--corn-piece:work/panel-->
 

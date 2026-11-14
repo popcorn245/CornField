@@ -1,13 +1,14 @@
 /**
  * @module explorer/pieces/work-specs
  *
- * The Specs tab: the proposals the server finds, merged into one row each, and the number of those that wait on a decision. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
+ * The Specs tab: the proposals the server finds, merged into one row each, the number of those that wait on a decision, and a proposal's actions in the node panel. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
  * to `ctx.fn`; nothing is shared between two mounts.
  */
 
 import { mergeSpecs } from '../proposal-model.js';
 import { waiting, specGroups } from '../waiting-model.js';
 import { plural, SPECS_POLL_MS } from './work-common.js';
+import { escapeHtml as escHtml } from '../../core/text.js';
 
 export function install(ctx) {
   const { inst, ui, m, fn, $ } = ctx;
@@ -67,5 +68,21 @@ export function install(ctx) {
     }, SPECS_POLL_MS);
   }
 
-  Object.assign(fn, { specsList, waitingNow, loadSpecs, specsShownWords, readSpecsQuiet, syncSpecsPoll });
+  /** The entry of the proposals list a node of the graph is: the open spec PR when it has a number, else the copy that is only a file in a checkout (where Review opens it from) */
+  function specEntry(item) {
+    const list = specsList();
+    const items = list ? list.items : [];
+    return items.find((e) => e.slug === item.slug && (item.number ? e.pull && e.pull.number === item.number : !e.pull)) || items.find((e) => e.slug === item.slug) || null;
+  }
+
+  /** A proposal's actions in the node panel: Review (opens it over the map; Approve and Send back are the review's), and Start an agent on it when the config lets a run start */
+  function proposalActionsHtml(item) {
+    const entry = specEntry(item);
+    const source = (entry && entry.source) || item.source || '';
+    const review = `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-corn-kind="approve" data-work-action="review" data-slug="${escHtml(item.slug)}" data-source="${escHtml(source)}">Review …</button>`;
+    const agent = fn.canStartAgent() ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-agent="proposal:${escHtml(item.slug)}" aria-label="${escHtml(t('startAgent'))} on proposal ${escHtml(item.slug)}">${escHtml(t('startAgent'))} …</button>` : '';
+    return `<div class="hx-forge-cta">${review}${agent}</div>`;
+  }
+
+  Object.assign(fn, { specsList, waitingNow, loadSpecs, specsShownWords, readSpecsQuiet, syncSpecsPoll, specEntry, proposalActionsHtml });
 }

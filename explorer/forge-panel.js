@@ -1,7 +1,7 @@
 /**
  * @module explorer/forge-panel
  *
- * A bridge (spec 0011 D2 and D3, step 6): the Work panel is a piece on the instance (pieces/work.js, with a part per tab in pieces/work-*.js) and its
+ * A bridge (spec 0011 D2 and D3, step 6): the Work list and the actions of a piece of work are the Work piece on the instance (pieces/work.js, with a part per tab in pieces/work-*.js) and its
  * pure half is forge-panel-model.js. This file keeps the old names for the page (page.js, deep-link.js, panels.js) and for the tests that drive the
  * panel through cornfield's own page, bound to the page's instance and to the piece the page mounts at the places in index.html. It goes when
  * those callers are on the instance (the `corn-work` shell for a host, and a page shell that mounts the piece itself).
@@ -45,12 +45,7 @@ export const openForge = (opts) => { const p = piece(); if (p) p.openForge(opts)
 export const closeForge = (opts) => { const p = piece(); if (p) p.closeForge(opts); };
 export const toggleForge = () => { const p = piece(); if (p) p.toggleForge(); };
 export const refreshForge = (opts) => { const p = piece(); return p ? p.refreshForge(opts) : Promise.resolve(); };
-export const clearPull = () => { const p = piece(); if (p) p.clearPull(); };
-export const clearDeploy = () => { const p = piece(); if (p) p.clearDeploy(); };
-export const clearThread = () => { const p = piece(); if (p) p.clearThread(); };
-export const selectDeploy = (id) => { const p = piece(); if (p) p.selectDeploy(id); };
-export const openRunLink = (id) => { const p = piece(); return p && p.isOn() ? p.openRunLink(id) : Promise.resolve(false); };
-export const openIssueLink = (n) => { const p = piece(); return p && p.isOn() ? p.openIssueLink(n) : Promise.resolve(false); };
 export const openProposalStart = (slug, opener) => { const p = piece(); return p && p.isOn() ? p.openProposalStart(slug, opener) : Promise.resolve(false); };
-export const openWorkAt = (item) => { const p = piece(); return p && p.isOn() ? p.openWorkAt(item) : Promise.resolve(false); };
+/** A piece of work by what a row of the list names (the Work view's way to show one the graph does not draw) */
+export const showWorkRef = (kind, key) => { const p = piece(); return p && p.isOn() ? p.showRef(kind, key) : Promise.resolve(false); };
 export const canStartAgent = () => { const p = piece(); return !!p && p.canStartAgent(); };

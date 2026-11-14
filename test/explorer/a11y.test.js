@@ -43,7 +43,9 @@ import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scen
 import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/review-column.js';
 
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 import { explorerPage } from '../helpers.js';
 
 import { explorerCss } from './stylesheets.js';
@@ -79,7 +81,7 @@ const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
  * audits that panel (plus the controls that name its state) and the two whole-page audits below (one per theme) keep
  * the page-level rules (landmarks, duplicate ids, the order of headings) running.
  */
-const FORGE = ['#forge-btn', '#forge-panel', '#forge-confirm'];
+const FORGE = ['#forge-btn', '#forge-panel', '#forge-confirm', '#spec-drawer']; // the Work list, its dialogs, and the node panel, where a piece of work's actions are
 const DRAWER = ['#spec-drawer'];
 const LAYERS = ['#legend-toggle-btn', '#legend-dropdown'];
 const PROPOSAL_REGION = ['#proposal-wrap', '#proposal-bar', '#review-column', '#sheet-dock', '#spec-drawer'];
@@ -359,7 +361,9 @@ describe('the issues and PRs panel', () => {
   const start = () => {
     const canvas = mount();
     resetForgePanelForTests();
+    resetWorkViewForTests();
     initForgePanel({ forge: { type: 'github', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } });
+    initWorkView({ offered: true });
     return canvas;
   };
   afterEach(() => { closeForge({ restoreFocus: false }); resetForgePanelForTests(); delete document.documentElement.dataset.theme; });
@@ -386,7 +390,7 @@ describe('the issues and PRs panel', () => {
     await settle();
   };
   const prSelected = async (n = 13) => {
-    press(`[data-forge-pr="${n}"]`);
+    press(`[data-work-ref="pull:${n}"]`);
     await settle();
   };
 
@@ -485,7 +489,7 @@ describe('the issues and PRs panel', () => {
     const finished = $('forge-work-finished');
     finished.checked = true;
     finished.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(document.querySelector('[data-forge-pr="9"]')).not.toBe(null);
+    expect(document.querySelector('[data-work-ref="pull:9"]')).not.toBe(null);
     expect(await audit(...FORGE)).toEqual([]);
   });
 
@@ -513,7 +517,7 @@ describe('the issues and PRs panel', () => {
   it('has none with the actions shown (Land it)', async () => {
     await listsOpen();
     await prSelected(13);
-    press('[data-forge-pr="13"]');
+    press('[data-work-ref="pull:13"]');
     await prSelected(12);
     expect(document.querySelector('[data-forge-merge]')).not.toBe(null);
     expect(await audit(...FORGE)).toEqual([]);
@@ -626,7 +630,7 @@ describe('the issues and PRs panel', () => {
       await settle();
     };
     const deploySelected = async (id) => {
-      click(document.querySelector(`[data-forge-deploy="${id}"]`));
+      click(document.querySelector(`[data-work-ref="deploy:${id}"]`));
       await settle();
       expect(document.querySelector('#forge-detail').hidden).toBe(false);
     };
@@ -642,7 +646,7 @@ describe('the issues and PRs panel', () => {
         await deploysList('dark');
         await deploySelected(id);
         expect(await audit(...FORGE)).toEqual([]);
-        if (id === '1') expect(state.forgeLit.failing.has('table-t')).toBe(true);
+        if (id === '1') expect(document.querySelectorAll('#forge-detail [data-forge-node]').length).toBeGreaterThan(0);
       });
     }
 
@@ -659,7 +663,7 @@ describe('the issues and PRs panel', () => {
       expect(await audit(...FORGE)).toEqual([]);
     });
 
-    it('is by keyboard: the tab, the rows and Clear are buttons in the tab order, the selection is announced, Escape closes', async () => {
+    it('is by keyboard: the tab and the rows are buttons in the tab order, the selection is announced, Escape closes', async () => {
       stubDeploys();
       start();
       openForge({ tab: 'pulls' });
@@ -670,23 +674,18 @@ describe('the issues and PRs panel', () => {
       click(tab); // Enter and Space on a button are a click
       await settle(40);
       expect($('map-announcer').textContent).toBe('3 deploys shown');
-      const row = document.querySelector('[data-forge-deploy="3"]');
+      const row = document.querySelector('[data-work-ref="deploy:3"]');
       expect([row.tagName, row.tabIndex, row.getAttribute('aria-pressed')]).toEqual(['BUTTON', 0, 'false']);
       row.focus();
       click(row);
-      await settle(40);
-      // The selection replaces the list: the focus moves to its back control, which has a name
-      const back = document.querySelector('#forge-detail .hx-forge-back');
-      expect(document.activeElement).toBe(back);
-      expect(back.textContent.trim()).toBe('All deploys');
-      expect(document.querySelector('#forge-list').hidden).toBe(true);
-      expect($('map-announcer').textContent).toBe('Deploy Deploy web of main, succeeded: 1 node restarted and lit, 1 named that is not on the map.');
-      expect([back.tagName, back.tabIndex]).toEqual(['BUTTON', 0]);
-      expect(back.getAttribute('data-action')).toBe('clear-forge-deploy');
-      expect(document.querySelector('#forge-detail').getAttribute('aria-label')).toBe('Selected deploy');
+      await settle(120);
+      // The row selects its node: the node panel shows the deploy, and the focus stays on the row
+      expect(document.activeElement.dataset.workRef).toBe('deploy:3'); // the list is drawn again, and the focus is on the same row
+      expect(document.activeElement.getAttribute('aria-pressed')).toBe('true');
+      expect(document.querySelector('#forge-detail').getAttribute('data-work-kind')).toBe('deploy');
+      expect($('map-announcer').textContent).toBe('Deploy Deploy web of main, succeeded: 1 node restarted on the map, 1 named that is not on the map.');
       key($('forge-title'), 'Escape');
       expect(document.activeElement).toBe($('forge-btn'));
-      expect($('forge-btn-lit').textContent).toBe('deploy');
     });
   });
 
@@ -717,6 +716,8 @@ describe('the issues and PRs panel', () => {
   const specPage = async () => {
     const click = await pipelinePage();
     click('[data-forge-kind="issues"]');
+    await settle();
+    click('[data-work-ref="issue:7"]'); // the row selects the issue: its Start a spec is in the node panel
     await settle();
     expect(document.querySelectorAll('[data-forge-spec]').length).toBe(1);
     return click;
@@ -749,7 +750,7 @@ describe('the issues and PRs panel', () => {
     light();
     click('[data-forge-kind="pulls"]');
     await settle();
-    click('[data-forge-pr="40"]');
+    click('[data-work-ref="pull:40"]');
     await settle();
     expect(document.querySelectorAll('[data-forge-build]').length).toBe(1);
     return click;
@@ -804,7 +805,7 @@ describe('the issues and PRs panel', () => {
     expect(document.activeElement).toBe(btn);
     expect($('forge-panel').inert).toBe(true);
     await settle(40);
-    expect($('map-announcer').textContent).toBe('Work closed');
+    expect($('map-announcer').textContent).toBe('Work list closed');
   });
 });
 
@@ -832,7 +833,9 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
   const start = () => {
     const canvas = mount();
     resetForgePanelForTests();
+    resetWorkViewForTests();
     initForgePanel({ forge: { type: 'github', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, threads: { label: 'idea' } });
+    initWorkView({ offered: true });
     return canvas;
   };
   const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -849,10 +852,10 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
       expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(2);
     }],
     ['a thread open', FORGE, async () => {
-      click(document.querySelector('[data-forge-thread="41"]'));
+      click(document.querySelector('[data-work-ref="thread:41"]'));
       await settle();
       expect(document.querySelectorAll('.hx-thread-msg').length).toBe(2);
-      expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
+      expect($('forge-detail').getAttribute('data-work-kind')).toBe('thread');
     }],
     ['New idea, empty', FORGE, async () => {
       click($('idea-open'));
@@ -920,12 +923,12 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
     click(tab);
     await settle();
     expect(tab.getAttribute('aria-pressed')).toBe('true');
-    const row = document.querySelector('[data-forge-thread="41"]');
+    const row = document.querySelector('[data-work-ref="thread:41"]');
     expect(row.tagName).toBe('BUTTON');
     expect(row.getAttribute('aria-pressed')).toBe('false');
     click(row);
     await settle();
-    expect(document.querySelector('[data-forge-thread="41"]').getAttribute('aria-pressed')).toBe('true'); // the rows are drawn again
+    expect(document.querySelector('[data-work-ref="thread:41"]').getAttribute('aria-pressed')).toBe('true'); // the rows are drawn again
     const detail = $('forge-detail');
     expect(detail.querySelector('ol[aria-label="Messages"]')).not.toBe(null);
     expect(detail.textContent).toContain('Read-only here');

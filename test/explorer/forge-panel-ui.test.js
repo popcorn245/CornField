@@ -16,11 +16,13 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge, refreshForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, refreshForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initSheets, sheetState } from '../../explorer/sheets.js';
+import { initSheets, sheetState, expandSheet } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 import { explorerPage } from '../helpers.js';
@@ -117,6 +119,8 @@ const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) =
 const said = async () => { await new Promise((r) => setTimeout(r, 50)); return $('map-announcer').textContent; };
 const choose = (id, value) => { const el = $(id); el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); };
 const rows = () => qa('#forge-list .hx-forge-item');
+/** A row's piece of work shown in the node panel (the Work view is not in this page, so the node panel shows it alone, as it shows work older than the graph's 14 days) */
+const show = async (kind, key) => { await showWorkRef(kind, String(key)); await settle(); };
 
 /** A fake server behind `fetch`: the forge routes, and a record of every call */
 function fakeServer(opts = {}) {
@@ -154,7 +158,7 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   Object.assign(state.activeLayers, { stack: false, machine: false, container: false }); // the layers that start off
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
@@ -165,7 +169,10 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   initKeyboard();
   initSheets();
   resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge, signIn }, { clock: () => NOW });
+  resetWorkViewForTests();
+  const on = initForgePanel({ forge, signIn }, { clock: () => NOW });
+  initWorkView({ offered: !!forge }); // answers the node panel for a piece of work (work:panel)
+  return on;
 }
 
 const sceneNode = (id) => render.getScene().nodes.find((n) => n.id === id);
@@ -183,7 +190,6 @@ describe('with no forge in the config', () => {
     openForge({ tab: 'pulls' });
     expect($('forge-panel').classList.contains('forge-open')).toBe(false);
     expect(server.calls).toEqual([]);
-    expect(state.forgeLit).toBe(null);
   });
 });
 
@@ -236,7 +242,7 @@ describe('opening and closing', () => {
     expect($('forge-panel').classList.contains('forge-open')).toBe(false);
     expect(document.activeElement).toBe($('forge-btn'));
     expect($('forge-btn').getAttribute('aria-expanded')).toBe('false');
-    expect(await said()).toBe('Work closed');
+    expect(await said()).toBe('Work list closed');
     const asked = server.calls.filter((c) => c.url.startsWith('/api/forge')).length;
     click($('forge-btn'));
     await settle();
@@ -304,7 +310,7 @@ describe('the lists and their filters', () => {
     expect([...$('forge-state').options].map((o) => o.textContent)).toEqual(['Open', 'Merged', 'Closed', 'All']);
   });
 
-  it('the issues are links out; a link that is not the forge\'s web address is not a link', async () => {
+  it('an issue\'s row selects it, with a link out beside it; a link that is not the forge\'s web address is not a link', async () => {
     const server = fakeServer();
     mount();
     openForge({ tab: 'pulls' });
@@ -315,11 +321,13 @@ describe('the lists and their filters', () => {
     expect(q('[data-forge-kind="issues"]').getAttribute('aria-pressed')).toBe('true');
     expect(q('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('false');
     expect([...$('forge-state').options].map((o) => o.textContent)).toEqual(['Open', 'Closed', 'All']);
-    const links = qa('#forge-list a.hx-forge-row');
+    expect(qa('#forge-list [data-work-ref]').map((b) => b.getAttribute('data-work-ref'))).toEqual(['issue:5', 'issue:3', 'issue:4']);
+    const links = qa('#forge-list a.hx-forge-out');
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/5', 'https://git.example.test/owner/name/issues/3']);
-    expect(links[0].textContent).toContain('Sign-in');
+    expect(rows()[0].textContent).toContain('Sign-in');
     expect(rows()[2].querySelector('a')).toBe(null);
     expect(rows()[2].textContent).toContain('Odd link');
+    expect(rows()[0].querySelector('[data-forge-agent]')).toBe(null); // the actions are the node panel's
     choose('forge-label', 'v1');
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Sign-in', 'Odd link']);
     click(q('[data-forge-kind="pulls"]'));
@@ -328,42 +336,36 @@ describe('the lists and their filters', () => {
   });
 });
 
-describe('a pull request lights the map', () => {
+describe('a pull request in the node panel', () => {
+  // A row of the list (or a link) names the pull request; with no Work view in the page it is shown in the node panel alone, the way work older than the graph's 14 days is
   async function select(n) {
-    q(`[data-forge-pr="${n}"]`).focus();
-    click(q(`[data-forge-pr="${n}"]`));
-    await settle();
+    await show('pull', n);
   }
 
-  it('asks for its files and checks and lights the nodes the files are; the rest fades back', async () => {
+  it('asks for its files and checks and shows them in the node panel, with what the files are on the map', async () => {
     const server = fakeServer();
     mount();
     openForge({ tab: 'pulls' });
     await settle();
-    await select(12);
-    expect(server.urls().at(-1)).toBe('/api/forge/pulls/12');
-    expect(q('[data-forge-pr="12"]').getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q('#forge-detail .hx-forge-back')); // the list is replaced: the focus is on the way back
-    expect($('forge-list').hidden).toBe(true);
-    expect(q('#forge-detail .hx-forge-back-text').textContent).toBe('All pull requests');
-    expect([...state.forgeLit.changed].sort()).toEqual(['core-meals', 'core-server']);
-    expect(sceneNode('core-server')).toMatchObject({ alpha: 1, halo: 'match' });
-    expect(sceneNode('core-meals')).toMatchObject({ alpha: 1, halo: 'match' });
-    expect(sceneNode('root').alpha).toBeLessThan(0.5);
-    expect($('forge-btn-lit').textContent).toBe('#12');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work panel, pull request 12 selected');
-    expect(await said()).toBe('Pull request 12, Meals page: 3 files, 2 on the map, 2 nodes lit. 1 check passed.');
-    // the legend names only what is lit: no failing check, no "a test a failing check names" (#189)
-    expect(q('.hx-forge-key').textContent).toBe('a file this pull request changes ');
+    q('[data-work-ref="pull:12"]').focus();
+    click(q('[data-work-ref="pull:12"]'));
+    await settle();
+    expect(server.urls()).toContain('/api/forge/pulls/12');
+    expect(q('[data-work-ref="pull:12"]').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement).toBe(q('[data-work-ref="pull:12"]')); // the focus stays on the row: the list can be read down
+    expect($('forge-list').hidden).toBe(false); // the list does not give way to a detail of its own
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    expect($('drawer-title').textContent).toBe('Meals page');
+    expect($('drawer-badge').textContent).toBe('Pull request');
+    expect(state.forgeLit).toBeUndefined(); // nothing is lit on the map any more: the Work view draws what a pull request touches
+    expect(await said()).toBe('Pull request 12, Meals page: 3 files, 2 on the map. 1 check passed.');
   });
 
   it('lists every file, one on no node too, each node with a button; and the checks with their words', async () => {
     fakeServer();
     mount();
-    openForge({ tab: 'pulls' });
-    await settle();
     await select(12);
-    const files = qa('.hx-forge-file');
+    const files = qa('#forge-detail .hx-forge-file');
     expect(files.map((f) => f.querySelector('code').textContent)).toEqual(['server/server.js', 'server/meals.js', 'docs/specs/proposals/0013-meals.json']);
     expect(files[0].textContent).toContain('modified');
     expect(files[0].textContent).toContain('+3');
@@ -371,13 +373,12 @@ describe('a pull request lights the map', () => {
     expect(files[0].querySelector('button').textContent).toBe('server.js');
     expect(files[2].textContent).toContain('not on the map');
     expect(files[2].querySelector('button')).toBe(null);
-    expect(q('.hx-forge-sub').textContent).toBe('Checks: 1 check passed');
-    expect(qa('.hx-forge-sub')[1].textContent).toBe('3 files changed, 2 on the map');
-    expect(q('.hx-forge-check').textContent).toContain('passed');
-    expect(q('.hx-forge-check a').getAttribute('href')).toBe('https://git.example.test/runs/41');
-    expect(q('.hx-forge-detail-title').textContent).toBe('Meals page');
-    expect(q('.hx-forge-dmeta').textContent).toMatch(/^Open #12 branch-12 → main agent-four /);
+    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Checks: 1 check passed');
+    expect(qa('#forge-detail .hx-forge-sub')[1].textContent).toBe('3 files changed, 2 on the map');
+    expect(q('#forge-detail .hx-forge-check').textContent).toContain('passed');
+    expect(q('#forge-detail .hx-forge-check a').getAttribute('href')).toBe('https://git.example.test/runs/41');
     expect(q('#forge-detail a.hx-forge-open[href="https://git.example.test/owner/name/pull/12"]').textContent).toBe('Open on GitHub ↗');
+    expect(q('#forge-detail .hx-forge-key')).toBe(null); // nothing is lit, so there is no key to what is lit
   });
 
   it('carries a theme hook on the list, the detail and their parts, so a brand needs no class name', async () => {
@@ -389,39 +390,31 @@ describe('a pull request lights the map', () => {
     const [lint] = rows();
     expect(lint.querySelector('[data-corn="tag"]').textContent).toBe('agent');
     expect(lint.querySelector('a[data-corn="out-link"]').getAttribute('href')).toBe('https://git.example.test/owner/name/pull/13');
+    expect(lint.querySelector('button[data-corn="row"]').getAttribute('data-work-ref')).toBe('pull:13');
     await select(12);
-    expect(q('#forge-detail [data-corn="back"]')).toBe(q('#forge-detail .hx-forge-back'));
-    expect(q('#forge-detail [data-corn="detail-title"]').textContent).toBe('Meals page');
+    expect(q('#forge-detail').getAttribute('data-corn')).toBe('work-detail');
     expect(qa('#forge-detail [data-corn="file"]').length).toBe(3);
     expect(qa('#forge-detail [data-corn="node-chip"]').map((b) => b.textContent)).toEqual(['server.js', 'meals.js']);
     expect(q('#forge-detail [data-corn="open-link"]').getAttribute('data-corn-kind')).toBe('secondary');
     expect(q('#forge-detail .hx-forge-check [data-corn="text-link"]').getAttribute('href')).toBe('https://git.example.test/runs/41');
-    expect(q('#forge-detail [data-corn="mark-dot"]').getAttribute('data-corn-state')).toBe('changed'); // the key's dot: a file this pull request changes
   });
 
-  it('a failing check lights the test files it names, red; one that names none says so', async () => {
+  it('a failing check names the test files it is about; one that names none says so', async () => {
     fakeServer();
     mount();
-    openForge({ tab: 'pulls' });
-    await settle();
     await select(13);
-    expect([...state.forgeLit.failing]).toEqual(['tests-auth']);
-    expect(sceneNode('tests-auth')).toMatchObject({ alpha: 1, halo: 'match', color: '#f87171' });
-    const checks = qa('.hx-forge-check');
+    const checks = qa('#forge-detail .hx-forge-check');
     expect(checks.map((c) => c.querySelector('.hx-forge-state').textContent)).toEqual(['failed', 'failed', 'running']);
-    expect(checks[0].querySelector('.hx-forge-lights').textContent).toBe('Lights test/server/auth.test.js');
-    expect(checks[1].querySelector('.hx-forge-lights').textContent).toBe('Names no test file, so lights nothing');
+    expect(checks[0].querySelector('.hx-forge-lights').textContent).toBe('Names test/server/auth.test.js');
+    expect(checks[1].querySelector('.hx-forge-lights').textContent).toBe('Names no test file');
     expect(checks[2].querySelector('.hx-forge-lights')).toBe(null);
-    expect(q('.hx-forge-sub').textContent).toBe('Checks: 2 failed, 1 still running');
-    expect(q('.hx-forge-key').textContent).toContain('a test a failing check names');
-    expect(await said()).toMatch(/1 file, 1 on the map, 2 nodes lit\. 2 failed, 1 still running\.$/);
+    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Checks: 2 failed, 1 still running');
+    expect(await said()).toMatch(/1 file, 1 on the map\. 2 failed, 1 still running\.$/);
   });
 
   it('a node button selects the node on the map, and says it', async () => {
     fakeServer();
     mount();
-    openForge({ tab: 'pulls' });
-    await settle();
     await select(12);
     click(q('[data-forge-node="core-meals"]'));
     await settle();
@@ -430,59 +423,36 @@ describe('a pull request lights the map', () => {
     expect(await said()).toBe('meals.js, core');
   });
 
-  it('picking it again, or the back control, lets go: nothing lit, the list is back with the focus on the row', async () => {
-    fakeServer();
+  it('the node panel letting go (another node, or closed) lets go of the pull request: the next row asks again', async () => {
+    const server = fakeServer();
     mount();
     openForge({ tab: 'pulls' });
     await settle();
     await select(12);
-    click(q('[data-forge-pr="12"]'));
-    expect(state.forgeLit).toBe(null);
-    expect($('forge-detail').hidden).toBe(true);
-    expect($('forge-btn-lit').hidden).toBe(true);
-    expect(sceneNode('root').alpha).toBe(1);
-    await select(13);
-    click(q('[data-action="clear-forge-pr"]'));
-    expect(state.forgeLit).toBe(null);
-    expect($('forge-list').hidden).toBe(false);
-    expect(document.activeElement).toBe(q('[data-forge-pr="13"]'));
-    expect(await said()).toBe('Pull request 13 cleared');
-  });
-
-  it('closing the panel leaves the lights, which the button names', async () => {
-    fakeServer();
-    mount();
-    openForge({ tab: 'pulls' });
+    closeDrawer();
     await settle();
+    expect(q('[data-work-ref="pull:12"]').getAttribute('aria-pressed')).toBe('false');
+    server.calls.length = 0;
     await select(12);
-    closeForge();
-    expect(state.forgeLit).not.toBe(null);
-    expect($('forge-btn-lit').textContent).toBe('#12');
+    expect(server.urls().filter((u) => u === '/api/forge/pulls/12').length).toBeGreaterThan(0);
   });
 
   it('follows the map when its nodes change (a proposal opening)', async () => {
     fakeServer();
     mount();
-    openForge({ tab: 'pulls' });
-    await settle();
     await select(12);
-    expect(state.forgeLit.changed.has('core-server')).toBe(true);
     setMap(MAP.nodes.filter((n) => n.id !== 'core-server').map((n) => ({ ...n })), MAP.edges.filter((e) => e.to !== 'core-server'));
-    expect([...state.forgeLit.changed].sort()).toEqual(['core-meals', 'pkg-server']);
-    expect(qa('.hx-forge-file')[0].querySelector('button').textContent).toBe('server');
+    await settle();
+    expect(qa('#forge-detail .hx-forge-file')[0].querySelector('button').textContent).toBe('server');
   });
 
-  it('a pull request that touches no node lights nothing and leaves the map as it was', async () => {
+  it('a pull request that touches no node says so and leaves the map as it was', async () => {
     fakeServer({ answers: { '/api/forge/pulls/14': { body: { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', pull: PULLS.open[2], files: [{ path: 'README.md', status: 'modified', previousPath: null, additions: 1, deletions: 0 }], checks: [] } } } });
     mount();
-    openForge({ tab: 'pulls' });
-    await settle();
     await select(14);
-    expect(state.forgeLit.changed.size).toBe(0);
     expect(sceneNode('root').alpha).toBe(1);
-    expect(q('.hx-forge-file').textContent).toContain('not on the map');
-    expect(q('.hx-forge-sub').textContent).toBe('Checks: No checks');
-    expect(q('.hx-forge-key')).toBe(null);
+    expect(q('#forge-detail .hx-forge-file').textContent).toContain('not on the map');
+    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Checks: No checks');
   });
 });
 
@@ -523,19 +493,14 @@ describe('when the forge or the server cannot answer', () => {
     expect($('forge-notice').textContent).toMatch(/could not be reached/);
   });
 
-  it('a pull request that cannot be read says why in its place, and lights nothing', async () => {
+  it('a pull request that cannot be read says why in the node panel', async () => {
     fakeServer();
     mount();
-    openForge({ tab: 'pulls' });
-    await settle();
-    click(q('[data-forge-pr="12"]'));
-    await settle();
-    expect(state.forgeLit).not.toBe(null);
+    await show('pull', 12);
+    expect(q('#forge-detail .hx-forge-file')).not.toBe(null);
     fakeServer({ answers: { '/api/forge/pulls/13': { status: 404, body: { ok: false, error: 'GitHub has no pull request #13 in owner/name, or this sign-in cannot see it.' } } } });
-    click(q('[data-forge-pr="13"]'));
-    await settle();
-    expect(state.forgeLit).toBe(null);
-    expect(q('#forge-detail .hx-forge-notice').textContent).toBe('Could not load pull request 13. GitHub has no pull request #13 in owner/name, or this sign-in cannot see it.');
+    await show('pull', 13);
+    expect($('forge-act-note').textContent).toBe('Could not load pull request 13. GitHub has no pull request #13 in owner/name, or this sign-in cannot see it.'); // a link that names nothing is a line in the list, said through the live region
   });
 
   it('Refresh asks again past the server\'s cache, the list and the selected pull request', async () => {
@@ -543,7 +508,7 @@ describe('when the forge or the server cannot answer', () => {
     mount();
     openForge({ tab: 'pulls' });
     await settle();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
     server.calls.length = 0;
     click(q('[data-action="refresh-forge"]'));
@@ -579,17 +544,20 @@ describe('on a phone', () => {
     expect($('forge-panel').inert).toBe(true);
   });
 
-  it('a node button collapses the sheet so the map and the node\'s own sheet show', async () => {
+  it('a row shows the node\'s sheet and the list takes its leave (they take turns, spec 0010 D7); a node button in it selects that node', async () => {
     phone(true);
     fakeServer();
     mount();
     openForge({ tab: 'pulls' });
     await settle();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    console.log('CHIP', !!q('[data-forge-node="core-server"]'), $('forge-detail') && $('forge-detail').innerHTML.slice(0, 200));
+    expandSheet('drawer'); // a tap on a sheet at its peek expands it first (spec 0010 D7)
     click(q('[data-forge-node="core-server"]'));
     await settle();
-    expect(sheetState('forge')).toBe('peek');
     expect(state.selectedNode.id).toBe('core-server');
   });
 });
@@ -634,14 +602,14 @@ describe('the Agents tab', () => {
     expect(groups().map((g) => g.querySelector('.hx-forge-meta').textContent)).toEqual([
       '1 pull request, 1 by an agent', '1 pull request, 1 branch, 2 by agents', '1 branch, 1 by an agent',
     ]);
-    const lint = q('[data-forge-pr="13"]');
+    const lint = q('[data-work-ref="pull:13"]');
     expect(lint.querySelector('.hx-forge-agent').textContent).toBe('Agent');
     expect(lint.querySelector('.hx-forge-why').textContent).toBe('listed author agent-four');
     const branch = qa('.hx-forge-branch')[0];
     expect(branch.textContent).toContain('claude/5-notes');
     expect(branch.textContent).toContain('no pull request yet');
     expect(branch.querySelector('.hx-forge-why').textContent).toBe('branch starts with claude/');
-    expect(q('[data-forge-pr="12"]').parentElement.textContent).toContain('Spec PR for 0013-meals');
+    expect(q('[data-work-ref="pull:12"]').parentElement.textContent).toContain('Spec PR for 0013-meals');
     // A heading names its list
     const list = groups()[1].querySelector('ul');
     expect(document.getElementById(list.getAttribute('aria-labelledby')).textContent).toContain('#5 Sign-in');
@@ -651,35 +619,32 @@ describe('the Agents tab', () => {
 
   it('shows open work, the finished with a switch, and only the agents\' with the other', async () => {
     await open();
-    expect(q('[data-forge-pr="9"]')).toBe(null);
+    expect(q('[data-work-ref="pull:9"]')).toBe(null);
     const finished = $('forge-work-finished');
     finished.checked = true;
     finished.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(q('[data-forge-pr="9"]')).not.toBe(null);
-    expect(q('[data-forge-pr="9"]').querySelector('.hx-forge-agent')).toBe(null);
+    expect(q('[data-work-ref="pull:9"]')).not.toBe(null);
+    expect(q('[data-work-ref="pull:9"]').querySelector('.hx-forge-agent')).toBe(null);
     const agents = $('forge-work-agents');
     agents.checked = true;
     agents.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(q('[data-forge-pr="9"]')).toBe(null);
+    expect(q('[data-work-ref="pull:9"]')).toBe(null);
     expect(qa('#forge-list .hx-forge-item').length).toBe(4);
     expect(await said()).toBe('3 groups, 4 pieces of work, 4 by agents');
     agents.checked = false;
     agents.dispatchEvent(new Event('change', { bubbles: true }));
     finished.checked = false;
     finished.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(q('[data-forge-pr="9"]')).toBe(null);
+    expect(q('[data-work-ref="pull:9"]')).toBe(null);
   });
 
-  it('a pull request in a group selects like any other: its files and checks are asked for and the map is lit', async () => {
+  it('a pull request in a group selects like any other: its files and checks are asked for and the node panel shows them', async () => {
     const server = await open();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
     expect(server.urls()).toContain('/api/forge/pulls/12');
-    expect(sceneNode('core-server').glow).toBeGreaterThan(0);
-    expect(q('[data-forge-pr="12"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-btn-lit').textContent).toBe('#12');
-    click(q('[data-action="clear-forge-pr"]'));
-    expect(state.forgeLit).toBe(null);
+    expect(q('[data-work-ref="pull:12"]').getAttribute('aria-pressed')).toBe('true');
+    expect(qa('#forge-detail .hx-forge-file').length).toBe(3);
   });
 
   it('is announced, its tab is a pressed button, and a refresh asks the server again for the work', async () => {
@@ -712,9 +677,9 @@ describe('the Agents tab', () => {
     expect($('forge-panel').parentElement.id).toBe('sheet-dock');
     expect(sheetState('forge')).toBe('expanded');
     expect(groups()).toHaveLength(3);
-    click(q('[data-forge-pr="13"]'));
+    click(q('[data-work-ref="pull:13"]'));
     await settle();
-    expect(qa('.hx-forge-file').length).toBe(1);
+    expect(qa('#forge-detail .hx-forge-file').length).toBe(1);
   });
 });
 
@@ -726,7 +691,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
   const select = async (n) => {
     openForge({ tab: 'pulls' });
     await settle();
-    click(q(`[data-forge-pr="${n}"]`));
+    click(q(`[data-work-ref="pull:${n}"]`));
     await settle();
   };
 
@@ -738,9 +703,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     expect(q('#forge-detail .hx-forge-cta [data-forge-merge]')).not.toBe(null); // the primary action, with Open on the forge beside it
     expect(q('#forge-detail .hx-forge-cta .hx-forge-open')).not.toBe(null);
     expect(q('#forge-detail .hx-forge-why')).toBe(null); // nothing to explain
-    click(q('[data-action="clear-forge-pr"]'));
-    click(q('[data-forge-pr="13"]'));
-    await settle();
+    await select(13);
     expect(q('[data-forge-merge]')).toBe(null);
     expect(q('.hx-forge-cta .hx-btn--approve').disabled).toBe(true); // Land it, there and off, with its one line of why under it
     expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe("Can't land yet: vitest test/server/auth.test.js failed, lint failed, build is still running. Next: re-run vitest test/server/auth.test.js below, then re-run lint on the forge, then wait for build to finish, then press Refresh.");
@@ -843,7 +806,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await settle();
     click(q('[data-forge-kind="pulls"]'));
     await settle();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
     click(q('[data-forge-merge]'));
     click(q('[data-action="forge-confirm-go"]'));
@@ -928,7 +891,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
   });
 });
 
-describe('deploys light the map', () => {
+describe('deploys: the list and the node panel', () => {
   const tab = () => q('[data-forge-kind="deploys"]');
   async function openDeploys(opts) {
     const server = fakeServer(opts);
@@ -940,13 +903,13 @@ describe('deploys light the map', () => {
     return server;
   }
   const selectDeploy = async (id) => {
-    q(`[data-forge-deploy="${id}"]`).focus();
-    click(q(`[data-forge-deploy="${id}"]`));
+    q(`[data-work-ref="deploy:${id}"]`).focus();
+    click(q(`[data-work-ref="deploy:${id}"]`));
     await settle();
   };
   const titles = () => rows().map((r) => r.querySelector('.hx-forge-title').textContent);
 
-  it('lists the last deploys, newest first, with their state, branch, commit, who and when, and what each lights', async () => {
+  it('lists the last deploys, newest first, with their state, branch, commit, who and when, and what each restarts', async () => {
     const server = await openDeploys();
     expect(server.urls().at(-1)).toBe('/api/forge/deploys?limit=100');
     expect(tab().getAttribute('aria-pressed')).toBe('true');
@@ -955,10 +918,10 @@ describe('deploys light the map', () => {
     const first = rows()[0];
     expect(first.querySelector('.hx-forge-state').textContent).toBe('Succeeded');
     expect(first.querySelector('.hx-forge-meta').textContent).toBe('Succeeded main · abc1234 · maintainer-one · 1 hour ago');
-    expect(first.querySelector('.hx-forge-label').textContent).toBe('Lights 3 nodes'); // the stack and its two containers
+    expect(first.querySelector('.hx-forge-label').textContent).toBe('Restarts 3 nodes'); // the stack and its two containers
     expect(rows()[1].querySelector('.hx-forge-label').textContent).toBe('Not mapped to a node'); // listed, not dropped
     expect(rows()[1].querySelector('.hx-forge-meta').textContent).not.toContain('null');
-    expect(rows()[2].querySelector('.hx-forge-label').textContent).toBe('Lights 1 node');
+    expect(rows()[2].querySelector('.hx-forge-label').textContent).toBe('Restarts 1 node');
     expect(first.querySelector('a.hx-forge-out').getAttribute('aria-label')).toBe('Open deploy Deploy web on GitHub (new tab)');
     expect($('forge-status').textContent).toMatch(/^4 of 4 deploys, as of 2 minutes ago$/);
     expect($('forge-label').parentElement.hidden).toBe(true);
@@ -968,91 +931,60 @@ describe('deploys light the map', () => {
     expect(await said()).toBe('4 deploys shown');
   });
 
-  it('selecting one lights the nodes it restarted, a stack with its containers, and fades the rest', async () => {
+  it('selecting one shows it in the node panel: what it restarted, a stack with its containers, and its logs on the forge; nothing more is asked', async () => {
     const server = await openDeploys();
-    const asked = server.calls.length;
+    const asked = server.urls().filter((u) => u.startsWith('/api/forge/deploys')).length;
     await selectDeploy('9004');
-    expect(server.calls.length).toBe(asked); // the list holds what it restarted: nothing more is asked
-    expect(q('[data-forge-deploy="9004"]').getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q('#forge-detail .hx-forge-back'));
-    expect(q('#forge-detail .hx-forge-back-text').textContent).toBe('All deploys');
-    expect([...state.forgeLit.changed].sort()).toEqual(['container-app', 'container-db', 'stack-web']);
-    expect(state.forgeLit.failing.size).toBe(0);
-    for (const id of ['stack-web', 'container-app', 'container-db']) expect(sceneNode(id)).toMatchObject({ alpha: 1, halo: 'match' });
-    expect(sceneNode('root').alpha).toBeLessThan(0.5);
-    expect(sceneNode('core-server').alpha).toBeLessThan(0.5);
-    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected deploy');
-    expect(q('.hx-forge-detail-title').textContent).toBe('Deploy web');
-    expect(q('.hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
-    expect(qa('[data-forge-node]').map((b) => b.textContent)).toEqual(['web', 'app', 'db']);
-    expect($('forge-btn-lit').textContent).toBe('deploy');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work panel, a deploy selected');
-    expect(await said()).toBe('Deploy Deploy web of main, succeeded: 3 nodes restarted and lit. Turned on the Infra and Containers layers.');
+    expect(server.urls().filter((u) => u.startsWith('/api/forge/deploys')).length).toBe(asked); // the list holds what it restarted
+    expect(q('[data-work-ref="deploy:9004"]').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement).toBe(q('[data-work-ref="deploy:9004"]')); // the focus stays on the row
+    expect($('drawer-badge').textContent).toBe('Deploy');
+    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
+    expect(qa('#forge-detail [data-forge-node]').map((b) => b.textContent)).toEqual(['web · layer off', 'app · layer off', 'db · layer off']); // the Map's layers for them are off here
+    expect(q('#forge-detail a[href]').textContent).toBe('Open the logs on GitHub ↗');
+    expect(q('#forge-detail a[href]').getAttribute('href')).toBe('https://git.example.test/owner/name/actions/runs/9004');
+    expect(q('#forge-detail [data-forge-rerun]')).toBe(null); // cornfield has no route that runs a workflow again
+    expect(await said()).toBe('Deploy Deploy web of main, succeeded: 3 nodes restarted on the map.');
   });
 
-  it('turns on the layers its nodes are on, since containers, stacks and machines start off, and only those', async () => {
-    await openDeploys();
-    expect([state.activeLayers.stack, state.activeLayers.container, state.activeLayers.machine]).toEqual([false, false, false]);
-    await selectDeploy('9004');
-    expect([state.activeLayers.stack, state.activeLayers.container, state.activeLayers.machine]).toEqual([true, true, false]);
-    expect(qa('[data-forge-node]').every((b) => !b.textContent.includes('layer off'))).toBe(true);
-    click(q('[data-forge-deploy="9004"]')); // letting go leaves the layers as the person now has them
-    expect(state.activeLayers.stack).toBe(true);
-  });
-
-  it('a failed deploy lights its nodes red, and says a node the config names that is not on the map', async () => {
+  it('a failed deploy says a node the config names that is not on the map', async () => {
     await openDeploys();
     await selectDeploy('9002');
-    expect([...state.forgeLit.failing]).toEqual(['machine-nas']); // found by its label, "nas"
-    expect(state.forgeLit.changed.size).toBe(0);
-    expect(sceneNode('machine-nas').color).toBe('#f87171');
+    expect(qa('#forge-detail [data-forge-node]').map((b) => b.textContent)).toEqual(['nas · layer off']); // found by its label
     expect(q('#forge-detail .hx-forge-notice').textContent).toBe('ghost-node is named in the config but not on the map.');
-    expect(await said()).toBe('Deploy Deploy nas of main, failed: 1 node restarted and lit, 1 named that is not on the map. Turned on the Machines layer.');
+    expect(await said()).toBe('Deploy Deploy nas of main, failed: 1 node restarted on the map, 1 named that is not on the map.');
   });
 
-  it('a deploy the config maps to nothing is listed, says so, and lights nothing', async () => {
+  it('a deploy the config maps to nothing is listed, and says so', async () => {
     await openDeploys();
     await selectDeploy('9003');
-    expect(state.forgeLit.changed.size + state.forgeLit.failing.size).toBe(0);
-    expect(sceneNode('root').alpha).toBe(1);
-    expect(q('#forge-detail .hx-forge-notice').textContent).toContain('No node is mapped to this deploy, so nothing is lit.');
+    expect(q('#forge-detail .hx-forge-notice').textContent).toContain('No node is mapped to this deploy.');
     expect(q('#forge-detail .hx-forge-notice').textContent).toContain('deploys.restarts');
-    expect(qa('[data-forge-node]')).toHaveLength(0);
-    expect(await said()).toBe('Deploy Deploy media of main, running. No node is mapped to it, so nothing is lit.');
+    expect(qa('#forge-detail [data-forge-node]')).toHaveLength(0);
+    expect(await said()).toBe('Deploy Deploy media of main, running. No node is mapped to it.');
   });
 
-  it('selecting it again, or Clear, lets go; a pull request and a deploy are never selected together', async () => {
+  it('shows one thing at a time: a deploy after a pull request lets the pull request go', async () => {
     fakeServer();
     mount();
     openForge({ tab: 'pulls' });
     await settle();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
-    expect($('forge-btn-lit').textContent).toBe('#12');
+    expect(q('#forge-detail .hx-forge-file')).not.toBe(null);
     click(tab());
     await settle();
     await selectDeploy('9004');
-    expect($('forge-btn-lit').textContent).toBe('deploy'); // the pull request's lights were let go for the deploy's
-    expect(state.forgeLit.changed.has('core-server')).toBe(false);
-    click(q('[data-forge-deploy="9004"]'));
-    expect(state.forgeLit).toBe(null);
-    expect($('forge-detail').hidden).toBe(true);
-    expect($('forge-btn-lit').hidden).toBe(true);
-    expect(sceneNode('root').alpha).toBe(1);
-    await selectDeploy('9001'); // restarts "web": the stack by its label
-    expect([...state.forgeLit.changed].sort()).toEqual(['container-app', 'container-db', 'stack-web']);
-    click(q('[data-action="clear-forge-deploy"]'));
-    expect(state.forgeLit).toBe(null);
-    expect(document.activeElement).toBe(q('[data-forge-deploy="9001"]'));
-    expect(await said()).toBe('Deploy Deploy web cleared');
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('deploy');
+    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
     click(q('[data-forge-kind="pulls"]'));
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
-    expect(state.forgeLit.changed.has('core-server')).toBe(true);
-    expect(q('#forge-detail').getAttribute('aria-label')).toBe('Selected pull request');
+    expect(qa('#forge-detail .hx-forge-file')).toHaveLength(3);
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('pull');
   });
 
-  it('filters by state and a search; the lights stay with the selected deploy', async () => {
+  it('filters by state and a search; the deploy in the node panel stays', async () => {
     await openDeploys();
     await selectDeploy('9004');
     choose('forge-state', 'failure');
@@ -1071,7 +1003,7 @@ describe('deploys light the map', () => {
     $('forge-text').value = 'nothing like it';
     $('forge-text').dispatchEvent(new Event('input', { bubbles: true }));
     expect(q('.hx-forge-empty').textContent).toBe('No deploy matches these filters.');
-    expect(state.forgeLit.changed.has('stack-web')).toBe(true);
+    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
   });
 
   it('a node button selects the node on the map', async () => {
@@ -1086,18 +1018,18 @@ describe('deploys light the map', () => {
   it('follows the map when its nodes change, and Refresh reads the deploys again', async () => {
     const server = await openDeploys();
     await selectDeploy('9002');
-    expect(state.forgeLit.failing.has('machine-nas')).toBe(true);
+    expect(qa('#forge-detail [data-forge-node]').map((b) => b.textContent)).toEqual(['nas · layer off']);
     setMap(MAP.nodes.filter((n) => n.id !== 'machine-nas').map((n) => ({ ...n })), MAP.edges);
-    expect(state.forgeLit.failing.size).toBe(0);
+    await settle();
     expect(q('#forge-detail .hx-forge-notice').textContent).toBe('nas, ghost-node are named in the config but not on the map.');
     const before = server.calls.length;
     await refreshForge();
     expect(server.calls.length).toBe(before + 1);
     expect(server.calls.at(-1).init).toEqual({ cache: 'reload' });
-    expect(q('[data-forge-deploy="9002"]').getAttribute('aria-pressed')).toBe('true');
+    expect(q('[data-work-ref="deploy:9002"]').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('when the forge cannot list runs, says why in the panel (Forgejo without Actions) and the other lists still work', async () => {
+  it('when the forge cannot list runs, says why in the list (Forgejo without Actions) and the other lists still work', async () => {
     fakeServer({ answers: { '/api/forge/deploys?limit=100': { status: 501, body: { ok: false, error: 'Forgejo cannot list the Actions runs of owner/name: Actions is off for the repo, or the instance is older than Forgejo 11 (or Gitea 1.24), which cannot list runs. Deploys are not read from it.', code: 'unavailable' } } } });
     mount();
     openForge({ tab: 'pulls' });
@@ -1116,15 +1048,16 @@ describe('deploys light the map', () => {
     expect(q('.hx-forge-empty').textContent).toBe('No deploys to show. They appear here when a workflow runs on GitHub.');
   });
 
-  it('on a phone it is the same sheet: a deploy selected lights the map, and its node button collapses the sheet', async () => {
+  it('on a phone the deploy\'s sheet takes the list\'s place, and its node button (the sheet expanded first) selects the node', async () => {
     vi.stubGlobal('matchMedia', (query) => ({ matches: /max-width: 767px/.test(query), media: query, addEventListener() {}, removeEventListener() {} }));
     await openDeploys();
     expect(sheetState('forge')).toBe('expanded');
     await selectDeploy('9004');
-    expect(state.forgeLit.changed.has('stack-web')).toBe(true);
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    expandSheet('drawer');
     click(q('[data-forge-node="stack-web"]'));
     await settle();
-    expect(sheetState('forge')).toBe('peek');
     expect(state.selectedNode.id).toBe('stack-web');
   });
 });
@@ -1133,7 +1066,7 @@ describe('a spec pull request waiting to land on its approval (proposals.approve
   const FORGE_ON = { type: 'github', url: 'https://github.com', repo: 'owner/name', approveLands: true };
   const landing = { pull: 12, slug: '0013-meals', sha: 'abc1234', by: 'maintainer-one', since: '2026-10-19T11:50:00Z' };
   async function select(n) {
-    click(q(`[data-forge-pr="${n}"]`));
+    click(q(`[data-work-ref="pull:${n}"]`));
     await settle();
   }
 
@@ -1246,31 +1179,28 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     expect(chip.querySelector('.hx-forge-count').textContent).toBe('1');
   });
 
-  it('a selection replaces the list, only on its own tab, and the back control (named by the list) returns to it', async () => {
+  it('a selection does not replace the list: every tab keeps its lists, and the node panel keeps the piece of work shown', async () => {
     fakeServer();
     mount();
     openForge({ tab: 'pulls' });
     await settle();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
-    expect([$('forge-list').hidden, $('forge-detail').hidden, $('forge-bar').hidden, $('notes-open').hidden]).toEqual([true, false, true, true]);
-    const back = q('#forge-detail .hx-forge-back');
-    expect(back.textContent.trim()).toBe('All pull requests');
-    click(q('[data-forge-kind="issues"]')); // another tab: its own list, the pull request still lit
+    expect([$('forge-list').hidden, $('forge-bar').hidden, $('notes-open').hidden]).toEqual([false, false, false]);
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('pull');
+    click(q('[data-forge-kind="issues"]')); // another tab: its own list, the pull request still in the node panel
     await settle();
-    expect([$('forge-list').hidden, $('forge-detail').hidden]).toEqual([false, true]);
-    expect(state.forgeLit).not.toBe(null);
-    click(q('[data-forge-kind="work"]')); // Runs has its own list: a pull request selected on PRs does not replace it
+    expect($('forge-list').hidden).toBe(false);
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('pull');
+    click(q('[data-forge-kind="work"]'));
     await settle();
-    expect([$('forge-list').hidden, $('forge-detail').hidden, $('forge-runs').hidden]).toEqual([false, true, false]);
+    expect([$('forge-list').hidden, $('forge-runs').hidden]).toEqual([false, false]);
     q('[data-forge-kind="pulls"]').focus();
     click(q('[data-forge-kind="pulls"]'));
     await settle();
-    expect($('forge-detail').hidden).toBe(false);
     expect(document.activeElement).toBe(q('[data-forge-kind="pulls"]')); // a tab changed leaves the focus on the tab
-    click(q('#forge-detail .hx-forge-back'));
-    expect([$('forge-list').hidden, $('forge-detail').hidden, $('notes-open').hidden]).toEqual([false, true, false]);
-    expect(document.activeElement).toBe(q('[data-forge-pr="12"]'));
+    expect(q('[data-work-ref="pull:12"]').getAttribute('aria-pressed')).toBe('true'); // its row says it is the one shown
+    expect($('notes-open').hidden).toBe(false);
   });
 
   it('hides the account menu\'s Proposals entry, which Specs replaces; without the panel the entry stays', async () => {

@@ -7,7 +7,6 @@
 
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { defaultFilters } from '../forge-panel-model.js';
-import { withParts } from '../engine/piece.js';
 
 export const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
 export const SEARCH_ANNOUNCE_MS = 500;
@@ -24,8 +23,6 @@ export const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : m
 /** A link only if it is the forge's web address: a forge's JSON is data, not trusted markup */
 export const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 export const option = (value, label, on) => `<option value="${escHtml(value)}"${on ? ' selected' : ''}>${escHtml(label)}</option>`;
-/** The back control of a detail: an arrow and the name of the list it returns to ("All pull requests") */
-export const backHtml = (action, words) => withParts(`<button data-corn="back" type="button" class="hx-forge-back" data-action="${action}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">${escHtml(words)}</span></button>`);
 /** The thread a successful answer holds, or null (a failure, or an answer without one) */
 export const threadOf = (res) => (res && res.ok && res.body && res.body.thread && typeof res.body.thread === 'object' && Array.isArray(res.body.thread.messages) ? res.body.thread : null);
 
@@ -49,27 +46,29 @@ export function freshUi() {
     filtersOpen: false, // the Filter chip's box
     filters: defaultFilters(),
     lists: {}, // `${kind}|${server state}` -> { items, at, rate, stale }
-    work: null, // { grouped, problem, at, rate, stale } of the Agents tab
+    work: null, // { grouped, problem, at, rate, stale } of the Runs tab
     specQuery: '', // the Specs tab's search (spec 0010 D5)
     draftsOpen: null, // the Drafts group opened (true) or folded (false) by hand; null: as the model has it (folded past 10 rows)
     workFilters: { agentsOnly: false, finished: false },
     loading: false,
     error: '',
-    selected: null, // the pull request's number
-    selectedOn: '', // the tab it was selected on ('pulls' or 'work')
-    detail: null, // { pull, files, checks, at, rate, stale } of the selected one
+    node: '', // the id of the piece of work the node panel shows (`pull:27`), or '' while it shows none
+    ref: '', // …and its row's name in the lists (`pull:27`, `proposal:<slug>`, `run:<id>`): a row that names it is pressed
+    item: null, // …and what the graph, or the lists, say of it (work-model.js `workNode`'s `item`)
+    selected: null, // the pull request's number in the node panel
+    detail: null, // { pull, files, checks, at, rate, stale } of the pull request in the node panel
     landing: null, // what waits to land on its approval for the selected pull request ({ slug, by, since }), or null
     detailError: '',
-    lit: null, // litFor(detail, nodes)
-    thread: null, // the selected thread's number (Threads tab)
-    threadDetail: null, // { thread, at, rate, stale } of the selected one: its messages, as written
+    lit: null, // litFor(detail, nodes): its files on the map's nodes
+    thread: null, // the number of the thread in the node panel
+    threadDetail: null, // { thread, at, rate, stale } of the one in the node panel: its messages, as written
     threadError: '',
-    litThread: null, // litForThread(thread, nodes)
+    litThread: null, // litForThread(thread, nodes): the nodes its text names
     idea: freshIdea(), // the New idea form
-    deploy: null, // the selected deploy's id; the deploy itself is `deployItem`
+    deploy: null, // the id of the deploy in the node panel; the deploy itself is `deployItem`
     deployItem: null,
-    litDeploy: null, // litForDeploy(deployItem, nodes)
-    nodesSeen: null, // the `state.nodes` the lights were worked out for
+    litDeploy: null, // litForDeploy(deployItem, nodes): the nodes it restarted
+    nodesSeen: null, // the `state.nodes` those were worked out for
     busy: '', // the action in flight ('merge', or 'rerun:<check id>'), so a second click does nothing
     note: null, // { text, ok }: what the last action came to, for the selected pull request
     confirm: null, // { opener: selector, kind: 'merge' | 'spec' | 'build', plan?, n?, slug? } while the confirm dialog is open
@@ -77,7 +76,7 @@ export function freshUi() {
     notes: freshNotes(), // the Release notes view
     runs: null, // { data, error } of the Agents tab's runs: what /api/agent-runs answered
     runNote: null, // { text, ok }: what the last Stop came to
-    runSel: null, // the run lit on the map (Light on the map), by id
+    runShown: null, // the run in the node panel, by id
     runnerSaid: null, // the runner state last shown ('online', 'offline', 'none'; null off the pull transport), so a change is said once
     runTimelines: new Set(), // the runs whose timeline is open
     runReplies: new Map(), // the reply typed so far for each waiting run, so a repaint (the runs are looked at again) keeps it

@@ -14,7 +14,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -22,7 +24,8 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer, copySpec } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { runsHtml, loadingRowsHtml, loadingLinesHtml } from '../../explorer/runs-view.js';
+import { runHtml, loadingRowsHtml, loadingLinesHtml } from '../../explorer/runs-view.js';
+const runsHtml = (ctx, runs) => runs.map((r) => runHtml(ctx, r, runs)).join(''); // the cards, one after another, as the node panel draws each
 // @ts-expect-error plain JS modules, no declarations
 import { formatCost, formatTokens, runName, runTone, runMeta, limitRows, pullRunWords, changeWords, RUN_TONE } from '../../explorer/runs-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -116,7 +119,7 @@ function mount(clock = () => NOW) {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -126,9 +129,21 @@ function mount(clock = () => NOW) {
   initKeyboard();
   initSheets();
   resetForgePanelForTests(clock);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock });
+  resetWorkViewForTests();
+  const forgeOn = initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work (work:panel): the actions are in it
+  return forgeOn;
 }
-const openTab = async (tab) => { openForge({ tab: 'pulls' }); await settle(); if (tab !== 'pulls') { click(q(`[data-forge-kind="${tab}"]`)); await settle(); } };
+/** A piece of work in the node panel (no Work view in this page: it is shown there alone, as work older than the graph's 14 days is) */
+const showWork = async (kind, key) => { await showWorkRef(kind, String(key)); await settle(); };
+/** The tab, and for Runs (unless `card` is false) the first run listed in the node panel, where its card is */
+const openTab = async (tab, card = true) => {
+  openForge({ tab: 'pulls' });
+  await settle();
+  if (tab !== 'pulls') { click(q(`[data-forge-kind="${tab}"]`)); await settle(); }
+  const first = tab === 'work' && card ? q('#forge-runs-list [data-work-ref]') : null;
+  if (first) await showWork('run', first.dataset.workRef.slice('run:'.length));
+};
 const setOnline = (on) => Object.defineProperty(navigator, 'onLine', { value: on, configurable: true });
 
 beforeEach(() => { localStorage.clear(); history.replaceState(null, '', '/'); resetFeedbackForTests(); });
@@ -170,7 +185,7 @@ describe('a refresh does not disturb a reply being typed (F03)', () => {
     click(q('[data-action="refresh-forge"]'));
     await settle();
     expect([field.selectionStart, field.selectionEnd]).toEqual([4, 10]);
-    expect(q(`[data-run="${ID(3)}"] [data-corn="state-pill"]`).textContent).toContain('Done'); // the card without a field follows the runs
+    expect(q(`#forge-runs-list [data-work-ref="run:${ID(3)}"] [data-corn="state-pill"]`).textContent).toContain('Done'); // the row of the other run follows the runs
     field.blur();
     click(q('[data-action="refresh-forge"]'));
     await settle();
@@ -250,14 +265,14 @@ describe('the seven run states differ without colour (F34)', () => {
     const ctx = { esc: (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`), safeUrl: () => null, forgeName: 'GitHub', forgeType: 'github', repoUrl: null, now: NOW, nodes: [], selected: null, timelines: new Set(), replies: new Map(), busy: false };
     host.innerHTML = runsHtml(ctx, SEVEN);
     const pills = [...host.querySelectorAll('.hx-run-head [data-corn="state-pill"]')];
-    // in the Runs list's groups (spec 0010 D6): Needs you, then In motion, then Finished
-    expect(pills.map((p) => p.dataset.cornState)).toEqual(['waiting', 'requested', 'claimed', 'working', 'done', 'failed', 'stopped']);
+    // the cards in the order they were given (the Runs list groups them: spec 0010 D6)
+    expect(pills.map((p) => p.dataset.cornState)).toEqual(['requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped']);
     expect(new Set(pills.map((p) => p.dataset.cornState)).size).toBe(7);
-    expect(pills.map((p) => p.textContent.trim())).toEqual(['Waiting', 'Requested', 'Claimed', 'Working', 'Done', 'Failed', 'Stopped']); // a word always
+    expect(pills.map((p) => p.textContent.trim())).toEqual(['Requested', 'Claimed', 'Working', 'Waiting', 'Done', 'Failed', 'Stopped']); // a word always
     const shapes = pills.map((p) => p.querySelector('[data-corn="state-icon"]').innerHTML);
     expect(new Set(shapes).size).toBe(7); // a distinct icon each
     for (const p of pills) expect(p.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
-    expect(pills.map((p) => p.className.match(/hx-forge-state--(\w+)/)[1])).toEqual(['waiting', 'requested', 'claimed', 'working', 'done', 'failed', 'stopped']);
+    expect(pills.map((p) => p.className.match(/hx-forge-state--(\w+)/)[1])).toEqual(['requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped']);
     // the card carries the same state as its pill
     expect([...host.querySelectorAll('[data-corn="run"]')].map((c) => c.dataset.cornState)).toEqual(pills.map((p) => p.dataset.cornState));
   });
@@ -585,29 +600,23 @@ describe('a run is named by what the card shows (F43)', () => {
   it('gives every button of a card a name that starts with its visible label, and shows no id', async () => {
     fakeServer({ runs: SEVEN });
     mount();
-    await openTab('work');
-    const buttons = qa('#forge-runs-list button').filter((b) => b.getAttribute('aria-label'));
-    expect(buttons.length).toBeGreaterThan(10);
+    await openTab('work', false);
+    const buttons = [];
+    for (const r of SEVEN) {
+      await showWork('run', r.runId);
+      buttons.push(...qa('#forge-run-card button').filter((b) => b.getAttribute('aria-label')));
+      expect(q('#forge-run-card').textContent).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
+      expect(qa('#forge-run-card [aria-label]').map((e) => e.getAttribute('aria-label')).join(' ')).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
+    }
+    expect(buttons.length).toBeGreaterThan(5);
     for (const b of buttons) {
       const visible = b.textContent.trim().replace(/\s+/g, ' ');
       expect(b.getAttribute('aria-label').startsWith(visible), `${b.getAttribute('aria-label')} vs ${visible}`).toBe(true);
     }
     expect(q('#forge-runs-list').textContent).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
-    expect(qa('#forge-runs-list [aria-label]').map((e) => e.getAttribute('aria-label')).join(' ')).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
   });
 
-  it('makes a disabled Light on the map look disabled and say why', async () => {
-    fakeServer({ runs: [SEVEN[3], SEVEN[2]] });
-    mount();
-    await openTab('work');
-    const off = q(`[data-run="${ID(4)}"] [data-run-select]`);
-    const on = q(`[data-run="${ID(3)}"] [data-run-select]`);
-    expect(off.disabled).toBe(true);
-    expect(off.title).toMatch(/No node on the map yet/);
-    expect($(off.getAttribute('aria-describedby')).textContent).toBe('No node on the map yet.');
-    expect(on.disabled).toBe(false);
-    expect(on.hasAttribute('title')).toBe(false);
-    expect(on.getAttribute('aria-label')).toMatch(/^Light on the map: /);
+  it('draws a disabled button of the lists as disabled', () => {
     expect(css).toMatch(/\.hx-forge \.hx-btn:disabled[^{]*\{[^}]*border-style: dashed[^}]*cursor: not-allowed/);
   });
 });

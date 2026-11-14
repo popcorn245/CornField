@@ -110,7 +110,7 @@ export const markup = () => ({
     + '<a data-corn="open-link" id="drawer-file-btn" data-corn-kind="primary" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open file ↗</a>'
     + '<a data-corn="open-link" id="drawer-open-btn" data-corn-kind="primary" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open route ↗</a>'
     + '<button data-corn-kind="secondary" type="button" id="drawer-run-btn" class="hx-btn hx-foot-btn" data-action="start-run" data-corn-string="startRun" hidden>Start a run</button>'
-    + '<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>'
+    + '<button data-corn-kind="quiet" type="button" id="drawer-copy-btn" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>'
     + '<p id="copy-spec-result" class="hx-forge-result" data-corn="result" hidden></p>'
     + '</div>'
     + '</aside>',
@@ -437,7 +437,8 @@ export function mount(root, inst, options = {}) {
     fileBtn.textContent = `${t(inst, 'openFile')} ↗`;
     own('drawer-run-btn').hidden = !(state.proposalSlug && inst.ask('forge:can-start'));
     // The Work view (spec 0012 D5): a piece of work is shown by the page's own answer (work-view.js); a node of code in it keeps its own sections, with the work touching it first
-    const work = state.view === 'work' ? inst.ask('work:panel', node) : null;
+    const work = inst.ask('work:panel', node);
+    own('drawer-copy-btn').hidden = !!(work && work.replace); // a piece of work is no spec to copy: its JSON is the forge's, not the map's
     if (work && work.replace) {
       title.textContent = work.title;
       title.classList.remove('hx-mono');

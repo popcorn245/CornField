@@ -1,10 +1,11 @@
 /**
  * @module explorer/pieces/work
  *
- * The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the
- * panel with its tabs (Specs, PRs, Issues, Threads, Runs, Deploys, and Release notes one level down on PRs), the two dialogs it opens (the confirm
- * step and Start an agent) and the layer over the map that marks the nodes an open run is changing. What the panel shows, asks and does is the
- * parts' (work-*.js, one module each); this file makes them for one mount, wires them to the instance, and ends them.
+ * The Work piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010, spec 0012 D5 and D6): the Work list with its tabs (Specs, PRs, Issues,
+ * Threads, Runs, Deploys, and Release notes one level down on PRs; the List toggle of the Work view opens it), the actions of a piece of work in the node panel (Land it,
+ * Re-run, Start an agent, a run's answer field ...), the two dialogs those open (the confirm step and Start an agent) and the layer over the map that marks the nodes an open
+ * run is changing. What the list shows, asks and does is the parts' (work-*.js, one module each; the list's own is work-list.js); this file makes them for one mount, wires
+ * them to the instance, and ends them.
  *
  *   mount(root, inst, { slots, config, clock }) -> { update, destroy, elements, ... }
  *     slots   where cornfield's page leaves the places (`<!--corn-piece:work/button-->`, `work/panel`, `work/overlay`, `work/dialogs`); a host
@@ -26,9 +27,10 @@
  *   POST /api/agent-runs/<id>/stop {}   POST /api/agent-runs/<id>/answer {action: 'continue'|'stop'|'reply', text?}
  *   (and GET /proposals, which the engine reads for the Specs tab: engine/proposal.js)
  *
- * Events and asks (instance.js lists them): hears `work:open-specs` (ask, answers true), `forge:can-start` (ask) and `forge:start`, `thread:open`,
- * `thread:start`, `threads:ensure`, `threads:index` (ask), `proposal:bar`, `decision`, `work:answer`, `work:on` (ask), `scene`; says `work:waiting {total}`,
- * `work:available {on}`, `proposal:waiting`, `proposal:waiting-reset`, `runs:map {active}`, `threads:changed`, `announce`.
+ * Events and asks (instance.js lists them): hears `forge:can-start` (ask) and `forge:start`, `thread:open`, `thread:start`, `threads:ensure`, `threads:index` (ask),
+ * `proposal:bar`, `decision`, `work:answer`, `work:open-specs` (ask, answers true), `work:on` (ask), `node:painted` and `node:close` (the node panel shows a piece of work, or lets it go), `scene`; asks
+ * `work:pick {kind, key}` (the Work view selects that node: true); says `work:waiting {total}`, `work:available {on}`,
+ * `work:list {open}`, `proposal:waiting`, `proposal:waiting-reset`, `runs:map {active}`, `threads:changed`, `announce`.
  */
 
 import { place, scopeOf } from '../engine/piece.js';
@@ -39,7 +41,6 @@ import { t } from '../engine/strings.js';
 import { isPhone, registerSheet, unregisterSheet, expandSheet, collapseSheet, showSheet, refreshStubs } from '../engine/sheets.js';
 import { sayResult, clearResult, resultOf, showResultIn } from '../engine/feedback.js';
 import { selectNode } from '../engine/selection.js';
-import { toggleLayer } from '../engine/layers.js';
 import { notSentWords } from '../engine/connection.js';
 import * as P from '../engine/proposal.js';
 import { isNodeVisible } from '../scene.js';
@@ -57,7 +58,7 @@ import { install as installNotes } from './work-notes.js';
 import { install as installConfirm } from './work-confirm.js';
 import { install as installAgent } from './work-agent.js';
 import { install as installPaint } from './work-paint.js';
-import { install as installEvents } from './work-events.js';
+import { install as installList } from './work-list.js';
 
 export { markup, RUNS_POLL_MS, SPECS_POLL_MS };
 
@@ -71,7 +72,6 @@ export function mount(root, inst, options = {}) {
   const mk = markup();
   const slots = options.slots || {};
   const made = [
-    ...place(inst, root, mk.button, slots, 'button'),
     ...place(inst, root, mk.panel, slots, 'panel'),
     ...place(inst, root, mk.overlay, slots, 'overlay'),
     ...place(inst, root, mk.dialogs, slots, 'dialogs'),
@@ -103,13 +103,10 @@ export function mount(root, inst, options = {}) {
     collapseSheet: (id) => collapseSheet(inst, id),
     showSheet: (id) => showSheet(inst, id),
     refreshStubs: () => refreshStubs(inst),
-    render: () => { if (inst.map) inst.map.render(); },
-    touchScene: () => inst.touchScene(),
     nodeById: (id) => inst.state.nodes.find((n) => n.id === id),
     isNodeVisible: (node) => (inst.map ? inst.map.isNodeVisible(node) : isNodeVisible(inst.state, node)),
     selectNode: (node, opts) => selectNode(inst, node, opts),
     repaintThreads: () => inst.emit('threads:changed'),
-    toggleLayer: (key) => toggleLayer(inst, key),
     sayResult: (key, text, ok) => sayResult(inst, key, text, ok),
     clearResult: (key) => clearResult(inst, key),
     resultOf: (key) => resultOf(inst, key),
@@ -138,7 +135,7 @@ export function mount(root, inst, options = {}) {
   };
   const ctx = { inst, ui: freshUi(), m, fn: {}, state: inst.state, root: inst.root || root, $: (id) => inst.el(id), scope, h, dead: false };
   const { ui, fn } = ctx;
-  for (const install of [installData, installSpecs, installPrs, installIssues, installThreads, installRuns, installDeploys, installNotes, installConfirm, installAgent, installPaint, installEvents]) install(ctx);
+  for (const install of [installData, installSpecs, installPrs, installIssues, installThreads, installRuns, installDeploys, installNotes, installConfirm, installAgent, installPaint, installList]) install(ctx);
 
   // -- the panel starts once the config says there is a forge and somebody is signed in ---------------------------------------------------
   let on = false;
@@ -152,7 +149,7 @@ export function mount(root, inst, options = {}) {
     ui.config = config;
     const first = !on;
     on = true;
-    for (const toggle of ctx.root.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false;
+    for (const toggle of ctx.root.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false; // the Work view's List toggle, if it is there already (it asks `work:on` when it is made)
     panel.hidden = false;
     inst.emit('work:available', { on: true });
     // `threads: false` in the config turns the tab off; a server that does not say has threads
@@ -160,9 +157,9 @@ export function mount(root, inst, options = {}) {
     const tab = panel.querySelector('[data-forge-kind="threads"]');
     if (tab) tab.hidden = !threadsOn;
     ui.threadsOn = threadsOn;
-    // On a phone Work is a sheet: it opens as a peek and displaces the node panel; folded to a stub it says its title and what waits on you (spec 0010 D7)
+    // On a phone the list is a sheet: it opens as a peek and displaces the node panel (and the reverse); folded to a stub it says its title and what waits on you (spec 0010 D7)
     registerSheet(inst, 'forge', panel, {
-      stub: () => { const n = fn.waitingNow().total; return { title: h.t('issuesAndPrs'), badge: n ? String(n) : '', label: workButtonName(h.t('issuesAndPrs'), n, h.t) }; },
+      stub: () => { const n = fn.waitingNow().total; return { title: 'Work list', badge: n ? String(n) : '', label: workButtonName('Work list', n, h.t) }; },
       away: () => fn.closeForge({ restoreFocus: false }),
     });
     fn.paintFilters();
@@ -181,14 +178,17 @@ export function mount(root, inst, options = {}) {
     scope.on('decision', ({ open }) => { if (open !== false) fn.readSpecsQuiet(); });
     scope.on('proposal:bar', ({ open }) => fn.paintBarLine(open));
     scope.on('work:answer', ({ run }) => { fn.answerFromBar(run); });
-    // A bad link's way on, and the node panel's "Start a run"
+    // A bad link's way on (the proposal bar asks), and the node panel's "Start a run"
     scope.on('work:open-specs', () => { fn.openForge({ tab: 'specs' }); return true; });
     scope.on('forge:can-start', () => fn.canStartAgent());
     scope.on('forge:start', ({ slug, returnTo }) => { fn.openProposalStart(slug, returnTo); });
     // A node's panel lists the threads that mention it; a click there shows one in this panel
     scope.on('threads:index', (nodeId) => (ui.config && ui.threadsOn ? { threads: fn.threadsFor(nodeId), forge: fn.forgeName(), start: true } : undefined));
     scope.on('threads:ensure', () => { if (ui.config && ui.threadsOn) fn.ensureThreadsList(); });
-    scope.on('thread:open', ({ number }) => { if (ui.threadsOn) fn.openThread(number); });
+    scope.on('thread:open', ({ number }) => { if (ui.threadsOn) fn.openThread(number).catch(() => {}); });
+    // The node panel shows a piece of work (the Work view's node, or one the lists read): its actions are drawn into it; anything else, or closed, lets go of it
+    scope.on('node:painted', ({ node }) => { m.shown = node && node.work && node.item ? fn.showDetail(node) : (fn.dropDetail(), Promise.resolve()); });
+    scope.on('node:close', () => fn.dropDetail());
     scope.on('thread:start', ({ node }) => { if (ui.threadsOn && node) fn.startThread(node); });
     // The map or the proposal changed the nodes: the lights follow them. The header's Proposals menu reads the same list: the Specs tab and its count follow
     scope.on('scene', fn.onNodesChange);
@@ -196,13 +196,18 @@ export function mount(root, inst, options = {}) {
     scope.own(inst.onNetwork((offline) => { if (!offline) fn.readOnline(); })); // ends with the piece, not only with the instance
     scope.own(inst.onPageHide(() => fn.onPageHide()));
     scope.own(inst.onPageShow(() => fn.onPageShow()));
-    // Any `data-action="toggle-forge"` opens and closes the panel
+    // Any `data-action="toggle-forge"` (the Work view's List toggle) opens and closes the list
     scope.listen(ctx.root, 'click', (e) => {
       const el = e.target.closest && e.target.closest('[data-action="toggle-forge"]');
       if (!el) return;
       m.openerEl = el;
       fn.toggleForge();
     });
+    // What is in the node panel's actions is the page's, not the list's: its clicks, a reply being typed and Enter in it are heard on the root
+    const inDetail = (e) => e.target.closest && e.target.closest('[data-corn="work-detail"]');
+    scope.listen(ctx.root, 'click', (e) => { if (inDetail(e)) fn.onDetailClick(e); });
+    scope.listen(ctx.root, 'input', (e) => { if (inDetail(e)) fn.onDetailInput(e); });
+    scope.listen(ctx.root, 'keydown', (e) => { if (inDetail(e)) fn.onDetailKey(e); });
     // A control tabbed to inside the strip of tabs is brought fully into view, ring and all (focus-room.js)
     scope.listen(ctx.root, 'focusin', (e) => { revealInStrip(e.target); });
     const tabs = panel.querySelector('.hx-forge-tabs');
@@ -248,8 +253,6 @@ export function mount(root, inst, options = {}) {
     ctx.dead = true;
     if (ui.confirm) fn.closeConfirm({ restoreFocus: false });
     if (ui.agent) fn.closeAgent({ restoreFocus: false });
-    // What this panel lit and said goes with it
-    if (inst.state.forgeLit) inst.state.forgeLit = null;
     runsMap.destroy();
     inst.emit('proposal:waiting-reset');
     inst.emit('work:waiting', { total: 0 });
@@ -271,25 +274,9 @@ export function mount(root, inst, options = {}) {
     closeForge: (opts) => fn.closeForge(opts),
     toggleForge: () => fn.toggleForge(),
     refreshForge: (opts) => fn.refreshForge(opts),
-    clearPull: () => fn.clearPull(),
-    clearDeploy: () => fn.clearDeploy(),
-    clearThread: () => fn.clearThread(),
-    selectDeploy: (id) => fn.selectDeploy(id),
-    openRunLink: (id) => fn.openRunLink(id),
-    openIssueLink: (n) => fn.openIssueLink(n),
     openProposalStart: (slug, opener) => fn.openProposalStart(slug, opener),
-    /** The panel at a piece of work from the Work view (spec 0012, step 2): its tab, and the item open in it. `item` is a node of the work graph */
-    openWorkAt: async (item) => {
-      if (item.kind === 'run') return fn.openRunLink(item.runId);
-      if (item.kind === 'issue') return fn.openIssueLink(item.number);
-      if (item.kind === 'thread') { fn.openThread(item.number); return true; }
-      const tab = { pull: 'pulls', proposal: 'specs', deploy: 'deploys' }[item.kind]; // the panel's own tab names (work-common.js TABS)
-      if (!tab) return false;
-      await fn.openTab(tab); // the list is in before a row of it is selected (a deploy is found in it)
-      if (item.kind === 'pull') fn.selectPull(item.number);
-      else if (item.kind === 'deploy') fn.selectDeploy(item.deployId);
-      return true;
-    },
+    /** A piece of work, by what a row of the list names (`pull`, `issue`, `thread`, `run`, `deploy`, `proposal` and its number, id or slug): selected in the Work view, or shown in the node panel alone when the graph does not hold it */
+    showRef: (kind, key) => fn.showRef(kind, key),
     canStartAgent: () => fn.canStartAgent(),
     /** For tests: force reduced motion on or off for the runs' marks (null: follow the viewer's setting) */
     setReducedMotion: (v) => runsMap.setReducedMotion(v),

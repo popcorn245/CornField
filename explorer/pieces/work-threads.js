@@ -1,7 +1,7 @@
 /**
  * @module explorer/pieces/work-threads
  *
- * The Threads tab: the list, a thread's messages, and the New idea form. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
+ * The Threads tab: the list, a thread's messages in the node panel, and the New idea form. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
  * to `ctx.fn`; nothing is shared between two mounts.
  */
 
@@ -12,15 +12,15 @@ import { defaultFilters, threadsUrl, threadUrl, IDEAS_URL, threadKindWords, thre
 import { cornStateAttr } from '../corn-state.js';
 import { relativeTime } from '../review-model.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
-import { plural, safeUrl, backHtml, threadOf, MENTIONABLE } from './work-common.js';
+import { plural, safeUrl, threadOf, MENTIONABLE } from './work-common.js';
 
 export function install(ctx) {
   const { inst, ui, m, fn, state, root, $ } = ctx;
-  const { announce, t, render, touchScene, repaintThreads } = ctx.h;
+  const { announce, repaintThreads } = ctx.h;
 
   /** Forgets the selected thread without painting: another thing is being selected */
   function dropThread() {
-    ui.runSel = null;
+    ui.runShown = null;
     m.threadToken++;
     ui.thread = null;
     ui.threadDetail = null;
@@ -31,7 +31,7 @@ export function install(ctx) {
   async function selectThread(n) {
     const token = ++m.threadToken;
     m.pullToken++;
-    ui.runSel = null;
+    ui.runShown = null;
     ui.selected = null;
     ui.detail = null;
     ui.detailError = '';
@@ -44,11 +44,8 @@ export function install(ctx) {
     ui.threadDetail = null;
     ui.threadError = '';
     ui.litThread = null;
-    state.forgeLit = null;
-    touchScene();
-    render();
     fn.paint();
-    const res = await fn.request(threadUrl(n), false);
+    const res = fn.preloaded('thread', n) || await fn.request(threadUrl(n), false);
     if (token !== m.threadToken) return;
     // An answer without a thread in it is a failure too: nothing to show or light
     const thread = threadOf(res);
@@ -59,40 +56,26 @@ export function install(ctx) {
       return;
     }
     ui.threadDetail = { thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
-    fn.relight();
-    $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the thread's messages are what was asked for, not the row that was tapped
-    announce(threadSelectionWords());
+    fn.figure();
+    fn.sayDetail(threadSelectionWords());
   }
 
-  /** Lets go of the selected thread: nothing is lit any more */
+  /** Lets go of the thread in the node panel (another node was chosen, or the panel closed) */
   function clearThread() {
-    const had = ui.thread;
     dropThread();
-    state.forgeLit = null;
-    touchScene();
-    render();
-    fn.paint();
-    if (had !== null) announce(`Thread ${had} cleared`);
   }
 
   /** What a screen reader hears when a thread is selected */
   function threadSelectionWords() {
     const { thread } = ui.threadDetail;
-    const lit = ui.litThread ? ui.litThread.nodes.length : 0;
+    const on = ui.litThread ? ui.litThread.nodes.length : 0;
     const off = ui.litThread ? ui.litThread.unresolved.length : 0;
-    return `Thread ${thread.number}, ${thread.title}: ${plural(thread.messages.length, 'message')}, ${lit ? `${plural(lit, 'node')} lit` : 'no node mentioned'}${off ? `, ${off} named that ${off === 1 ? 'is' : 'are'} not on the map` : ''}. Read-only: reply on ${fn.forgeName()}.`;
+    return `Thread ${thread.number}, ${thread.title}: ${plural(thread.messages.length, 'message')}, ${on ? `${plural(on, 'node')} on the map` : 'no node mentioned'}${off ? `, ${off} named that ${off === 1 ? 'is' : 'are'} not on the map` : ''}. Read-only: reply on ${fn.forgeName()}.`;
   }
 
-  /** Shows a thread from the map (a node's "Mentioned in"): the panel opens on the Threads tab with that thread selected */
+  /** Shows a thread from the map (a node's "Mentioned in"): the thread's node is selected, or, for one the Work view does not draw, the node panel shows it by the same path as a row of the list */
   function openThread(n) {
-    if (ui.kind !== 'threads') {
-      ui.kind = 'threads';
-      ui.actNote = null;
-      ui.filters = defaultFilters('threads');
-    }
-    fn.openForge({ tab: 'threads' }); // named, so a closed panel does not open on the tab with the oldest thing waiting instead
-    fn.paintFilters();
-    selectThread(n);
+    return fn.showRef('thread', String(n));
   }
 
   /** The threads list for the node panel's "Mentioned in", read once (quietly) when a node is first selected, and when the Threads tab loads it */
@@ -192,7 +175,7 @@ export function install(ctx) {
   }
 
   /**
-   * After an idea is opened: the list read again, the new thread selected (so what it mentions lights), the focus back on what opened
+   * After an idea is opened: the list read again, the new thread shown in the node panel (from the list's form), the focus back on what opened
    * the form, and all of it said once. The idea is on the forge whatever happens here, so a failure is said, never thrown.
    */
   async function afterIdea(res) {
@@ -208,8 +191,8 @@ export function install(ctx) {
       await fn.loadList(true, true);
       if (ui.open) fn.primeCounts();
       ensureThreadsList();
-      // The new thread is selected in the list, so what it mentions lights on the map once its messages are in
-      if (Number.isInteger(n)) await selectThread(n);
+      // An idea opened from the form of the list is shown in the node panel, with what it mentions; one opened from a node's panel leaves that panel as it is: its "Mentioned in" lists the new thread
+      if (Number.isInteger(n) && !about) await fn.showRef('thread', String(n));
     } catch (err) {
       trouble = ` The list could not be read again (${err instanceof Error ? err.message : err}); Refresh asks for it.`;
     }
@@ -217,7 +200,7 @@ export function install(ctx) {
     try { focusIdeaOpener(); } catch { /* the page moved on */ }
     ui.idea.opener = '';
     ui.idea.node = null;
-    const shown = ui.thread === n && ui.threadDetail && ui.threadDetail.thread ? ` ${threadSelectionWords()}` : ui.thread === n && ui.threadError ? ` ${ui.threadError}` : '';
+    const shown = ui.thread === n && ui.threadDetail && ui.threadDetail.thread ? ` ${threadSelectionWords()}` : ui.thread === n && ui.threadError ? ` ${ui.threadError}` : !about && ui.actNote && !ui.actNote.ok ? ` ${ui.actNote.text}` : '';
     // Opened from a node: say that its "Mentioned in" lists the new thread
     const listed = about && (threadsFor(about.id) || []).some((t) => t.number === n);
     announce(`${ui.idea.message}${shown}${listed ? ` It is listed under Threads for ${about.label}.` : ''}${trouble}`);
@@ -228,7 +211,7 @@ export function install(ctx) {
     const bar = $('forge-idea');
     if (!bar) return;
     // An idea is a thread: with threads off (`threads: false`) there is no New idea, on Specs either
-    bar.hidden = (ui.kind !== 'threads' && ui.kind !== 'specs') || !!fn.detailKey() || !ui.config || ui.config.threads === false;
+    bar.hidden = (ui.kind !== 'threads' && ui.kind !== 'specs') || !ui.config || ui.config.threads === false;
     $('idea-open').setAttribute('aria-expanded', String(ui.idea.open));
     $('idea-form').hidden = !ui.idea.open;
     $('idea-send').textContent = ui.idea.busy ? 'Opening …' : 'Open the idea';
@@ -263,20 +246,19 @@ export function install(ctx) {
     const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
     const run = runOnThread(runs, t.number);
     const runWord = run ? `${runPillHtml({ esc: escHtml }, run, threadRunWords(runs, t.number), ` data-thread-run="${escHtml(run.runId)}"`)} ` : '';
-    return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-thread="${t.number}" aria-pressed="${ui.thread === t.number}" data-corn="row">
+    return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-work-ref="thread:${t.number}" aria-pressed="${fn.isShown(`thread:${t.number}`)}" data-corn="row">
       <span class="hx-forge-title">${escHtml(t.title)}</span>
       <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label" data-corn="tag">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, m.now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
   }
 
-  /** The selected thread: read-only, its messages as written, a way to reply on the forge, and the nodes its text lights */
+  /** The thread in the node panel: read-only, its messages as written, a way to reply on the forge, and the nodes its text names */
   function threadDetailHtml() {
-    const head = (title) => `${backHtml('clear-forge-thread', 'All threads')}<h3 class="hx-forge-detail-title" data-corn="detail-title">${title}</h3>`;
-    if (ui.threadError) return `${head(`Thread ${ui.thread}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>`;
-    if (!ui.threadDetail) return `${head(`Thread ${ui.thread}`)}<p class="hx-faint">Loading its messages …</p>`;
+    if (ui.threadError) return `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>`;
+    if (!ui.threadDetail) return '<p class="hx-faint">Loading its messages …</p>';
     const { thread: t, stale } = ui.threadDetail;
     const lit = ui.litThread;
     const url = safeUrl(t.url);
-    const reply = url ? `<a data-corn="text-link" class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Reply on ${escHtml(fn.forgeName())} (new tab)</a>` : '';
+    const reply = url ? `<a data-corn="open-link" data-corn-kind="primary" class="hx-btn hx-btn--primary hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Reply on ${escHtml(fn.forgeName())} ↗</a>` : '';
     const named = [
       ...(t.proposals || []).map((p) => `Proposal <code class="hx-code">${escHtml(p.slug)}</code> in pull request #${p.pull}`),
       ...(t.kind === 'proposal' ? [`Spec pull request for <code class="hx-code">${escHtml((t.slugs || []).join(', '))}</code>`] : []),
@@ -290,17 +272,15 @@ export function install(ctx) {
         : '';
       return `<li class="hx-thread-msg" data-corn="thread-message"><p class="hx-forge-meta"><strong class="hx-strong">${escHtml(msg.author ? msg.author.login : 'someone')}</strong>${msg.opening ? ' opened this' : ''} · ${escHtml(relativeTime(msg.createdAt, m.now()))}${link}</p><p class="hx-thread-body">${escHtml(msg.body.trim() === '' ? '(no text)' : msg.body)}${msg.cut ? '\n… (cut here; the rest is on the forge)' : ''}</p>${chips}</li>`;
     }).join('');
-    const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark-dot" data-corn-state="changed" aria-hidden="true"></span>a node this thread mentions</p>` : '';
-    return `${head(`#${t.number} ${escHtml(t.title)}`)}
-      <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${t.state === 'open' ? 'Open' : 'Closed'}</span> ${escHtml(threadKindWords(t))} · ${escHtml(threadMeta({ ...t, comments: t.messages.length - (t.kind === 'idea' ? 1 : 0) + (t.hidden || 0) }, m.now()))}</p>
-      <p class="hx-forge-why hx-faint">Read-only here: a thread is a conversation on ${escHtml(fn.forgeName())}, so you reply there. ${reply}</p>
+    return `<p class="hx-forge-meta">${escHtml(threadKindWords(t))} · ${escHtml(threadMeta({ ...t, comments: t.messages.length - (t.kind === 'idea' ? 1 : 0) + (t.hidden || 0) }, m.now()))}</p>
+      <p class="hx-forge-why hx-faint">Read-only here: a thread is a conversation on ${escHtml(fn.forgeName())}, so you reply there.</p>
+      ${reply ? `<div class="hx-forge-cta">${reply}</div>` : ''}
       ${named.length ? `<p class="hx-forge-meta">${named.join(' · ')}</p>` : ''}
       ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
-      <h4 class="hx-forge-sub">${escHtml(`Mentions: ${plural(lit.nodes.length, 'node')} on the map`)}</h4>
-      ${key}
+      <h3 class="hx-forge-sub">${escHtml(`Mentions: ${plural(lit.nodes.length, 'node')} on the map`)}</h3>
       ${lit.nodes.length ? `<span class="hx-forge-nodes hx-thread-nodes">${lit.nodes.map(fn.nodeButton).join('')}</span>` : '<p class="hx-faint">No message mentions a node. Write [[node-id]] or [[repo/path]] in a message to point at the map.</p>'}
       ${lit.unresolved.length ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(lit.unresolved.join(', '))} ${lit.unresolved.length === 1 ? 'is' : 'are'} mentioned but not on the map, so ${lit.unresolved.length === 1 ? 'it stays' : 'they stay'} text.</p>` : ''}
-      <h4 class="hx-forge-sub">${escHtml(plural(t.messages.length, 'message'))}</h4>
+      <h3 class="hx-forge-sub">${escHtml(plural(t.messages.length, 'message'))}</h3>
       ${t.hidden ? `<p class="hx-forge-why hx-faint">${escHtml(plural(t.hidden, 'earlier message'))} not shown; they are on ${escHtml(fn.forgeName())}.</p>` : ''}
       <ol class="hx-thread-msgs" aria-label="Messages">${msgs}</ol>`;
   }

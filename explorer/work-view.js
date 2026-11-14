@@ -5,16 +5,18 @@
  * (server/work-graph.js). Page code, as house.js is for the House view: it reads `location` and listens on `document`.
  *
  *   initWorkView({ offered })   once, after the config: the Work button of the view switch (shown when the config names a forge), the toggle, the clicks
- *   openWork({ select })        opens the view (the camera fits), asks the server for the work graph (once; again on Refresh and on the poll the Work
- *                               panel makes), and selects a node of it when `select` names one; closeWork() goes back to the map
- *   followWorkAddress()         `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=` (work-model.js `workAddress`)
+ *   openWork({ select })        opens the view (the camera fits), asks the server for the work graph (once; again on Refresh and every minute while it is open),
+ *                               and selects a node of it when `select` names one; closeWork() goes back to the map
+ *   followWorkAddress()         `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=` (work-model.js `workAddress`): the node, or for work older than the graph's
+ *                               14 days the Work list and the node panel (pieces/work-list.js `showRef`)
  *
- * What it puts on the page: the view switch's Work button, with "waiting on you" as its badge (the number the Work panel's button used to say, in the same
- * words), the toggle at the top left of the stage ("All work" and "Waiting on you"), the lanes' titles in screen space (the map draws the lanes' panels), the words
+ * What it puts on the page: the view switch's Work button, with "waiting on you" as its badge, the toggles at the top left of the stage ("All work", "Waiting on you" and
+ * **List**, which opens the Work list (pieces/work-list.js) where the side panel sat), the lanes' titles in screen space (the map draws the lanes' panels), the words
  * and the empty lanes shown at once while the first answer is on its way (the page stays usable: the views, the Layers menu, search), "Updating…" while a refresh
  * is (the last answer stays on the map, and a refresh that fails keeps it and says so), the map's own card when the answer is refused (signed out, not a maintainer,
  * offline: pieces/status.js), and a quiet line naming what the server could not read (`problems`). It answers the node panel's `work:panel` ask with what a node says in
- * the Work view, and holds the keys of the view: N and P step through the lanes, an arrow goes to the nearest node that way. Every request goes through `credentialed`;
+ * the Work view (the Work piece draws the actions into it), the Work list's `work:pick` ask by selecting that row's node, and holds the keys of the view: N and P step through
+ * the lanes, an arrow goes to the nearest node that way. Every request goes through `credentialed`;
  * every word that comes from the forge is escaped or set as text, every link goes through `safeUrl` (work-model.js).
  */
 
@@ -24,19 +26,18 @@ import { closeDrawer } from './panels.js';
 import { announce } from './engine/keyboard.js';
 import { credentialed } from './engine/connection.js';
 import { selectNode } from './engine/selection.js';
-import { closeProposal } from './engine/proposal.js';
+import { closeProposal, openProposal } from './engine/proposal.js';
 import { signInUrl } from './engine/source.js';
-import { mapStyleOf, workToken } from './engine/map-style.js';
+import { mapStyleOf, workToken, workEdgeToken } from './engine/map-style.js';
 import { t } from './engine/strings.js';
 import { mount as mountStatus } from './pieces/status.js';
 import { fitGraphToViewport, fitPadding, onPaint, render } from './render.js';
 import { isPhone } from './sheets.js';
-import { WORK_KINDS, WORK_THEMES } from '../core/schema.js';
+import { WORK_KINDS, WORK_THEMES, WORK_EDGES } from '../core/schema.js';
 import { workButtonName } from './waiting-model.js';
 import { stepFrom } from './keyboard-model.js';
-import { checksWords, pullUrl } from './forge-panel-model.js';
 import { RUNS_POLL_MS } from './pieces/work-common.js';
-import { openWorkAt, openRunLink, openIssueLink } from './forge-panel.js';
+import { showWorkRef, openForge, closeForge } from './forge-panel.js';
 import {
   CODE_LAYER, DRAFT_LAYER, KIND_WORDS, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
@@ -53,7 +54,6 @@ let offPaint = null;
 let card = null; // the map's own card (pieces/status.js)
 let timer = 0;
 let seq = 0; // the answer that is waited for: an older one is dropped
-let pullDetail = new Map(); // pull number -> { head, text } what the checks said of the head (the node panel's line)
 let wasOn = false;
 
 const inst = () => pageInstance();
@@ -67,6 +67,7 @@ export function initWorkView(opts = {}) {
   if (btn) btn.hidden = !offered;
   work();
   mount();
+  paintEdgeColors();
   if (!wired) {
     wired = true;
     const i = inst();
@@ -77,10 +78,25 @@ export function initWorkView(opts = {}) {
     i.on('work:open', ({ id }) => openWork({ select: id }));
     i.on('search:more', () => (work().status === 'ok' && !on() ? work().nodes.filter((n) => n.work) : null));
     i.on('work:waiting', ({ total }) => paintBadge(total));
+    i.on('work:available', ({ on: available }) => paintList(available));
     i.on('work:panel', (node) => panelFor(node));
-    mapStyleOf(i).onChange(() => { if (on()) { state.workRows = layerRowsOf(work().nodes).map(themed); i.emit('layers:redraw'); } });
+    i.on('work:pick', (ref) => pickRef(ref));
+    mapStyleOf(i).onChange(() => { paintEdgeColors(); if (on()) { state.workRows = layerRowsOf(work().nodes).map(themed); i.emit('layers:redraw'); i.touchScene(); render(); } });
   }
   syncWork();
+}
+
+/** The List toggle is shown while the Work piece is on (a forge in the config and somebody signed in); the piece says its own `aria-expanded` */
+function paintList(available) {
+  if (els && els.list) els.list.hidden = !available;
+}
+
+/** The colours the theme gives the Work view's lines (`--corn-work-edge-<name>`), for the scene: a name it does not set is drawn in its default (work-model.js `workEdge`) */
+function paintEdgeColors() {
+  const values = mapStyleOf(inst()).get().values;
+  const colors = {};
+  for (const name of WORK_EDGES) if (values[workEdgeToken(name)]) colors[name] = values[workEdgeToken(name)];
+  state.workEdgeColors = colors;
 }
 
 /** The Work button's badge and its spoken name: "Work, 3 waiting on you" (the Work panel's own words: waiting-model.js) */
@@ -108,6 +124,7 @@ function mount() {
   bar.hidden = true;
   bar.innerHTML = '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="all" aria-pressed="true">All work</button>'
     + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="waiting" aria-pressed="false">Waiting on you</button>'
+    + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work list" title="The lists of issues, pull requests, proposals, threads, runs and deploys" hidden>List</button>'
     + '<span class="hx-work-busy" hidden>Updating…</span>';
   const note = document.createElement('p');
   note.className = 'hx-work-note';
@@ -127,7 +144,8 @@ function mount() {
   loading.innerHTML = `<div class="hx-work-skeleton" aria-hidden="true">${['Talk', 'Decide', 'Build', 'Ship', 'Code it touches'].map((name) => `<div class="hx-work-skel-lane"><span class="hx-work-lane-title">${name}</span><i></i><i></i><i></i><i></i></div>`).join('')}</div>`
     + '<p class="hx-work-loading-text" role="status">Reading the work from the forge. A big repository can take several seconds the first time; the page works meanwhile.</p>';
   stage.append(lanes, loading, bar, note);
-  els = { stage, bar, all: bar.children[0], waiting: bar.children[1], busy: bar.children[2], note, lanes, loading };
+  els = { stage, bar, all: bar.children[0], waiting: bar.children[1], list: bar.children[2], busy: bar.children[3], note, lanes, loading };
+  paintList(!!inst().ask('work:on')); // the List toggle is there while the Work piece is on: a signed-in maintainer of a forge
   if (offPaint) offPaint();
   offPaint = onPaint(paintLanes);
   watchSize(stage);
@@ -229,7 +247,11 @@ function syncWork() {
     wasOn = open;
     clearTimeout(timer);
     if (open) timer = setTimeout(poll, RUNS_POLL_MS);
-    else if (card) card.clear();
+    else {
+      if (card) card.clear();
+      closeForge({ restoreFocus: false }); // the list is the Work view's
+      if (!state.selectedNode) inst().emit('node:close'); // a piece of work the node panel showed from the lists, with nothing selected
+    }
   }
 }
 
@@ -360,13 +382,19 @@ function arrive(body, { select, ask, quiet }) {
     const node = state.selectedNode;
     announce(i, `${opened} ${landingWords(node, shown.indexOf(node), shown.length)}`.trim());
   } else if (ask && ask.kind) {
-    // A run or an issue older than the graph's window (a link posted in chat weeks ago) is still in the Work panel's lists: the panel opens at it, as these links did before
-    const older = !ask.bad && (ask.kind === 'run' || ask.kind === 'issue');
-    announce(i, `${ask.bad || `There is no ${KIND_WORDS[ask.kind].toLowerCase()} ${ask.key} in the work now${older ? ': the Work panel looks for it' : ''}.`} ${opened}`.trim());
-    if (older) (ask.kind === 'run' ? openRunLink(ask.key) : openIssueLink(Number(ask.key))).catch(() => {});
+    // Work older than the graph's window (a link posted in chat weeks ago) is in the Work list: the list opens on its tab and the node panel shows it, as a row of the list does
+    if (ask.bad) announce(i, `${ask.bad} ${opened}`.trim());
+    else {
+      announce(i, `${KIND_WORDS[ask.kind]} ${ask.key} is not in the work drawn here: the Work list looks for it. ${opened}`.trim());
+      openForge({ tab: LIST_TAB[ask.kind] });
+      showWorkRef(ask.kind, ask.key).catch(() => {});
+    }
   } else if (opened) announce(i, opened);
   return true;
 }
+
+/** The Work list's tab for a kind of work (its names are the tabs': pieces/work-common.js TABS) */
+const LIST_TAB = Object.freeze({ pull: 'pulls', issue: 'issues', thread: 'threads', run: 'work', deploy: 'deploys', proposal: 'specs' });
 
 /** The nodes N and P step through, in the lanes' order: what is shown */
 const shownInOrder = () => work().order.map((id) => state.nodes.find((n) => n.id === id)).filter((n) => n && !n.hidden);
@@ -419,37 +447,30 @@ function setWaiting(on_) {
 /** The kind's colour as the map draws it: the theme's token, else the default (the style goes on through `data-style`, which a host's CSP allows) */
 const colorOf = (kind) => { const v = mapStyleOf(inst()).get().values[workToken(kind)]; return /^#[0-9a-f]{3,8}$/i.test(v || '') ? v : WORK_THEMES[kind] ? WORK_THEMES[kind].color : ''; };
 
-/** What the node panel shows for a node while the Work view is open (`work:panel`): a piece of work, replaced; a node of code, with the work that touches it first (work-model.js builds the markup) */
+/**
+ * What the node panel shows for a node (`work:panel`): a piece of work, replaced (the Work piece draws its actions into it: pieces/work-paint.js `paintDetail`); a node of code in
+ * the Work view, with the work that touches it first (work-model.js builds the markup). A piece of work the graph does not hold (`old`, shown from the Work list or a link) is
+ * shown the same way in any view.
+ */
 function panelFor(node) {
-  if (!on() || !node) return undefined;
+  if (!node) return undefined;
   const w = work();
-  if (node.work) {
-    const p = panelOf(node, w.nodes, w.edges);
-    if (node.item.kind === 'pull') loadChecks(node);
-    return { replace: true, badge: p.kind, title: p.title, html: workPanelHtml(p, node, { color: colorOf, checks: checksLine(node) }) };
+  if (node.work && (on() || node.old)) {
+    const p = node.old ? panelOf(node, [], []) : panelOf(node, w.nodes, w.edges);
+    return { replace: true, badge: p.kind, title: p.title, html: workPanelHtml(p, node, { color: colorOf }) };
   }
-  return { replace: false, html: codePanelHtml(node, touchedBy(node, w.nodes, w.edges), { color: colorOf }) };
+  return on() ? { replace: false, html: codePanelHtml(node, touchedBy(node, w.nodes, w.edges), { color: colorOf }) } : undefined;
 }
 
-/** What the checks of a pull request's head say, once read; "Reading the checks…" until then */
-const checksLine = (node) => {
-  const got = pullDetail.get(node.item.number);
-  return got ? got.text : 'Reading the checks…';
-};
-
-/** The checks are not in the graph: they are read from the pull request's own route when its node is opened, and painted into the panel when they arrive */
-async function loadChecks(node) {
-  const n = node.item.number;
-  const i = inst();
-  let text = 'The checks could not be read.';
-  try {
-    const res = await credentialed(i)(pullUrl(n), { headers: { accept: 'application/json' } });
-    const body = res.ok ? await res.json() : null;
-    if (body && Array.isArray(body.checks)) text = checksWords(body.checks);
-  } catch { /* said in the panel */ }
-  pullDetail.set(n, { text });
-  const el = document.getElementById('work-checks');
-  if (el && state.selectedNode && state.selectedNode.id === node.id) el.textContent = text;
+/** A row of the Work list (or a link) names a piece of work: its node is selected on the map, with the camera on it, and the live region says where it is; false when the view does not draw it */
+function pickRef(ref) {
+  if (!on() || work().status !== 'ok') return false;
+  const id = nodeForAddress(ref, work().nodes);
+  if (!id || !pick(id, { frame: true, source: 'link' })) return false;
+  const shown = shownInOrder();
+  const node = state.selectedNode;
+  if (node) announce(inst(), landingWords(node, shown.indexOf(node), shown.length));
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -484,10 +505,18 @@ function onClick(e) {
   if (show && on()) { setWaiting(show.dataset.workShow === 'waiting'); return; }
   const act = t_.closest('[data-work-action]');
   if (!act) return;
+  if (act.dataset.workAction === 'review') { reviewSpec(act.dataset.slug, act.dataset.source); return; }
   const node = state.nodes.find((n) => n.id === act.dataset.id);
-  if (!node) return;
-  if (act.dataset.workAction === 'open-in-work') openWorkAt(node.item);
-  else if (act.dataset.workAction === 'show-on-map') showOnMap(node.id);
+  if (node && act.dataset.workAction === 'show-on-map') showOnMap(node.id);
+}
+
+/** A proposal's Review: the map is the review's (Before, Diff, After lay it over the map), so the view goes back to it and the proposal opens; Approve and Send back are the review's own */
+function reviewSpec(slug, source) {
+  if (!slug) return;
+  const i = inst();
+  closeWork();
+  i.emit('node:close'); // a proposal shown from the lists has nothing selected to close it
+  openProposal(i, slug, source || null).catch(() => {});
 }
 
 /** A node of code, on the map: the view goes back to it, the node selected and in view */
@@ -535,7 +564,6 @@ export function resetWorkViewForTests() {
   els = null;
   card = null;
   seq++;
-  pullDetail = new Map();
   wasOn = false;
 }
 

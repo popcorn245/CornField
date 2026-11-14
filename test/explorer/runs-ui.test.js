@@ -16,7 +16,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -94,7 +96,7 @@ function mount(clock = () => NOW, extra = {}) {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -104,10 +106,25 @@ function mount(clock = () => NOW, extra = {}) {
   initKeyboard();
   initSheets();
   resetForgePanelForTests(clock);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock });
+  resetWorkViewForTests();
+  const on = initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work: the actions are in it (spec 0012 D5)
+  return on;
 }
+/** A piece of work in the node panel (no Work view in this page: it is shown there alone, as work older than the graph's 14 days is) */
+const showWork = async (kind, key) => { await showWorkRef(kind, String(key)); await settle(); };
 const openIssues = async () => { openForge({ tab: 'pulls' }); await settle(); click(q('[data-forge-kind="issues"]')); await settle(); };
-const openAgents = async () => { openForge({ tab: 'pulls' }); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
+/** The Issues list, and issue `n` in the node panel, where its Start an agent is */
+const openIssue = async (n = 7) => { await openIssues(); await showWork('issue', n); };
+/** The Runs tab, and (unless `card` is false) the first run listed in the node panel, where its card is */
+const openAgents = async (card = true) => {
+  openForge({ tab: 'pulls' });
+  await settle();
+  click(q('[data-forge-kind="work"]'));
+  await settle();
+  const first = q('#forge-runs-list [data-work-ref]');
+  if (card && first) await showWork('run', first.dataset.workRef.slice('run:'.length));
+};
 const audit = async () => {
   const r = await axe.run({ include: [document.documentElement] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false }, region: { enabled: false } } });
   return r.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`));
@@ -141,9 +158,10 @@ describe('Start an agent', () => {
   it('is on an open issue, named for it, and opens a dialog with the focus in it', async () => {
     fakeServer();
     expect(mount()).toBe(true);
-    await openIssues();
-    const buttons = qa('[data-forge-agent]');
-    expect(buttons.map((b) => b.dataset.forgeAgent)).toEqual(['issue:7', 'issue:5']);
+    await openIssue(7);
+    expect(qa('#forge-list [data-forge-agent]')).toHaveLength(0); // the actions are the node panel's
+    const buttons = qa('#forge-detail [data-forge-agent]');
+    expect(buttons.map((b) => b.dataset.forgeAgent)).toEqual(['issue:7']);
     expect(buttons[0].getAttribute('aria-label')).toBe('Start an agent on issue 7');
     click(buttons[0]);
     await settle();
@@ -162,7 +180,7 @@ describe('Start an agent', () => {
   it('has no profile choice when the config lists none', async () => {
     fakeServer({ profiles: [] });
     mount();
-    await openIssues();
+    await openIssue();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
     expect($('agent-profile-field').hidden).toBe(true);
@@ -177,7 +195,7 @@ describe('Start an agent', () => {
     const fields = () => ['minutes', 'turns', 'cost', 'tokens'].map((k) => $(`agent-limit-${k}`).value);
     const server = fakeServer({ limits: { minutes: 30, claude: { cost: 5, minutes: 60 } } });
     mount();
-    await openIssues();
+    await openIssue();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
     expect($('agent-limits-edit').hidden).toBe(false);
@@ -200,7 +218,7 @@ describe('Start an agent', () => {
   it('leaves the limit fields blank and sends no limits when the config sets none', async () => {
     const server = fakeServer();
     mount();
-    await openIssues();
+    await openIssue();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
     expect($('agent-limits-edit').hidden).toBe(false);
@@ -210,20 +228,18 @@ describe('Start an agent', () => {
     expect(JSON.parse(server.posts()[0].init.body)).not.toHaveProperty('limits');
   });
 
-  it('is also on an issue group and a proposal group of the Agents tab', async () => {
+  it('is not in the Agents tab\'s groups: a group names its issue or proposal, and the actions are in the node panel', async () => {
     fakeServer();
     mount();
-    await openAgents();
-    expect(qa('#forge-list [data-forge-agent]').map((b) => b.dataset.forgeAgent).sort()).toEqual(['issue:7', 'proposal:0040-meals']);
-    click(q('[data-forge-agent="proposal:0040-meals"]'));
-    await settle();
-    expect($('agent-start-about').textContent).toBe('About proposal 0040-meals');
+    await openAgents(false);
+    expect(qa('#forge-list [data-forge-agent]')).toHaveLength(0);
+    expect(qa('#forge-list .hx-forge-group').length).toBeGreaterThan(0);
   });
 
   it('posts once what was chosen, and nothing the person did not choose; the focus goes back to the button', async () => {
     const server = fakeServer();
     mount();
-    await openIssues();
+    await openIssue();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
     $('agent-kind').value = 'summary';
@@ -243,7 +259,7 @@ describe('Start an agent', () => {
   it('says a refusal in the server\'s words and keeps the dialog; a run already open offers to ask on purpose, the cap does not', async () => {
     fakeServer({ start: { status: 409, body: { ok: false, code: 'run-open', error: 'issue #7 already has an open run: run-01JC (working).' } } });
     mount();
-    await openIssues();
+    await openIssue();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
     q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -265,7 +281,7 @@ describe('Start an agent', () => {
   it('keeps the focus in the dialog, closes on Escape and Cancel, and gives the focus back', async () => {
     fakeServer();
     mount();
-    await openIssues();
+    await openIssue();
     const opener = q('[data-forge-agent="issue:7"]');
     opener.focus();
     click(opener);
@@ -292,25 +308,35 @@ describe('Start an agent', () => {
 });
 
 describe('the runs on the Agents tab', () => {
-  it('lists each run with its state, what it is about, the runner\'s words escaped, links, and Stop only where it can be asked', async () => {
+  it('lists each run as a row with its state and what it is about; its card is the node panel\'s: the runner\'s words escaped, links, and Stop only where it can be asked', async () => {
     fakeServer();
     mount();
-    await openAgents();
+    await openAgents(false);
     expect(q('#forge-runs').hidden).toBe(false);
     expect($('forge-runs-status').textContent).toBe('1 open of 3 allowed, 2 runs');
-    const rows = qa('#forge-runs-list > li[data-run], #forge-runs-list > li.hx-run-group');
-    expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain('Working');
-    expect(rows[0].textContent).toContain('code on issue #7');
-    expect(rows[0].textContent).toContain('Runner: tests <img src=x onerror=alert(1)> failing');
-    expect(rows[0].querySelector('img')).toBe(null);
-    expect([...rows[0].querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/7#issuecomment-9', 'https://github.com/owner/name/issues/7', 'https://git.example.test/owner/name/pull/50', 'https://ci.example.org/1']);
+    const list = qa('#forge-runs-list [data-work-ref]');
+    expect(list.map((r) => r.dataset.workRef)).toEqual([`run:${RUN.runId}`, `run:${QUIET.runId}`]);
+    expect(list[0].textContent).toContain('Working');
+    expect(list[0].textContent).toContain('code on issue #7');
+    expect(list[1].textContent).toContain('Quiet');
+    expect(list[0].textContent).not.toContain(RUN.runId);
+    expect(qa('#forge-runs-list [data-run]')).toHaveLength(0); // a row never holds the card
+    await showWork('run', RUN.runId);
+    const card = q('#forge-run-card > li[data-run]');
+    expect(card.textContent).toContain('Working');
+    expect(card.textContent).toContain('code on issue #7');
+    expect(card.textContent).toContain('Runner: tests <img src=x onerror=alert(1)> failing');
+    expect(card.querySelector('img')).toBe(null);
+    expect([...card.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/7#issuecomment-9', 'https://github.com/owner/name/issues/7', 'https://git.example.test/owner/name/pull/50', 'https://ci.example.org/1']);
     // a run is named by what the card shows, never by its id; the name starts with the visible label
-    expect(rows[0].querySelector('[data-forge-stop]').getAttribute('aria-label')).toBe('Stop: code on issue #7, profile claude, asked by maintainer-one, 1 hour ago');
-    expect(rows[0].textContent).not.toContain(RUN.runId);
-    expect(rows[1].textContent).toContain('Quiet');
-    expect(rows[1].textContent).toMatch(/no longer counts toward the limit/);
-    expect(rows[1].querySelector('[data-forge-stop]')).toBe(null);
+    expect(card.querySelector('[data-forge-stop]').getAttribute('aria-label')).toBe('Stop: code on issue #7, profile claude, asked by maintainer-one, 1 hour ago');
+    expect(card.textContent).not.toContain(RUN.runId);
+    expect(card.querySelector('[data-run-select]')).toBe(null); // nothing is lit on the map any more
+    await showWork('run', QUIET.runId);
+    const quiet = q('#forge-run-card > li[data-run]');
+    expect(quiet.textContent).toContain('Quiet');
+    expect(quiet.textContent).toMatch(/no longer counts toward the limit/);
+    expect(quiet.querySelector('[data-forge-stop]')).toBe(null);
     // the section is only on the Agents tab
     click(q('[data-forge-kind="issues"]'));
     await settle();
@@ -345,7 +371,7 @@ describe('the runs on the Agents tab', () => {
     // the result is in the run's own card, by the control that was used, not at the top of a list that may be scrolled away
     expect(q(`[data-run-result="${RUN.runId}"]`).textContent).toMatch(/^Asked this run to stop\. The runner decides/);
     expect(q(`[data-run="${RUN.runId}"]`).contains(q(`[data-run-result="${RUN.runId}"]`))).toBe(true);
-    expect(qa('#forge-runs-list > li[data-run], #forge-runs-list > li.hx-run-group')[0].textContent).toContain('Stop requested');
+    expect(qa('#forge-run-card > li[data-run]')[0].textContent).toContain('Stop requested');
     expect(q('[data-forge-stop]')).toBe(null);
     expect(await said()).toMatch(/to stop/);
   });
@@ -375,7 +401,7 @@ describe('a run that waits for an answer (issue #101)', () => {
     fakeServer(waiting());
     mount();
     await openAgents();
-    const row = q('#forge-runs-list > li[data-run]');
+    const row = q('#forge-run-card > li[data-run]');
     expect(row.textContent).toContain('Waiting');
     expect(row.textContent).toContain('Runner: Plan ready <b>approve</b> to build');
     expect(row.querySelector('b')).toBe(null);
@@ -398,7 +424,7 @@ describe('a run that waits for an answer (issue #101)', () => {
     await settle();
     expect(server.posts().map((p) => [p.url, JSON.parse(p.init.body)])).toEqual([[`/api/agent-runs/${WAITING.runId}/answer`, { action: 'continue' }]]);
     expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toMatch(/^Told this run to continue\. The runner picks it up/);
-    expect(q('#forge-runs-list > li[data-run]').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
+    expect(q('#forge-run-card > li[data-run]').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
     expect(await said()).toMatch(/Told this run to continue/);
     // the reply: empty is not sent; typed text is, once, and the field is empty again
     click(q('[data-run-answer="reply"]'));
@@ -413,8 +439,8 @@ describe('a run that waits for an answer (issue #101)', () => {
     await settle();
     expect(JSON.parse(server.posts()[1].init.body)).toEqual({ action: 'reply', text: 'Use the second <i>plan</i>.' });
     expect(q('[data-run-reply]').value).toBe('');
-    expect(q('#forge-runs-list > li[data-run]').textContent).toContain('answered: reply: Use the second <i>plan</i>.');
-    expect(q('#forge-runs-list i')).toBe(null);
+    expect(q('#forge-run-card > li[data-run]').textContent).toContain('answered: reply: Use the second <i>plan</i>.');
+    expect(q('#forge-run-card i')).toBe(null);
     click(q('[data-run-answer="stop"]'));
     await settle();
     expect(JSON.parse(server.posts()[2].init.body)).toEqual({ action: 'stop' });
@@ -494,7 +520,7 @@ describe.each(['dark', 'light'])('accessibility, %s theme, a waiting run', (them
     mount();
     document.documentElement.dataset.theme = theme;
     await openAgents();
-    expect(qa('[data-run-answer="continue"]')).toHaveLength(2);
+    expect(qa('[data-run-answer="continue"]')).toHaveLength(1);
     expect(await audit()).toEqual([]);
     click(q('[data-run-timeline]'));
     await settle();
@@ -560,6 +586,7 @@ describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
     await openAgents();
     expect($('forge-runs-runner').hidden).toBe(false);
     expect(await audit()).toEqual([]);
+    await showWork('issue', 7);
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
     expect($('agent-limit-minutes').value).toBe('30');
@@ -617,15 +644,15 @@ describe('whether a runner is online (issue #99)', () => {
   it('shows the warning on the Start dialog when none has polled lately', async () => {
     fakeServer({ presence: presence(360) });
     mount();
-    await openIssues();
-    click(q('[data-forge-agent="issue:7"]'));
+    await openIssue();
+    click(q('[data-forge-agent=\"issue:7\"]'));
     await settle();
     expect($('agent-start').hidden).toBe(false);
     expect($('agent-start-runner').hidden).toBe(false);
     expect($('agent-start-runner').textContent).toBe('No runner has polled for 6 min: a queued run will wait');
   });
 
-  it('while no runner is online the Runs tab shows a notice at the top, the Work button a dot, and Ask the runner reads Queue it (issue #183)', async () => {
+  it('while no runner is online the Runs tab shows a notice at the top, and Ask the runner reads Queue it (issue #183)', async () => {
     fakeServer({ presence: presence(360) });
     mount();
     await openAgents();
@@ -633,23 +660,19 @@ describe('whether a runner is online (issue #99)', () => {
     expect(runner.dataset.corn).toBe('notice');
     expect(runner.dataset.cornState).toBe('waiting');
     expect(runner.compareDocumentPosition($('forge-runs-status')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // above the status line, not a faint line under it
-    expect($('forge-btn-dot').hidden).toBe(false);
-    expect($('forge-btn').getAttribute('aria-label')).toMatch(/, no runner online/);
-    await openIssues();
-    click(q('[data-forge-agent="issue:7"]'));
+    await openIssue();
+    click(q('[data-forge-agent=\"issue:7\"]'));
     await settle();
     expect($('agent-start-go').textContent).toBe('Queue it (no runner online)');
   });
 
-  it('with a runner online there is no dot, the faint line stays, and the button reads Ask the runner', async () => {
+  it('with a runner online the faint line stays, and the button reads Ask the runner', async () => {
     fakeServer({ presence: presence(20) });
     mount();
     await openAgents();
-    expect($('forge-btn-dot').hidden).toBe(true);
-    expect($('forge-btn').getAttribute('aria-label')).not.toMatch(/no runner online/);
     expect($('forge-runs-runner').dataset.corn).toBeUndefined();
-    await openIssues();
-    click(q('[data-forge-agent="issue:7"]'));
+    await openIssue();
+    click(q('[data-forge-agent=\"issue:7\"]'));
     await settle();
     expect($('agent-start-go').textContent).toBe('Ask the runner');
   });
@@ -659,8 +682,8 @@ describe('whether a runner is online (issue #99)', () => {
     mount();
     await openAgents();
     expect($('forge-runs-runner').hidden).toBe(true);
-    await openIssues();
-    click(q('[data-forge-agent="issue:7"]'));
+    await openIssue();
+    click(q('[data-forge-agent=\"issue:7\"]'));
     await settle();
     expect($('agent-start-runner').hidden).toBe(true);
   });
@@ -709,8 +732,11 @@ describe('Start again', () => {
   it('is a button on failed and stopped runs only', async () => {
     fakeServer({ runs: [FAILED, STOPPED, DONE, RUN, QUIET, WAITING] });
     mount();
-    await openAgents();
-    expect(qa('[data-forge-retry]').map((b) => b.dataset.forgeRetry).sort()).toEqual([FAILED.runId, STOPPED.runId]);
+    await openAgents(false);
+    const again = [];
+    for (const r of [FAILED, STOPPED, DONE, RUN, QUIET, WAITING]) { await showWork('run', r.runId); again.push(...qa('[data-forge-retry]').map((b) => b.dataset.forgeRetry)); }
+    expect(again.sort()).toEqual([FAILED.runId, STOPPED.runId]);
+    await showWork('run', FAILED.runId);
     expect(q(`[data-forge-retry="${FAILED.runId}"]`).textContent).toBe('Start again');
   });
 
@@ -718,6 +744,7 @@ describe('Start again', () => {
     const server = fakeServer({ runs: [FAILED, STOPPED] });
     mount();
     await openAgents();
+    await showWork('run', FAILED.runId);
     click(q(`[data-forge-retry="${FAILED.runId}"]`));
     await settle();
     expect($('agent-start').hidden).toBe(false);
@@ -745,6 +772,7 @@ describe('Start again', () => {
     const server = fakeServer({ runs: [STOPPED], profiles: ['claude'], limits: { turns: 9 } });
     mount();
     await openAgents();
+    await showWork('run', STOPPED.runId);
     click(q(`[data-forge-retry="${STOPPED.runId}"]`));
     await settle();
     expect(server.urls()).toContain(`/api/agent-runs/${STOPPED.runId}/brief`);
@@ -757,7 +785,8 @@ describe('Start again', () => {
     expect($('agent-limit-turns').value).toBe('');
     click(q('[data-action="agent-start-cancel"]'));
     await settle();
-    click(q('[data-forge-agent="proposal:0040-meals"]'));
+    await showWork('issue', 7);
+    click(q('[data-forge-agent="issue:7"]'));
     await settle();
     expect($('agent-start-title').textContent).toBe('Start an agent');
     expect($('agent-retry-note').hidden).toBe(true);
@@ -772,6 +801,7 @@ describe('Start again', () => {
     const server = fakeServer({ runs: [FAILED], profiles: ['claude'], start: { status: 400, body: { ok: false, code: 'invalid', error: '"profile" "local-qwen" is not one of the configured profiles (claude).' } } });
     mount();
     await openAgents();
+    await showWork('run', FAILED.runId);
     click(q(`[data-forge-retry="${FAILED.runId}"]`));
     await settle();
     expect($('agent-profile').value).toBe('local-qwen');
@@ -801,6 +831,7 @@ describe('Start again', () => {
     const server = fakeServer({ runs: [FAILED] });
     mount();
     await openAgents();
+    await showWork('run', FAILED.runId);
     click(q(`[data-forge-retry="${FAILED.runId}"]`));
     await settle();
     $('agent-limit-turns').value = '0';
@@ -823,11 +854,13 @@ describe('Start again', () => {
     const server = fakeServer({ runs: [FAILED, STOPPED], brief: { status: 404, body: { ok: false, error: 'cornfield has no such run.', code: 'not-found' } } });
     mount();
     await openAgents();
+    await showWork('run', FAILED.runId);
     click(q(`[data-forge-retry="${FAILED.runId}"]`));
     await settle();
     expect(server.urls().some((u) => u.endsWith('/brief'))).toBe(false);
     click(q('[data-action="agent-start-cancel"]'));
     await settle();
+    await showWork('run', STOPPED.runId);
     click(q(`[data-forge-retry="${STOPPED.runId}"]`));
     await settle();
     expect(server.urls()).toContain(`/api/agent-runs/${STOPPED.runId}/brief`);
@@ -844,21 +877,24 @@ describe('the Runs view links a run to the one it retries', () => {
   it('shows both ways, with a button that goes to the other run, and in the timeline', async () => {
     fakeServer({ runs: [NEW, OLD] });
     mount();
-    await openAgents();
+    await openAgents(false);
+    await showWork('run', NEW.runId);
     const newRow = q(`[data-run="${NEW.runId}"]`);
-    const oldRow = q(`[data-run="${OLD.runId}"]`);
     expect(newRow.textContent).toContain('Starts again on summary on issue #7, profile local-qwen, asked by maintainer-one');
-    expect(oldRow.textContent).toContain('Started again as code on issue #7, profile claude, asked by maintainer-one');
     expect(newRow.textContent).not.toContain(FAILED.runId); // an id is shown nowhere
-    click(newRow.querySelector('[data-run-goto]'));
-    expect(document.activeElement).toBe(oldRow);
-    click(oldRow.querySelector('[data-run-goto]'));
-    expect(document.activeElement).toBe(newRow);
     click(newRow.querySelector('[data-run-timeline]'));
     await settle();
     const tl = q(`#run-tl-${NEW.runId}`);
     expect(tl.textContent).toContain('Starts again on summary on issue #7');
     expect(tl.querySelector(`[data-run-goto="${FAILED.runId}"]`)).not.toBeNull();
+    click(q(`[data-run="${NEW.runId}"] [data-run-goto]`)); // the button goes to the other run: its card is the node panel's now
+    await settle();
+    const oldRow = q(`[data-run="${OLD.runId}"]`);
+    expect(oldRow.textContent).toContain('Started again as code on issue #7, profile claude, asked by maintainer-one');
+    expect(q(`[data-run="${NEW.runId}"]`)).toBeNull();
+    click(q(`[data-run="${OLD.runId}"] [data-run-goto]`));
+    await settle();
+    expect(q(`[data-run="${NEW.runId}"]`)).not.toBeNull();
   });
 
   it('names a run that is not in the list as text, with no button', async () => {
@@ -877,10 +913,12 @@ describe.each(['dark', 'light'])('accessibility, %s theme, Start again', (theme)
     fakeServer({ runs: [NEW, { ...FAILED, retriedBy: [NEW.runId] }, STOPPED], start: { status: 409, body: { ok: false, code: 'cap-reached', error: 'owner/name already has 3 open runs.' } } });
     mount();
     document.documentElement.dataset.theme = theme;
-    await openAgents();
+    await openAgents(false);
+    await showWork('run', NEW.runId);
     click(q(`[data-run="${NEW.runId}"] [data-run-timeline]`));
     await settle();
     expect(await audit()).toEqual([]);
+    await showWork('run', FAILED.runId);
     click(q(`[data-forge-retry="${FAILED.runId}"]`));
     await settle();
     expect($('agent-limits-edit').hidden).toBe(false);

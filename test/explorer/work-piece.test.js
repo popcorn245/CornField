@@ -160,12 +160,28 @@ describe('the Work piece and the proposal piece, in either order', () => {
   });
 });
 
+/**
+ * What the node panel and the Work view do for a piece of work, as a host's page would not: a place for its actions (`forge-detail`) and the news that it is shown (`node:painted`).
+ * cornfield's page does it with pieces/node-panel.js and work-view.js; the Work piece draws the actions into the place.
+ */
+function painted(one, item) {
+  one.root.querySelector('#forge-detail')?.remove();
+  const box = document.createElement('section');
+  box.id = 'forge-detail';
+  box.dataset.corn = 'work-detail';
+  box.dataset.workKind = item.kind;
+  one.root.append(box);
+  one.inst.emit('node:painted', { node: { id: item.id, work: item.kind, item } });
+}
+const PIECE_ISSUE = { kind: 'issue', id: 'issue:5', number: 5, title: 'Five', open: true, state: 'open' };
+const PIECE_PULL = { kind: 'pull', id: 'pull:7', number: 7, title: 'Seven', open: true, state: 'open' };
+
 describe('one dialog at a time', () => {
   it('Start an agent opened while a spec\'s plan is being read: the plan, when it comes, opens no second dialog over it', async () => {
     const srv = server({ hold: ['/api/forge/issues/5/spec'] });
     const one = make(srv);
     await settle();
-    one.work.openForge({ tab: 'issues' });
+    painted(one, PIECE_ISSUE);
     await settle();
     click(one.q('[data-forge-spec="5"]')); // the plan is asked for, and held
     await settle();
@@ -184,9 +200,7 @@ describe('one dialog at a time', () => {
     const srv = server();
     const one = make(srv);
     await settle();
-    one.work.openForge({ tab: 'pulls' });
-    await settle();
-    click(one.q('[data-forge-pr="7"]'));
+    painted(one, PIECE_PULL);
     await settle();
     click(one.q('[data-forge-merge]'));
     expect(one.q('#forge-confirm').hidden).toBe(false);
@@ -204,9 +218,7 @@ describe('the focus trap in a root that is not the document', () => {
       const srv = server();
       const one = make(srv);
       await settle();
-      one.work.openForge({ tab: 'pulls' });
-      await settle();
-      click(one.q('[data-forge-pr="7"]'));
+      painted(one, PIECE_PULL);
       await settle();
       if (dialog === 'confirm') click(one.q('[data-forge-merge]')); else await one.work.openProposalStart('0042-x');
       const box = one.q(dialog === 'confirm' ? '#forge-confirm' : '#agent-start');

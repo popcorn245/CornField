@@ -212,12 +212,12 @@ export function mergeSpecs(entries) {
  * One row: title, a pill that says its review state (To decide, Changed since approved, Sent back, Approved, Draft PR, Local, spec 0010 D4),
  * who and when beside it ("Approved by maintainer-one \u00b7 2 hours ago", "Waiting 2 days"), a line of what it is for, and the meta (spec number,
  * where it is, +added ~changed \u2212removed, scenarios). A review that could not be read says so, with a way to try again, and never looks
- * unreviewed. A proposal that could not be read is a row that says why and opens nothing. Same `open-proposal` action as the Proposals menu's row.
+ * unreviewed. A proposal that could not be read is a row that says why and opens nothing. A row selects the proposal's node (`data-work-ref`: work-list.js); the review is opened from the node panel.
  * What the forge said (a login, a date) is escaped; the pill's state is one of a fixed list.
  * @param {{ slug: string, source: string, title?: string, summary?: string, spec?: string, pull?: {number: number, draft?: boolean}, review?: object | null, counts?: {added?: number, changed?: number, removed?: number, scenarios?: number}, errors?: number, error?: string }} entry
- * @param {{ current?: {slug: string, source: string} | null, nowMs?: number }} [opts] the proposal that is open now; the clock
+ * @param {{ shown?: string | null, nowMs?: number }} [opts] the row the node panel shows now (`proposal:<slug>`); the clock
  */
-export function specRowHtml(entry, { current = null, nowMs = Date.now() } = {}) {
+export function specRowHtml(entry, { shown = null, nowMs = Date.now() } = {}) {
   const head = `<span class="hx-forge-title">${escHtml(entry.title || entry.slug)}</span>`;
   if (entry.error) {
     return `<li class="hx-forge-item"><div class="hx-forge-row hx-forge-spec" data-corn="row">${head}<span class="hx-forge-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-forge-meta">${escHtml(specWhere(entry))}</span></div></li>`;
@@ -237,9 +237,9 @@ export function specRowHtml(entry, { current = null, nowMs = Date.now() } = {}) 
     c.scenarios ? `<span>${c.scenarios} ${c.scenarios === 1 ? 'scenario' : 'scenarios'}</span>` : '',
     entry.errors ? `<span class="hx-warn">${entry.errors} ${entry.errors === 1 ? 'problem' : 'problems'}</span>` : '',
   ].filter(Boolean).join('');
-  const mine = !!current && current.slug === entry.slug && (current.source === entry.source || (Array.isArray(entry.also) && entry.also.includes(current.source)));
+  const mine = shown === `proposal:${entry.slug}`;
   const unread = state === 'unknown' ? `<p class="hx-forge-meta hx-forge-unread" data-corn="message" data-corn-state="failure">${escHtml(entry.review && entry.review.error ? entry.review.error : 'The forge could not be asked.')} <button type="button" class="hx-btn hx-forge-act" data-corn-kind="quiet" data-action="retry-forge" aria-label="Try again: ${escHtml(entry.title || entry.slug)}">Try again</button></p>` : '';
-  return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" aria-pressed="${mine}" data-corn="row">`
+  return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-work-ref="proposal:${escHtml(entry.slug)}" aria-pressed="${mine}" data-corn="row">`
     + `<span class="hx-forge-line">${head}${pill}</span>`
     + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button>${unread}</li>`;
 }

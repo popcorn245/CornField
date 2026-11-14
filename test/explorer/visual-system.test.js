@@ -87,7 +87,6 @@ describe('a bar\'s controls are one height, --corn-control-height (read through 
   const READS = [
     ['the header: the Layers chip', '.hx-layers-chip', 'height'],
     ['the header: the search field', '.hx-search', 'height'],
-    ['the header: Work', '.hx-work', 'height'],
     ['the header: the account button', '.hx-account-btn', 'height'],
     ['the proposal bar: Edit and My edits', '.hx-proposal-tools .hx-btn', 'height'],
     ['the proposal bar: the more button', '.hx-proposal-more .hx-btn--icon', 'height'],

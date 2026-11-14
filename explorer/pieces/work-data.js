@@ -1,18 +1,17 @@
 /**
  * @module explorer/pieces/work-data
  *
- * The Work panel's asking: every request, the list a tab shows, what a selection lights on the map, the counts read quietly. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
+ * The Work list's asking: every request, the list a tab shows, what the piece of work in the node panel holds, the counts read quietly. Part of the Work piece (pieces/work.js): `install(ctx)` makes this part's functions for one mount, and hands the ones other parts call
  * to `ctx.fn`; nothing is shared between two mounts.
  */
 
-import { litOfRun } from '../runs-model.js';
 import { listUrl, pullUrl, filterItems, litFor, errorWords, listKeyOf, litForDeploy, threadUrl, litForThread } from '../forge-panel-model.js';
 import { plural, threadOf, FORGE_NAMES } from './work-common.js';
 import { credentialed } from '../engine/connection.js';
 
 export function install(ctx) {
   const { inst, ui, m, fn, state, $ } = ctx;
-  const { announce, render, touchScene, repaintThreads, isOffline } = ctx.h;
+  const { announce, repaintThreads, isOffline } = ctx.h;
 
   /** Every request carries the maintainer's session to the base's own origin only (engine/connection.js) */
   const ask = credentialed(inst);
@@ -83,7 +82,7 @@ export function install(ctx) {
         // A thread's row names the state of the run that is about it (issue #104): the runs are read, once, when the tab is the first thing opened
         if (!ui.runs) fn.loadRuns(false, { say: false }).then(() => { if (ui.open && ui.kind === 'threads') fn.paint(); }, () => {});
       }
-      if (!quiet) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
+      if (!quiet && !(ui.actNote && !ui.actNote.ok)) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`); // a link that found nothing has said so: the count would cover it
     } else {
       ui.error = failWords(res, `the ${kindWords()}s`);
       if (!quiet) announce(ui.error);
@@ -107,33 +106,26 @@ export function install(ctx) {
     if (ui.kind !== 'specs') fn.readSpecsQuiet(); // the specs part of the number is read when Work opens (spec 0010 D2)
   }
 
-  /** What the selected pull request lights, worked out again: for the nodes now on the map */
-  function relight() {
+  /** The answer the Work list already read of a piece of work it is about to show (a pull request or a thread older than the graph's window is read to be made a node): used once, never kept */
+  function preloaded(kind, n) {
+    const got = m.preload && m.preload.kind === kind && m.preload.n === n ? m.preload.res : null;
+    m.preload = null;
+    return got;
+  }
+
+  /** What the piece of work in the node panel holds, worked out again: for the nodes now on the map (its files, the nodes a thread or a deploy names) */
+  function figure() {
     ui.nodesSeen = state.nodes;
-    if (ui.runSel) {
-      const run = fn.runById(ui.runSel);
-      state.forgeLit = run ? litOfRun(run) : null;
-    } else if (ui.threadDetail && ui.threadDetail.thread) {
-      ui.litThread = litForThread(ui.threadDetail.thread, state.nodes);
-      state.forgeLit = { changed: ui.litThread.changed, failing: ui.litThread.failing };
-    } else if (ui.deployItem) {
-      ui.litDeploy = litForDeploy(ui.deployItem, state.nodes);
-      state.forgeLit = { changed: ui.litDeploy.changed, failing: ui.litDeploy.failing };
-    } else if (ui.detail) {
-      ui.lit = litFor(ui.detail, state.nodes);
-      state.forgeLit = { changed: ui.lit.changed, failing: ui.lit.failing };
-    } else {
-      ui.lit = null;
-      state.forgeLit = null;
-    }
-    touchScene();
-    render();
+    if (ui.threadDetail && ui.threadDetail.thread) ui.litThread = litForThread(ui.threadDetail.thread, state.nodes);
+    else if (ui.deployItem) ui.litDeploy = litForDeploy(ui.deployItem, state.nodes);
+    else if (ui.detail) ui.lit = litFor(ui.detail, state.nodes);
+    else ui.lit = null;
     fn.paint();
   }
 
-  /** A proposal opening, or the live layer, changes the nodes: the lights follow them */
+  /** A proposal opening, or the live layer, changes the nodes: what the node panel holds follows them */
   function onNodesChange() {
-    if ((ui.detail || ui.deployItem || ui.threadDetail) && state.nodes !== ui.nodesSeen) relight();
+    if ((ui.detail || ui.deployItem || ui.threadDetail) && state.nodes !== ui.nodesSeen) figure();
     repaintThreads();
   }
 
@@ -143,10 +135,11 @@ export function install(ctx) {
     if (ui.kind === 'notes') { await fn.loadNotes(true); return; }
     const n = ui.selected;
     await loadList(true, quiet);
+    if (ui.runShown) await fn.loadRuns(true, { say: false }); // the run in the node panel: as the runners now report it
     if (ui.deployItem) {
       // The list is read again: the deploy as the forge now has it (still running, now finished), else the last copy
       const again = ui.lists.deploys && ui.lists.deploys.items.find((d) => d.id === ui.deploy);
-      if (again) { ui.deployItem = again; relight(); }
+      if (again) { ui.deployItem = again; figure(); }
       return;
     }
     if (ui.thread !== null) {
@@ -156,7 +149,7 @@ export function install(ctx) {
       const thread = threadOf(res);
       if (token !== m.threadToken || !thread) return;
       ui.threadDetail = { thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
-      relight();
+      figure();
       return;
     }
     if (n !== null && ui.selected === n) {
@@ -164,7 +157,7 @@ export function install(ctx) {
       const res = await request(pullUrl(n), true);
       if (token !== m.pullToken || !res.ok) return;
       ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], specs: res.body.specs || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
-      relight();
+      figure();
       await fn.loadLanding(n, token);
     }
   }
@@ -174,5 +167,5 @@ export function install(ctx) {
     if (ui.open && (ui.error || (ui.runs && ui.runs.error) || ui.detailError || (ui.kind === 'notes' && ui.notes.error))) refreshForge({ quiet: true });
   }
 
-  Object.assign(fn, { forgeName, listKey, current, kindWords, failWords, request, post, loadList, primeCounts, relight, onNodesChange, refreshForge, readOnline });
+  Object.assign(fn, { preloaded, forgeName, listKey, current, kindWords, failWords, request, post, loadList, primeCounts, figure, onNodesChange, refreshForge, readOnline });
 }

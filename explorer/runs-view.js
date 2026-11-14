@@ -9,7 +9,7 @@
  */
 
 import { relativeTime } from './review-model.js';
-import { runTone, canRetry, aboutWords, runName, statusWords, statusWhy, runMeta, canStop, canAnswer, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
+import { runTone, canRetry, aboutWords, runName, statusWords, statusWhy, runMeta, canStop, canAnswer, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
 import { cornState, cornStateAttr, stateIconHtml } from './corn-state.js';
 import { t } from './strings.js';
 import { runGroups } from './waiting-model.js';
@@ -25,7 +25,6 @@ import { runGroupHeadingHtml } from './waiting-view.js';
  * @property {string} forgeType 'github' | 'forgejo'
  * @property {number} now
  * @property {{ id: string, label?: string }[]} nodes the map's nodes, for names
- * @property {string | null} selected the run lit on the map
  * @property {Set<string>} timelines the runs whose timeline is open
  * @property {boolean} busy an action is in flight
  * @property {Map<string, string>} [replies] the reply typed so far for each waiting run, so a repaint keeps it
@@ -143,7 +142,6 @@ export function loadingLinesHtml(n = 1) {
 /** One run */
 export function runHtml(ctx, run, all) {
   const say = ctx.t || t;
-  const lit = ctx.selected === run.runId;
   const open = ctx.timelines.has(run.runId);
   const why = statusWhy(run);
   const name = ctx.esc(runName(run, ctx.now));
@@ -157,8 +155,6 @@ export function runHtml(ctx, run, all) {
   const limits = limitRows(run);
   const count = (run.timeline || []).length;
   const links = linksHtml(ctx, run);
-  const noNodes = !(run.nodes || []).length;
-  const lightWords = lit ? 'Lit on the map' : 'Light on the map';
   const result = resultHtml(ctx, run);
   return `<li class="hx-run hx-forge-file" data-run="${ctx.esc(run.runId)}" tabindex="-1" data-corn="run"${cornStateAttr(run.status)}>
     <div class="hx-run-head">${runPillHtml(ctx, run, statusWords(run))} <span class="hx-name">${ctx.esc(run.kind)} on ${ctx.esc(aboutWords(run.refs))}</span>${run.profile ? ` <span class="hx-faint">profile ${ctx.esc(run.profile)}</span>` : ''}</div>
@@ -171,25 +167,21 @@ export function runHtml(ctx, run, all) {
     ${links ? `<p class="hx-forge-meta">${links}</p>` : ''}
     ${answering ? `${answerHtml(ctx, run)}${result}` : unsentHtml(ctx, run)}${run.answer && !answering ? answeredHtml(ctx, run) : ''}
     <div class="hx-run-actions" data-corn="run-actions">${stop}${retry}
-      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-select="${ctx.esc(run.runId)}" aria-pressed="${lit}" aria-label="${lightWords}: ${name}"${noNodes ? ` disabled title="No node on the map yet, so there is nothing to light" aria-describedby="run-nodes-${ctx.esc(run.runId)}"` : ''}>${lightWords}</button>
       <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-timeline="${ctx.esc(run.runId)}" aria-expanded="${open}" aria-controls="run-tl-${ctx.esc(run.runId)}">Timeline (${count})</button></div>
     ${answering ? '' : result}
     ${open ? timelineHtml(ctx, run, all) : ''}</li>`;
 }
 
 /**
- * The list, in groups (spec 0010 D6): Needs you (oldest question first), In motion, Finished (each newest first), each starting with a heading that
- * says how many; runs on their own and compares are the items. The headings are items of the one flat list, so a run's card is never moved into a section.
- * @param {ViewContext} ctx
+ * The Runs list of the Work list, in groups (spec 0010 D6): Needs you (oldest question first), In motion, Finished (each newest first), each starting with a heading that
+ * says how many. A row is a button that selects the run's node (work-list.js); the card, with its answer field, is the node panel's (`runHtml`).
+ * @param {ViewContext & { shown?: string | null }} ctx `shown`: the run the node panel has now
  * @param {object[]} runs
  */
-export function runsHtml(ctx, runs) {
-  return runGroups(runs).map((group) => runGroupHeadingHtml(group, ctx.t) + group.items.map((g) => {
-    if (g.kind === 'run') return runHtml(ctx, g.run, runs);
-    const id = `cmp-${g.runs[0].runId}`;
-    return `<li class="hx-run-group" data-key="${ctx.esc(id)}"><section class="hx-run-compare" aria-labelledby="${ctx.esc(id)}">
-      <h4 class="hx-run-compare-title" id="${ctx.esc(id)}">${ctx.esc(compareTitle(g.runs))}</h4>
-      <p class="hx-forge-meta hx-faint">The same request under each profile, side by side.</p>
-      <ul class="hx-run-columns" aria-label="${ctx.esc(g.runs.length)} profiles compared">${g.runs.map((r) => runHtml(ctx, r, runs)).join('')}</ul></section></li>`;
-  }).join('')).join('');
+export function runRowsHtml(ctx, runs) {
+  const say = ctx.t || t;
+  const row = (run) => `<li class="hx-forge-item" data-key="${ctx.esc(run.runId)}"><button type="button" class="hx-forge-row" data-work-ref="run:${ctx.esc(run.runId)}" aria-pressed="${ctx.shown === run.runId}" data-corn="row"${cornStateAttr(run.status)}>
+    <span class="hx-forge-title">${ctx.esc(run.kind)} on ${ctx.esc(aboutWords(run.refs))}</span>
+    <span class="hx-forge-meta">${runPillHtml(ctx, run, statusWords(run))} ${ctx.esc(runMeta(run, ctx.now))}</span></button></li>`;
+  return runGroups(runs).map((group) => runGroupHeadingHtml(group, say) + group.items.flatMap((g) => (g.kind === 'run' ? [g.run] : g.runs)).map(row).join('')).join('');
 }

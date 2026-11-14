@@ -39,7 +39,7 @@
  *   scene           (none)  touchScene(): what the picture is built from changed (`onSceneTouch`)
  *   layers          (none)  a layer went on or off, or the layers were set (engine/layers.js): live.js starts or stops the live layer, a search moves its matches
  *   search          { query, current }  the search's query or its current match changed (pieces/search.js)
- *   node:painted    { node }  the node panel was filled for this node (pieces/node-panel.js)
+ *   node:painted    { node }  the node panel was filled for this node (pieces/node-panel.js); the Work piece draws a piece of work's actions into it, or lets go of what it held
  *   proposal        { change: 'opened' | 'view' | 'closed', slug, source, pinSource, view, proposal }  the open proposal changed (engine/proposal.js; the page writes the address from it)
  *   proposal:draw   { open }  the bar and the review column draw again; proposal:bar { open }: they have, so what sits on the bar draws again
  *   proposal:mark   { applied, effective, proposal }  before the map is laid out (the what-if editor marks its edits)
@@ -59,7 +59,7 @@
  *                   and tells `host` to ask again when the root is free
  *   attach:released (none)  the piece that had the instance's root (`attach`) gave it back
  *   work:waiting    { total }  what waits on the maintainer changed (specs to decide plus runs that need an answer; pieces/work.js): the page puts the number before its title
- *   work:available  { on }  the Work panel started (a forge in the config and somebody signed in), or ended: the account menu's Proposals entry is only for a cornfield without it
+ *   work:available  { on }  the Work piece started (a forge in the config and somebody signed in), or ended: the Work view's List toggle shows, and the account menu's Proposals entry is only for a cornfield without it
  *   runs:map        { active }  runs are on the map, or none is (pieces/work.js, runs-map.js): the Layers menu shows its legend while there are
  *   thread:open     { number }  a thread listed in the node panel was chosen; thread:start { node }: "Start a thread about this" (pieces/node-panel.js; the Work panel opens the thread, or its New idea form)
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`; the piece that owns a live region writes it: `announce:write`)
@@ -99,9 +99,12 @@
  *   player:seat     bar -> true  the dock's owner (engine/sheets.js) seats the scenario player's bar as a sheet above the node panel's
  *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work panel's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
  *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
- *   work:on         (none) -> boolean  whether the Work panel has started (a piece mounted after it asks rather than waits for `work:available`)
- *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the Work panel opens on Runs at that run, its reply field focused
- *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page (or the review, or a scope's map: pieces/map.js) laid the map out from these
+ *   work:list       { open }  the Work list opened or closed (pieces/work-list.js)
+ *   work:pick       { kind, key } -> true  (ask, answered by the Work view: explorer/work-view.js) select the node of that piece of work (`pull`, `issue`, `thread`, `run`, `deploy`, `proposal`, and its number, id or slug) on the map; no answer: the Work piece shows it in the node panel alone, as it shows work older than the graph's 14 days
+ *   work:panel      node -> { replace, badge, title, html } | undefined  (ask, answered by the Work view) what the node panel shows for a piece of work or, in the Work view, a node of code; the html holds `forge-detail`, where the Work piece draws the actions
+ *   work:on         (none) -> boolean  whether the Work piece has started (a piece mounted after it asks rather than waits for `work:available`)
+ *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the run is shown in the node panel, its reply field focused
+ *   work:open-specs (none) -> true  the Work list opened on Specs for a bad link's way on; map:set { nodes, edges } -> true  the page (or the review, or a scope's map: pieces/map.js) laid the map out from these
  *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played
  *   whatif:edits -> edits[], whatif:form -> { name } | null, whatif:describe -> string[]  what the decision asks of the what-if editor
  *

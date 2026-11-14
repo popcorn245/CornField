@@ -2,7 +2,7 @@
 /**
  * The header (CF-41): brand, the View switch with Fit, the Layers chip with its count, search with its hint, the Work toggle and the
  * one account menu. What the header lost (the Proposals and Review tokens buttons, the zoom buttons, the theme cycle button and the
- * loose theme select) is not in the page, and what moved is in the account menu.
+ * loose theme select, and the Work panel button) is not in the page, and what moved is in the account menu.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { explorerPage } from '../helpers.js';
@@ -26,7 +26,7 @@ beforeEach(() => { document.body.innerHTML = body; ensurePagePieces(); Object.as
 
 describe('the header, left to right', () => {
   it('has the brand, the View switch, the Layers chip, search, Work and the account menu, in that order', () => {
-    const order = ['cf-brand', 'preset-map-btn', 'preset-dataflow-btn', 'preset-house-btn', 'preset-work-btn', 'fit-btn', 'legend-toggle-btn', 'node-search', 'forge-btn', 'account-btn'];
+    const order = ['cf-brand', 'preset-map-btn', 'preset-dataflow-btn', 'preset-house-btn', 'preset-work-btn', 'fit-btn', 'legend-toggle-btn', 'node-search', 'account-btn'];
     const at = order.map((id) => [...header().querySelectorAll('*')].indexOf($(id)));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
@@ -70,9 +70,8 @@ describe('the header, left to right', () => {
     expect($('cf-brand').dataset.action).toBe('reset-view');
   });
 
-  it('names the Work toggle by what it says (label in name)', () => {
-    const btn = $('forge-btn');
-    expect(btn.getAttribute('aria-label').startsWith(btn.textContent.trim())).toBe(true);
+  it('has no Work panel button: the Work view\'s List toggle opens the lists (explorer/work-view.js)', () => {
+    expect(header().querySelector('[data-corn="forge-button"], .hx-work, [data-action="toggle-forge"]')).toBeNull();
   });
 });
 

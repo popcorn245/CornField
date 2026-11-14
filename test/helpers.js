@@ -45,7 +45,8 @@ export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00
  * @param {{ pieces?: boolean | string[] }} [opts]
  */
 export function explorerPage({ pieces = false } = {}) {
-  const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+  // The Work list opens from any `data-action="toggle-forge"`: cornfield's page has it in the Work view's bar (explorer/work-view.js), which a test of the piece alone does not mount, so the page here has one of its own
+  const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8').replace('<!--corn-piece:work/panel-->', '<button type="button" id="forge-btn" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" hidden>List</button>\n    <!--corn-piece:work/panel-->');
   if (!pieces) return page;
   const wanted = (name) => pieces === true || pieces.includes(name);
   let out = page.replace(/<!--corn-placeholder:([a-z-]+)\/([a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1\/\2-->)/g, (all, name) => (wanted(name) ? '' : all)); // the stand-in goes when the piece comes (engine/piece.js place)

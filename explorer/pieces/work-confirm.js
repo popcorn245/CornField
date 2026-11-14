@@ -11,7 +11,7 @@ import { trapTab } from '../focusables.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 
 export function install(ctx) {
-  const { inst, ui, m, fn, $ } = ctx;
+  const { inst, ui, m, fn, root, $ } = ctx;
   const { announce, t, trapFocus } = ctx.h;
 
   const confirmEl = () => $('forge-confirm');
@@ -74,7 +74,7 @@ export function install(ctx) {
     const res = await fn.request(planUrl(action, n, slug), true);
     ui.busy = '';
     // The button was off while it asked; it has the focus again whatever the answer is
-    const refocus = () => { const back = $('forge-panel').querySelector(opener); if (back && !back.disabled && !ui.confirm) back.focus(); };
+    const refocus = () => { const back = root.querySelector(opener); if (back && !back.disabled && !ui.confirm) back.focus(); };
     if (!res.ok || !res.body || !res.body.plan) {
       stepNote(actionWords(action, res.status, res.body, n), false);
       refocus();
@@ -125,7 +125,7 @@ export function install(ctx) {
     el.hidden = true;
     if (m.confirmTrap) { m.confirmTrap(); m.confirmTrap = null; }
     if (!restoreFocus) return;
-    const back = $('forge-panel').querySelector(opener) || $('forge-title');
+    const back = root.querySelector(opener) || $('forge-title');
     if (back && !back.disabled) back.focus();
   }
 

@@ -16,7 +16,9 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initForgePanel, resetForgePanelForTests, openForge, closeForge, refreshForge, openWorkAt } from '../../explorer/forge-panel.js';
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge, refreshForge, showWorkRef } from '../../explorer/forge-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initWorkView, resetWorkViewForTests } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -102,7 +104,7 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '' });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -112,7 +114,10 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   initKeyboard();
   initSheets();
   resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge, signIn, ...(threads === undefined ? {} : { threads }) }, { clock: () => NOW });
+  resetWorkViewForTests();
+  const forgeOn = initForgePanel({ forge, signIn, ...(threads === undefined ? {} : { threads }) }, { clock: () => NOW });
+  initWorkView({ offered: true }); // answers the node panel for a piece of work (work:panel): the actions are in it
+  return forgeOn;
 }
 const openThreads = async () => {
   openForge({ tab: 'pulls' });
@@ -156,7 +161,7 @@ describe('the Threads tab', () => {
     mount();
     await openThreads();
     await settle();
-    const word = (n) => rows().find((r) => r.querySelector('[data-forge-thread]').dataset.forgeThread === String(n)).querySelector('[data-thread-run]');
+    const word = (n) => rows().find((r) => r.querySelector('[data-work-ref]').dataset.workRef === `thread:${n}`).querySelector('[data-thread-run]');
     // the open run is the one shown, and the other on the same thread is counted
     expect(word(41).textContent).toBe('Run: Waiting (+1)');
     expect(word(41).dataset.threadRun).toBe('run-01JC8Z3Q5M7VXK2RT9N4B6HDE2');
@@ -217,13 +222,13 @@ describe('a thread is read here and answered on the forge', () => {
     const server = fakeServer();
     mount();
     await openThreads();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
-    expect(server.urls().at(-1)).toBe('/api/forge/threads/41');
+    expect(server.urls()).toContain('/api/forge/threads/41');
     const detail = $('forge-detail');
     expect(detail.hidden).toBe(false);
-    expect(detail.getAttribute('aria-label')).toBe('Selected thread');
-    expect(detail.querySelector('.hx-forge-detail-title').textContent).toBe('#41 Rework sign-in');
+    expect(detail.getAttribute('data-work-kind')).toBe('thread');
+    expect($('drawer-title').textContent).toBe('Rework sign-in');
     const msgs = qa('.hx-thread-msg');
     expect(msgs).toHaveLength(3);
     expect(msgs[0].textContent).toContain('maintainer-one opened this');
@@ -239,8 +244,7 @@ describe('a thread is read here and answered on the forge', () => {
     expect(detail.textContent).toContain('Read-only here');
     expect(detail.textContent).toContain('Proposal 0040-meals in pull request #40');
     expect([...detail.querySelectorAll('a')].find((a) => a.getAttribute('aria-label') === 'Open this message on GitHub (new tab)')).toBeTruthy();
-    expect($('forge-btn-lit').textContent).toBe('thread #41');
-    expect(await said()).toBe('Thread 41, Rework sign-in: 3 messages, 2 nodes lit, 1 named that is not on the map. Read-only: reply on GitHub.');
+    expect(await said()).toBe('Thread 41, Rework sign-in: 3 messages, 2 nodes on the map, 1 named that is not on the map. Read-only: reply on GitHub.');
   });
 
   it('names the configured forge, Forgejo too, in every link and word; a hostile mention stays text', async () => {
@@ -248,7 +252,7 @@ describe('a thread is read here and answered on the forge', () => {
     fakeServer({ detail: hostile });
     mount({ forge: { type: 'forgejo', url: 'https://git.example.test', repo: 'owner/name' } });
     await openThreads();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
     const detail = $('forge-detail');
     const words = `${detail.textContent} ${[...detail.querySelectorAll('[aria-label]')].map((e) => e.getAttribute('aria-label')).join(' ')} ${await said()}`;
@@ -265,19 +269,15 @@ describe('a thread is read here and answered on the forge', () => {
     expect($('idea-words').textContent).toBe('This opens an issue labelled "idea" on Forgejo, as you. The conversation lives there; cornfield keeps no copy of it.');
   });
 
-  it('lights the nodes its text mentions, outside code, the way a pull request lights its files', async () => {
+  it('names the nodes its text mentions, outside code, each a button that selects it', async () => {
     fakeServer();
     mount();
     await openThreads();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
-    expect([...state.forgeLit.changed].sort()).toEqual(['core-auth', 'core-hooks']);
-    expect(state.forgeLit.failing.size).toBe(0);
-    // [[core-db]] is in a code span and a fence: not lit, and the rest fades back
-    expect(sceneNode('core-auth').halo).toBe('match');
-    expect(sceneNode('core-hooks').alpha).toBe(1);
-    expect(sceneNode('core-db').alpha).toBeLessThan(0.5);
-    expect(sceneNode('root').alpha).toBeLessThan(0.5);
+    // [[core-db]] is in a code span and a fence: not named
+    expect([...new Set(qa('#forge-detail > .hx-forge-nodes [data-forge-node], #forge-detail .hx-thread-nodes [data-forge-node]').map((b) => b.dataset.forgeNode))].sort()).toEqual(['core-auth', 'core-hooks']);
+    expect(q('#forge-detail [data-forge-node="core-db"]')).toBe(null);
     // the nodes are buttons that select them on the map, and what is on no node is said so
     const chips = qa('#forge-detail .hx-forge-node').map((b) => b.textContent);
     expect(chips).toContain('auth.js');
@@ -291,69 +291,57 @@ describe('a thread is read here and answered on the forge', () => {
     expect(state.selectedNode.id).toBe('core-auth');
   });
 
-  it('a path lights the node that owns it, and a block names nodes precisely', async () => {
+  it('a path names the node that owns it, and a block names nodes precisely', async () => {
     fakeServer({ detail: (d) => ({ ...d, messages: [msg('1', 'a', 'in [[server/other.js]]\n```cornfield-thread\n{"nodes":["core-db"],"proposal":"0040-meals"}\n```')] }) });
     mount();
     await openThreads();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
-    expect([...state.forgeLit.changed].sort()).toEqual(['core-db', 'pkg-server']);
+    expect([...new Set(qa('#forge-detail [data-forge-node]').map((b) => b.dataset.forgeNode))].sort()).toEqual(['core-db', 'pkg-server']);
   });
 
   it('a spec conversation is a thread too', async () => {
     fakeServer();
     mount();
     await openThreads();
-    click(q('[data-forge-thread="40"]'));
+    click(q('[data-work-ref="thread:40"]'));
     await settle();
     expect($('forge-detail').textContent).toContain('Spec pull request for 0040-meals');
     expect($('forge-detail').textContent).toContain('Names idea #41');
-    expect([...state.forgeLit.changed]).toEqual(['core-hooks']);
+    expect([...new Set(qa('#forge-detail [data-forge-node]').map((b) => b.dataset.forgeNode))]).toEqual(['core-hooks']);
   });
 
-  it('Clear, or the row again, lets go; selecting a pull request lets go of a thread and the other way round', async () => {
+  it('shows one piece of work at a time: a pull request after a thread lets the thread go, and the other way round', async () => {
     fakeServer();
     mount();
     await openThreads();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
-    expect(state.forgeLit).not.toBe(null);
-    click(q('[data-action="clear-forge-thread"]'));
-    expect(state.forgeLit).toBe(null);
-    expect($('forge-detail').hidden).toBe(true);
-    expect($('forge-list').hidden).toBe(false); // the list is back
-    expect(document.activeElement).toBe(q('[data-forge-thread="41"]')); // on the row that was opened
-    expect(await said()).toBe('Thread 41 cleared');
-    click(q('[data-forge-thread="41"]'));
-    await settle();
-    click(q('[data-forge-thread="41"]'));
-    expect(state.forgeLit).toBe(null);
-
-    click(q('[data-forge-thread="41"]'));
-    await settle();
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('thread');
+    expect(qa('.hx-thread-msg').length).toBeGreaterThan(0);
     click(q('[data-forge-kind="pulls"]'));
     await settle();
-    click(q('[data-forge-pr="12"]'));
+    click(q('[data-work-ref="pull:12"]'));
     await settle();
     expect(qa('.hx-thread-msg')).toEqual([]);
-    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected pull request');
-    expect([...state.forgeLit.changed]).toEqual(['core-db']);
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('pull');
+    expect(qa('#forge-detail [data-forge-node]').map((b) => b.dataset.forgeNode)).toEqual(['core-db']);
     click(q('[data-forge-kind="threads"]'));
     await settle();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
-    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
-    expect([...state.forgeLit.changed].sort()).toEqual(['core-auth', 'core-hooks']);
+    expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('thread');
+    expect([...new Set(qa('#forge-detail [data-forge-node]').map((b) => b.dataset.forgeNode))].sort()).toEqual(['core-auth', 'core-hooks']);
   });
 
   it('says in words when a thread cannot be read, and Refresh asks for it again', async () => {
     const server = fakeServer({ detail: undefined });
     mount();
     await openThreads();
-    click(q('[data-forge-thread="42"]')); // the fake has no detail for 42
+    click(q('[data-work-ref="thread:42"]')); // the fake has no detail for 42
     await settle();
-    expect($('forge-detail').textContent).toContain('is not a thread');
-    click(q('[data-forge-thread="41"]'));
+    expect($('forge-act-note').textContent).toContain('is not a thread');
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
     server.calls.length = 0;
     await refreshForge();
@@ -361,18 +349,18 @@ describe('a thread is read here and answered on the forge', () => {
     expect(server.calls.find((c) => c.url === '/api/forge/threads/41').init.cache).toBe('reload');
   });
 
-  it('follows the map: a proposal opening changes the nodes, and the lights follow', async () => {
+  it('follows the map: a proposal opening changes the nodes, and the nodes it names follow', async () => {
     fakeServer();
     mount();
     await openThreads();
-    click(q('[data-forge-thread="41"]'));
+    click(q('[data-work-ref="thread:41"]'));
     await settle();
-    expect(state.forgeLit.changed.has('core-auth')).toBe(true);
+    expect(qa('#forge-detail [data-forge-node="core-auth"]').length).toBeGreaterThan(0);
     // the map now on screen has no auth.js: its mention goes to the folder that owns the path
     const fewer = MAP.nodes.filter((n) => n.id !== 'core-auth');
     setMap(fewer.map((n) => ({ ...n })), MAP.edges.filter((e) => e.to !== 'core-auth'));
     await settle();
-    expect([...state.forgeLit.changed].sort()).toEqual(['core-hooks', 'pkg-server']);
+    expect([...new Set(qa('#forge-detail [data-forge-node]').map((b) => b.dataset.forgeNode))].sort()).toEqual(['core-hooks', 'pkg-server']);
   });
 });
 
@@ -409,21 +397,20 @@ describe('a node\'s panel lists the threads that mention it', () => {
     expect(q('#drawer-threads [data-thread-open]')).toBe(null);
   });
 
-  it('a button opens the thread in the issues and PRs panel, which lights its nodes', async () => {
+  it('a button shows the thread in the node panel, with the nodes it names', async () => {
     fakeServer();
     mount();
     selectNode(pick('core-hooks'));
     await settle();
     click(q('[data-thread-open="40"]'));
     await settle();
-    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
-    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
-    expect($('forge-detail').textContent).toContain('Spec: Meals');
-    expect([...state.forgeLit.changed]).toEqual(['core-hooks']);
+    expect($('drawer-badge').textContent).toBe('Thread'); // the thread is in the node panel, which shows what it names
+    expect($('forge-detail').getAttribute('data-work-kind')).toBe('thread');
+    expect($('forge-detail').textContent).toContain('Spec pull request for 0040-meals');
+    expect([...new Set(qa('#forge-detail [data-forge-node]').map((b) => b.dataset.forgeNode))]).toEqual(['core-hooks']);
   });
 
-  it('opens on the Threads tab even when a run waits on you (a closed panel would otherwise open on the oldest thing waiting)', async () => {
+  it('shows the thread even when a run waits on you', async () => {
     fakeServer({ runs: [{ runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDE2', status: 'waiting', open: true, requestedAt: '2026-10-19T09:00:00Z', target: 41, refs: { thread: 41 }, thread: { number: 41, mirror: null } }] });
     mount();
     openForge({ tab: 'work' }); // the runs are read, so one waits on you
@@ -433,25 +420,21 @@ describe('a node\'s panel lists the threads that mention it', () => {
     await settle();
     click(q('[data-thread-open="40"]'));
     await settle();
-    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-detail').textContent).toContain('Spec: Meals');
+    expect($('drawer-badge').textContent).toBe('Thread');
+    expect($('forge-detail').textContent).toContain('Spec pull request for 0040-meals');
   });
 
-  it('the Work view\'s "Open in Work" opens the tab of the piece of work, with it selected (spec 0012 step 2)', async () => {
-    fakeServer({ runs: [{ runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDE2', status: 'waiting', open: true, requestedAt: '2026-10-19T09:00:00Z', target: 41, refs: { thread: 41 }, thread: { number: 41, mirror: null } }] });
+  it('a piece of work the graph does not draw is shown in the node panel by the same path as a thread: by its kind and key (spec 0012 step 3)', async () => {
+    fakeServer();
     mount();
-    openForge({ tab: 'work' });
+    expect(await showWorkRef('pull', '12')).toBe(true);
     await settle();
-    closeForge({ restoreFocus: false });
-    await openWorkAt({ kind: 'pull', number: 12 });
+    expect($('drawer-badge').textContent).toBe('Pull request');
+    expect($('forge-detail').textContent).toContain('Land it');
+    expect(await showWorkRef('thread', '40')).toBe(true);
     await settle();
-    expect(q('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-detail').textContent).toContain('Meals page');
-    closeForge({ restoreFocus: false });
-    await openWorkAt({ kind: 'thread', number: 40 });
-    await settle();
-    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-detail').textContent).toContain('Spec: Meals');
+    expect($('drawer-badge').textContent).toBe('Thread');
+    expect($('forge-detail').textContent).toContain('Spec pull request for 0040-meals');
   });
 
   it('shares the list with the tab: opening the tab afterwards does not ask twice for the same state', async () => {
@@ -541,7 +524,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(document.activeElement).toBe($('idea-open'));
   });
 
-  it('posts the edited title and the text through POST /api/forge/threads, then "Mentioned in" lists the new thread, selected so its node lights', async () => {
+  it('posts the edited title and the text through POST /api/forge/threads, then "Mentioned in" lists the new thread, and the node\'s panel stays as it is', async () => {
     const posted = [];
     const server = fakeServer({ posts: POSTED });
     mount();
@@ -577,24 +560,21 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(box.querySelector('h3').textContent).toBe('Threads');
     expect(box.querySelector('[data-thread-open="77"]').textContent).toBe('Move db.js to its own package#77 · 0');
     expect(document.activeElement).toBe(button());
-    // the new thread is selected on the Threads tab, so the node it mentions lights; the words say all of it at once
-    expect(q('[data-forge-thread="77"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-btn-lit').textContent).toBe('thread #77');
-    expect([...state.forgeLit.changed]).toEqual(['core-db']);
+    // the node's panel stays (its button had the focus); the new thread is listed there and the words say so
+    expect($('drawer-title').textContent).toBe('db.js');
     const words = await said();
     expect(words).toContain('Opened idea #77');
-    expect(words).toContain('Thread 77, Move db.js to its own package: 1 message, 1 node lit.');
     expect(words).toContain('It is listed under Threads for db.js.');
   });
 
-  it('after posting, the new thread\'s messages pending, then an answer with no thread, then a failure: nothing lit, nothing thrown, all said', async () => {
+  it('after posting, the new thread\'s messages pending, then an answer with no thread, then a failure: nothing thrown, all said', async () => {
     const unhandled = [];
     const catcher = (err) => { unhandled.push(err); };
     process.on('unhandledRejection', catcher);
     try {
       const server = fakeServer({ posts: POSTED });
       mount();
-      selectNode(pick('core-db'));
+      openForge({ tab: 'threads' }); // from the form of the list, the new thread is shown in the node panel
       await settle();
       // The new thread's messages: held until the test lets them go, then answered as asked
       let release = null;
@@ -610,36 +590,31 @@ describe('Start a thread about this (a node\'s panel)', () => {
       const json = (status, data) => ({ ok: status < 400, status, headers: new Headers(), json: async () => data });
 
       // 1. pending: the idea is opened and the thread is selected, but nothing is lit before its messages are in
-      click(button());
-      await settle();
+      click($('idea-open'));
+      type('idea-title', 'An idea');
       click($('idea-send'));
       await settle();
       expect(server.posts()).toHaveLength(1);
       expect(release).not.toBe(null);
-      expect(state.forgeLit).toBe(null);
       // 2. it comes back as a 200 with no thread in it: a failure in words, nothing lit
       answer = () => json(200, { ok: true, at: '2026-10-19T11:59:30.000Z', rate: '' });
       release();
       await settle();
-      expect(state.forgeLit).toBe(null);
-      expect(q('#forge-detail').textContent).toContain('Thread 77 could not be read: the answer had no thread in it.');
+      expect($('forge-act-note').textContent).toContain('Thread 77 could not be read: the answer had no thread in it.');
       const words = await said();
       expect(words).toContain('Opened idea #77');
       expect(words).toContain('Thread 77 could not be read');
-      expect(document.activeElement).toBe(button());
 
       // 3. again, and the forge fails: said, nothing lit, the form usable
       release = null;
-      click(button());
-      await settle();
+      click($('idea-open'));
       $('idea-title').value = 'Another';
       click($('idea-send'));
       await settle();
       answer = () => json(502, { ok: false, error: 'GitHub did not answer.', code: 'unavailable' });
       release();
       await settle();
-      expect(state.forgeLit).toBe(null);
-      expect(q('#forge-detail').textContent).toContain('GitHub did not answer.');
+      expect($('forge-act-note').textContent).toContain('GitHub did not answer.');
       expect(await said()).toContain('GitHub did not answer.');
       await new Promise((r) => setTimeout(r, 20));
       expect(unhandled).toEqual([]);
@@ -747,8 +722,8 @@ describe('New idea', () => {
     await settle();
     expect(server.posts()).toHaveLength(1);
     expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
-    expect($('forge-detail').hidden).toBe(false);
-    expect($('forge-detail').textContent).toContain('Rework sign-in');
+    expect($('drawer-title').textContent).toBe('Rework sign-in'); // shown in the node panel
+    expect($('forge-detail').getAttribute('data-work-kind')).toBe('thread');
     mount({ threads: false });
     openForge();
     await settle();
