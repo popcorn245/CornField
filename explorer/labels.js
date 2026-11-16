@@ -344,6 +344,11 @@ export function createLabelLayer(canvas, opts = {}) {
     return w;
   };
 
+  // A web font that arrives late changes every width measured in the face used until then, and the family string is the same: measure again
+  const fonts = canvas.ownerDocument && canvas.ownerDocument.fonts; // the canvas's own document: none in a test's fake canvas
+  const fontsArrived = () => { widths.clear(); kept = null; dirty = true; };
+  if (fonts && fonts.addEventListener) fonts.addEventListener('loadingdone', fontsArrived);
+
   return {
     /** The node whose label is drawn under a screen point (a cluster's title: input.js frames the cluster), or null */
     hit(x, y) {
@@ -397,6 +402,7 @@ export function createLabelLayer(canvas, opts = {}) {
 
     destroy() {
       destroyed = true;
+      if (fonts && fonts.removeEventListener) fonts.removeEventListener('loadingdone', fontsArrived);
       lastScene = null;
       kept = null;
       widths.clear();
