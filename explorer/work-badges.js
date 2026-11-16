@@ -139,5 +139,11 @@ export function createWorkBadges({ stage, state, style, colorOf, wanted, doc = d
     for (const [id, el] of pills) if (!seen.has(id)) { el.remove(); pills.delete(id); }
   }
 
-  return { sync, clear, destroy() { clear(); if (layer) layer.remove(); layer = null; } };
+  // A web font that arrives late (the page's, the pill's text; the theme's label font, the names') changes the widths and the pill's height measured in the face used
+  // until then, and the family strings are the same (issue #285): measure and place again at the next paint (the map asks for one: labels.js)
+  const fonts = doc && doc.fonts;
+  const fontsArrived = () => { widths.clear(); tall = { key: '', h: 0 }; placed = null; placedKey = ''; drawnKey = ''; };
+  if (fonts && fonts.addEventListener) fonts.addEventListener('loadingdone', fontsArrived);
+
+  return { sync, clear, destroy() { clear(); if (fonts && fonts.removeEventListener) fonts.removeEventListener('loadingdone', fontsArrived); if (layer) layer.remove(); layer = null; } };
 }

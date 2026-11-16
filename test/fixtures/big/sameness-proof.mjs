@@ -61,6 +61,7 @@ async function shot(browser, base, size, scheme, view) {
     // The retro theme's fonts come from a font service (`theme.fonts`). Whether one has arrived by the map's first label measurement changes how the labels sit by a fraction of a pixel (the map
     // keeps each text's width, measured once, so a width taken in the fallback face stays), now in one rig and now in the other: about 10 000 pixels of text in one run in five, and a checkout
     // against itself shows it too. Waiting does not help (it is the page's own first measurement), so neither checkout is given the fonts: both draw in the fallback face, always.
+    // Issue #285 measures again when a font arrives, but the checkout compared with may be one without that (main before it): the race is still there on its side, and this keeps the proof off the network.
     await context.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
     const sign = await context.newPage(); await sign.goto(`${base}/auth/start`); await sign.waitForURL(`${base}/**`); await sign.close();
     const page = await context.newPage();

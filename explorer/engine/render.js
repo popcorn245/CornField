@@ -83,7 +83,7 @@ export function createMap(inst, opts = {}) {
     if (!state.labelCanvas) return null;
     if (!labelLayer || labelLayerCanvas !== state.labelCanvas) {
       if (labelLayer) labelLayer.destroy();
-      labelLayer = createLabelLayer(state.labelCanvas, { mapStyle });
+      labelLayer = createLabelLayer(state.labelCanvas, { mapStyle, redraw: render }); // a web font that arrives asks for a frame
       labelLayerCanvas = state.labelCanvas;
       if (state.width) labelLayer.resize(state.width, state.height, inst.dpr());
     }
