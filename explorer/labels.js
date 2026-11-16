@@ -314,7 +314,8 @@ export function labelHit(placed, camera, x, y) {
 /**
  * A transparent 2D canvas that draws the chosen labels over the map
  * @param {HTMLCanvasElement} canvas
- * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (the instance's: `mapStyleOf(inst).get`; none: no theme);
+ * @param {{mapStyle?: () => import('./map-style.js').MapStyle, redraw?: () => void}} [opts] `mapStyle`: where the theme's map tokens come from (the instance's: `mapStyleOf(inst).get`; none: no theme);
+ *   `redraw`: asks the map for a frame (a web font arrived, so the labels are measured and placed again);
  *   a node's label colour is the theme's `--corn-map-label`, and the outline under every label its `--corn-map-label-halo`, when it sets them
  * @returns {{hit: (x: number, y: number) => string|null, draw: (scene: import('./scene.js').Scene, camera: import('./scene.js').Camera, extras?: {hover?: string|null}) => boolean, resize: (width: number, height: number, dpr: number) => void, destroy: () => void}}
  *   `draw` returns whether it painted: false when the camera, the scene, the size and the hovered node were unchanged; `extras.hover` is the
@@ -344,9 +345,12 @@ export function createLabelLayer(canvas, opts = {}) {
     return w;
   };
 
-  // A web font that arrives late changes every width measured in the face used until then, and the family string is the same: measure again
+  // A web font that arrives late changes every width measured in the face used until then, and the family string is the same: measure again.
+  // `dirty` makes the next draw place every label again; `kept` stays until then, so `hit` still answers for the labels on the screen.
+  // The next draw is asked for (`opts.redraw`): the map's style asks only when the theme names a label font, and a face in the labels' own stack can arrive too
   const fonts = canvas.ownerDocument && canvas.ownerDocument.fonts; // the canvas's own document: none in a test's fake canvas
-  const fontsArrived = () => { widths.clear(); kept = null; dirty = true; };
+  const redraw = typeof opts.redraw === 'function' ? opts.redraw : null;
+  const fontsArrived = () => { if (destroyed) return; widths.clear(); dirty = true; if (redraw) redraw(); };
   if (fonts && fonts.addEventListener) fonts.addEventListener('loadingdone', fontsArrived);
 
   return {

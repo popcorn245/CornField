@@ -16,7 +16,7 @@ const node = (id, x, y) => ({
 const scene = () => ({ nodes: [node('alpha', 100, 100), node('beta', 200, 100)], edges: [], decor: { grid: null, rings: [], lanes: [] }, preset: false, version: 1 });
 
 /** A canvas whose document has a fake `fonts`, and a context whose text is `face.px` px wide per character */
-function rig({ withFonts = true } = {}) {
+function rig({ withFonts = true, redraw } = {}) {
   const face = { px: 6 };
   const measured = [];
   const ctx = new Proxy({}, { get: (_t, key) => (key === 'measureText' ? (s) => { measured.push(s); return { width: s.length * face.px }; } : () => {}), set: () => true });
@@ -28,7 +28,7 @@ function rig({ withFonts = true } = {}) {
     fonts.removeEventListener = (...a) => { listeners--; remove(...a); };
   }
   const canvas = { width: 0, height: 0, getContext: () => ctx, ownerDocument: { fonts } };
-  const layer = createLabelLayer(canvas);
+  const layer = createLabelLayer(canvas, redraw ? { redraw } : {});
   layer.resize(800, 600, 1);
   return { layer, face, measured, fonts, listeners: () => listeners };
 }
@@ -58,6 +58,30 @@ describe('label widths and a web font that arrives late', () => {
     const n = measured.length;
     layer.draw(s, { x: 5, y: 5, zoom: 1 });
     expect(measured.length).toBe(n);
+  });
+
+  it('asks the map for a frame when the fonts finish loading, once per event, and not after it is destroyed', () => {
+    let asked = 0;
+    const { layer, fonts } = rig({ redraw: () => { asked++; } });
+    layer.draw(scene(), CAM);
+    expect(asked).toBe(0);
+    fonts.dispatchEvent(new Event('loadingdone'));
+    expect(asked).toBe(1);
+    fonts.dispatchEvent(new Event('loadingdone')); // a second face, a theme switched: one frame each, and one placing in it
+    expect(asked).toBe(2);
+    layer.destroy();
+    fonts.dispatchEvent(new Event('loadingdone'));
+    expect(asked).toBe(2);
+  });
+
+  it('still answers for the labels on the screen between the font event and the next draw', () => {
+    const { layer, fonts } = rig();
+    layer.draw(scene(), CAM);
+    let at = null; // a point on the label of alpha (drawn under its disc)
+    for (let y = 100; y < 140 && !at; y++) for (let x = 80; x < 120 && !at; x++) if (layer.hit(x, y) === 'alpha') at = { x, y };
+    expect(at).not.toBe(null);
+    fonts.dispatchEvent(new Event('loadingdone'));
+    expect(layer.hit(at.x, at.y)).toBe('alpha'); // what is drawn is what is hit until the frame that draws it again
   });
 
   it('stops listening when it is destroyed', () => {
