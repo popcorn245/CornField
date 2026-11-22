@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "spec": "0013",
+  "title": "Words",
+  "summary": "A dictionary of the project's own words, read from the glossary grill-with-docs keeps. Nodes carry words; a Words layer shows them and, when a word is picked, ties every node that carries it. A second shelf explains cornfield's own AI coding words to newcomers.",
+  "nodes": {
+    "add": [
+      { "id": "core-core-glossary", "label": "glossary.js", "type": "core", "parent": "pkg-core", "file": "core/glossary.js", "desc": "Reads the project's glossary (GLOSSARY.md, or one per area from GLOSSARY-MAP.md): each word, its meaning, its section and the words to avoid. Never runs anything it reads." },
+      { "id": "core-explorer-engine-words", "label": "words.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/engine/words.js", "desc": "The Words layer: each node's words as chips, and the ties from a picked word to every node that carries it." },
+      { "id": "core-explorer-pieces-dictionary", "label": "dictionary.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/pieces/dictionary.js", "desc": "The dictionary: this project's words by section, and the AI coding shelf that explains cornfield's own words. A word picks its nodes; a tagged node selects it." }
+    ],
+    "change": [
+      { "id": "core-core-schema", "set": { "desc": "The topology's shape: kinds, their colours and fields, and a node's optional words." }, "why": "nodes carry words" },
+      { "id": "core-core-validate", "set": { "desc": "Checks a topology against its schema, and every word a node carries against the glossary." }, "why": "an unknown word is reported like an unknown kind" },
+      { "id": "core-explorer-pieces-layers", "set": { "desc": "The Layers menu: the map's layers, the Words layer among them, and in the Work view one layer per kind of work." }, "why": "Words is a layer" },
+      { "id": "core-explorer-pieces-node-panel", "set": { "desc": "What is selected: a node with its words, or a piece of work with what it is connected to and its actions." }, "why": "a node shows its words and the word to use instead of one to avoid" },
+      { "id": "core-server-embed", "set": { "desc": "Cornfield inside another app: the components, the routes they read, and the words a host passes in." }, "why": "a host can pass words to tie together" }
+    ]
+  },
+  "edges": {
+    "add": [
+      { "from": "core-core-validate", "to": "core-core-glossary", "dashed": true, "label": "imports" },
+      { "from": "core-explorer-engine-words", "to": "core-core-glossary", "label": "reads" },
+      { "from": "core-explorer-pieces-dictionary", "to": "core-explorer-engine-words", "label": "picks" },
+      { "from": "core-explorer-pieces-dictionary", "to": "core-explorer-pieces-node-panel", "label": "selects" }
+    ]
+  },
+  "mockups": [
+    { "node": "core-explorer-engine-words", "path": "0013-words/words-layer.svg", "title": "The Words layer on the Map view with Invoice picked: its six nodes tied to the word, the rest dimmed, and the dictionary open beside the map" },
+    { "node": "core-explorer-pieces-node-panel", "path": "0013-words/node-panel-words.svg", "title": "The node panel of the bills table: its word bill is one the glossary says to avoid, with the word to use instead and what to do about it" },
+    { "node": "core-explorer-pieces-dictionary", "path": "0013-words/ai-coding-shelf.svg", "title": "The AI coding shelf of the dictionary, with Run open, and the dotted word Work in the header explained on hover" }
+  ]
+}

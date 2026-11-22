@@ -3207,6 +3207,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work layer's badges on the Map view (spec 0012 D4), drawn: one small pill over each node open work touches (`PR #27`, `Issue #14 +1`), in screen space, so it reads at any zoom, in the colour of… (explorer/work-badges.js)"
+    },
+    {
+      "id": "page-doc-docs-specs-0013-words",
+      "type": "page",
+      "label": "/docs/specs/0013-words",
+      "file": "docs/specs/0013-words.md",
+      "summary": "Spec 0013: Words (a dictionary of the project's own words, as a layer that ties nodes together)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0013: Words (a dictionary of the project's own words, as a layer that ties nodes together) (docs/specs/0013-words.md)."
     }
   ],
   "edges": [
@@ -4256,30 +4266,6 @@
       "kind": "calls",
       "status": "live",
       "label": "npm ci",
-      "when": "deploy"
-    },
-    {
-      "from": "tool-ci",
-      "to": "ext-github",
-      "kind": "calls",
-      "status": "live",
-      "label": "uses actions/checkout · uses actions/setup-node · uses actions/upload-pages-artifact · uses actions/deploy-pages · uses docker/setup-buildx-action · uses docker/login-action · uses docker/metadata-action · uses docker/build-push-action · secret-scan.yml: downloads from github.com",
-      "when": "deploy"
-    },
-    {
-      "from": "tool-ci",
-      "to": "ext-npm",
-      "kind": "calls",
-      "status": "live",
-      "label": "pages.yml: npm ci · release.yml: npm ci · release.yml: npm install · release.yml: downloads from registry.npmjs.org · test.yml: npm ci",
-      "when": "deploy"
-    },
-    {
-      "from": "tool-ci",
-      "to": "ext-docker-hub",
-      "kind": "calls",
-      "status": "live",
-      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run /tmp",
       "when": "deploy"
     },
     {
@@ -11110,7 +11096,16 @@
       "to": "core-explorer-scene",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0013-words"
+    },
+    {
+      "from": "page-doc-docs-specs-0013-words",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-14T05:23:00.408Z"
+  "updatedAt": "2026-11-22T10:21:26.085Z"
 }
