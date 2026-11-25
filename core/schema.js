@@ -3,7 +3,7 @@
  *
  * What a `topology.json` node and edge may be: the node types with their colour and radius, and the
  * edge kinds, the physical world's rules (spec 0029: live types and ids, which ends an edge kind
- * may join) and the cloud's (spec 0031: the kinds of external, a cloud node's fields, `when` and `side`). Pure data and small pure checks with no imports, so the CLI (cli/cornfield.js), the proposal checks
+ * may join) and the cloud's (spec 0031: the kinds of external, a cloud node's fields, `when` and `side`), and the one check of a list of links (`linkProblems`: the config's and a proposal's). Pure data and small pure checks with no imports, so the CLI (cli/cornfield.js), the proposal checks
  * (core/proposal.js) and the explorer in the browser all read the one table.
  */
 
@@ -301,4 +301,51 @@ export function callFieldProblems(edge, from, to) {
     else if (from?.type !== 'app' || to?.type !== 'external') problems.push('has "side", which goes only on an app -> external calls edge (the visitor\'s browser makes the call).');
   }
   return problems;
+}
+
+/**
+ * Whether `href` is a place a link may lead: an `http:` or `https:` address, or a path in the site (`/docs`). Anything
+ * else is refused (`javascript:`, `data:`, a bare `//host`, a backslash, a space or a control character), so a link from a
+ * file of the repo or of a pull request can never run script or send the reader somewhere the check did not see.
+ * @param {unknown} href
+ * @returns {boolean}
+ */
+export function isLinkHref(href) {
+  return typeof href === 'string' && (/^https?:\/\/[^\s\\/]/i.test(href) || /^\/(?![/\\])/.test(href)) && !/[\u0000-\u001f\u007f\s\\]/.test(href);
+}
+
+/**
+ * What is wrong with a list of links, `[{ label, href }]`, each with the place in the list it is at (`at`: `[1].href`) and
+ * a message that names it. The config's `links` and a proposal's share this one check.
+ * @param {unknown} list
+ * @param {{ max?: number, maxLabel?: number, closed?: boolean }} [limits] `max` links in the list, `maxLabel` characters in a label, `closed` refuses any key but label and href
+ * @returns {{ at: string, message: string }[]}
+ */
+export function linkProblems(list, { max = Infinity, maxLabel = Infinity, closed = false } = {}) {
+  if (!Array.isArray(list)) return [{ at: '', message: '"links" must be a list of { label, href }.' }];
+  const out = [];
+  if (list.length > max) out.push({ at: '', message: `"links" has ${list.length} links; at most ${max}.` });
+  list.forEach((l, i) => {
+    const at = `[${i}]`;
+    if (l === null || typeof l !== 'object' || Array.isArray(l)) return out.push({ at, message: `links${at} must be { label, href }: an object with a label and an href.` });
+    if (closed) for (const key of Object.keys(l)) if (key !== 'label' && key !== 'href') out.push({ at: `${at}.${key}`, message: `Unknown key "${key}" in a link. A link has: label, href.` });
+    if (typeof l.label !== 'string' || l.label.trim() === '') out.push({ at: `${at}.label`, message: `links${at}.label must be the words of the link.` });
+    else if (l.label.length > maxLabel) out.push({ at: `${at}.label`, message: `links${at}.label is ${l.label.length} characters; at most ${maxLabel}.` });
+    if (!isLinkHref(l.href)) out.push({ at: `${at}.href`, message: `links${at}.href must be an http: or https: address, or a path in the site that starts with a single slash.` });
+  });
+  return out;
+}
+
+/**
+ * The links of a list that may be drawn, as `{ label, href }` and nothing else: what passes `linkProblems` entry by entry, at most `max`.
+ * A list read from a pull request is untrusted, so the page asks again here and leaves out what it would not have accepted.
+ * @param {unknown} list
+ * @param {{ max?: number, maxLabel?: number }} [limits]
+ * @returns {{ label: string, href: string }[]}
+ */
+export function usableLinks(list, { max = Infinity, maxLabel = Infinity } = {}) {
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, max)
+    .filter((l) => l && typeof l === 'object' && !Array.isArray(l) && linkProblems([l], { maxLabel }).length === 0)
+    .map((l) => ({ label: l.label, href: l.href }));
 }

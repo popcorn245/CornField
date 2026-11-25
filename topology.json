@@ -11110,7 +11110,19 @@
       "to": "core-explorer-scene",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-proposal",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-14T05:23:00.408Z"
+  "updatedAt": "2026-11-25T23:17:04.131Z"
 }
