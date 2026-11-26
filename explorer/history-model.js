@@ -10,6 +10,10 @@
  *   trailHtml(commit, ctx)            a commit's trail: `Spec 0012 → Issue #283 → PR #284 → 0281cba`, a gap dashed (`no spec`, `no issue`)
  *   historySectionHtml(node, ctx)     the node panel's History section
  *   specReach(history, spec)          the nodes a spec's commits touched, and how many commits named it
+ *   heatOf(history, at)               the History layer (spec 0014 D3): per node, how often it changed and how lately, as of a commit
+ *   haloWidth(count, max)             a halo's width on screen (px) for how often its node changed
+ *   historyRowOf(status, heat)        the Layers menu's row under Overlays
+ *   specBarHtml(pick, ctx)            the bar on the map while a spec is picked: `Spec 0012 · Work as a view: 6 commits, 72 nodes`
  */
 
 import { escapeHtml as esc } from '../core/text.js';
@@ -175,4 +179,70 @@ export function specReach(history, spec) {
     for (const id of c.nodes) nodes.add(id);
   }
   return { nodes, commits };
+}
+
+/** The History layer's key in the Layers menu and `state.activeLayers` (spec 0014 D3): an overlay, off to start */
+export const HISTORY_LAYER = 'history-halos';
+/** The most halos drawn at once */
+export const MAX_HALOS = 600;
+/** How lately a node changed, as of the timeline's commit: within a week, within a month (30 days), or before */
+export const HALO_BANDS = Object.freeze(['week', 'month', 'old']);
+const DAY_MS = 86_400_000;
+const bandOf = (days) => (days <= 7 ? 'week' : days <= 30 ? 'month' : 'old');
+
+/**
+ * Each node's heat as of a commit: how many commits up to it changed the node, the last of them, and how many days before the commit that was.
+ * The age is counted from the commit's own date, not today's, so a replay reads as it did then.
+ * @param {{ commits: { date: string }[], nodes: Record<string, { commits: number[] }> } | null} history
+ * @param {number | null} [at] a commit's index; the newest when it is left out or out of range
+ * @returns {{ at: number, nodes: Map<string, { count: number, last: number, days: number, band: 'week' | 'month' | 'old' }>, max: number }}
+ */
+export function heatOf(history, at = null) {
+  const commits = (history && history.commits) || [];
+  const nodes = new Map();
+  if (!commits.length) return { at: -1, nodes, max: 0 };
+  const i = Number.isInteger(at) && at >= 0 && at < commits.length ? at : commits.length - 1;
+  const now = Date.parse(commits[i].date);
+  let max = 0;
+  for (const [id, e] of Object.entries(history.nodes || {})) {
+    let count = 0;
+    let last = -1;
+    for (const k of (e && e.commits) || []) { if (k > i) break; count++; last = k; }
+    if (!count) continue;
+    const days = Math.max(0, (now - Date.parse(commits[last].date)) / DAY_MS);
+    nodes.set(id, { count, last, days, band: bandOf(days) });
+    if (count > max) max = count;
+  }
+  return { at: i, nodes, max };
+}
+
+/** A halo's width on screen (px): from 1.5 for a node changed once to 6 for the most changed on the map (by the square root, so a few busy nodes do not flatten the rest) */
+export const haloWidth = (count, max) => (max > 0 && count > 0 ? Math.round((1.5 + 4.5 * Math.sqrt(Math.min(count, max) / max)) * 10) / 10 : 0);
+
+/**
+ * The Layers menu's row for the History layer: its count in words while the history is read.
+ * @param {'idle' | 'loading' | 'ready' | 'error'} status
+ * @param {{ nodes: Map<string, unknown> } | null} heat
+ * @param {string} color the dot's colour
+ */
+export function historyRowOf(status, heat, color) {
+  const n = heat ? heat.nodes.size : 0;
+  const countText = status === 'ready' ? `${n} ${n === 1 ? 'node' : 'nodes'}` : status === 'loading' ? 'reading…' : status === 'error' ? 'not read' : 'not read yet';
+  return { key: HISTORY_LAYER, label: 'History', color, overlay: true, countText, desc: 'A halo round each node the history changed: the wider, the more often; pink this week, violet this month, grey before. Picking a spec in a node\'s History lights what it reached.' };
+}
+
+/**
+ * The bar on the map while a spec is picked (spec 0014 D3): the spec, a link to its file on the forge when there is one, what it reached, and how to show the whole map again.
+ * @param {{ spec: string, nodes: Set<string>, commits: number }} pick
+ * @param {{ links: ReturnType<typeof forgeLinks>, specs: ReturnType<typeof specFiles> }} ctx
+ */
+export function specBarHtml(pick, { links, specs }) {
+  const spec = specs && specs.get(pick.spec);
+  const href = spec && links ? links.file(spec.file) : null;
+  const name = href ? `<a class="hx-link" data-corn="text-link" href="${esc(href)}" target="_blank" rel="noreferrer">Spec ${esc(pick.spec)}</a>` : `<b>Spec ${esc(pick.spec)}</b>`;
+  const label = spec ? ` · ${esc(spec.label)}` : '';
+  const c = pick.commits;
+  const n = pick.nodes.size;
+  return `<span class="hx-history-bar-text">${name}${label}: ${c} ${c === 1 ? 'commit' : 'commits'}, ${n} ${n === 1 ? 'node' : 'nodes'}</span>`
+    + `<button type="button" class="hx-btn hx-btn--quiet hx-textact" data-corn-kind="quiet" data-history-unpick>Show the whole map</button>`;
 }

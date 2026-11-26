@@ -203,6 +203,10 @@
   --corn-work-edge-work: auto;
   --corn-work-edge-code: auto;
   --corn-work-edge-adds: auto;
+  /* The History layer (spec 0014 D3): a node's halo, by how lately it changed as of the timeline's commit */
+  --corn-history-week: #f472b6;
+  --corn-history-month: #a78bfa;
+  --corn-history-old: #94a3b8;
   /* Node fill by group */
   --corn-map-group-app: auto;
   --corn-map-group-pkg: auto;
@@ -256,6 +260,9 @@
     --corn-info: #03679e;
 
     --corn-added: #197c6f;
+    --corn-history-week: #be185d;
+    --corn-history-month: #6d28d9;
+    --corn-history-old: #64748b;
     --corn-changed: #8f6703;
     --corn-removed: #e20b0b;
     --corn-edit: #6839f6;
@@ -305,6 +312,9 @@
   --corn-info: #03679e;
 
   --corn-added: #197c6f;
+  --corn-history-week: #be185d;
+  --corn-history-month: #6d28d9;
+  --corn-history-old: #64748b;
   --corn-changed: #8f6703;
   --corn-removed: #e20b0b;
   --corn-edit: #6839f6;
