@@ -23,7 +23,8 @@
  *                                       that says how to build them when this checkout has none (server/components.js)
  *   GET  /cornfield/brand/<key>.<ext>   a brand image the config's `brand` names (logo, wordmark, favicon; svg or png, 512 KB each): those files only
  *   GET  /manifest.webmanifest          the web app manifest: the repo's title, or built from `brand` when the config sets one
- *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
+ *   GET  /api/history                   the map's git history (core/history.js; spec 0014), when the config says `history: true`: a 404 otherwise
+ *   GET  /api/forge/…                   issues pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
  *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
  *   POST /api/forge/issues/<n>/spec, /pulls/<n>/build   the pipeline's steps (server/pipeline.js, server/forge-actions.js)
  *   POST /api/forge/release-drafts      the release notes kept as a DRAFT release on the forge (never published, no tag made)
@@ -83,6 +84,7 @@ import { createRunnerWatch, runnerPresence } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
 import { brandHead, escapeHtml, themeHead, themeHtmlTag } from './page-head.js';
 import { compressResponse } from './compress.js';
+import { createHistory } from '../core/history.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -263,6 +265,8 @@ export function clientConfig(config, signIn = false) {
     forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.forge.baseBranch ? { baseBranch: config.forge.baseBranch } : {}), ...(config.approveLands ? { approveLands: true } : {}) } : null,
     // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
     threads: config.threads === false ? false : { label: ideaLabel(config) },
+    // The map's git history is read (spec 0014): the page then offers the History layer, a node's commits and Replay
+    history: config.history === true,
     sources: browserSources(config),
     // Agent runs are followed (and marked on the map) where there is a forge and a sign-in (docs/agents.md)
     ...(config.forge && signIn ? { agents: { runs: true } } : {}),
@@ -320,6 +324,8 @@ export function createCornfieldServer(config, opts = {}) {
   const components = createComponents({ dir: opts.componentsDir ?? path.join(CORNFIELD_DIR, 'components', 'dist') });
   const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost, publicOrigin, embedOrigins: embed.origins };
   const fixtureCache = new Map();
+  // The repo's git history, read when first asked for and kept per HEAD and map (core/history.js); only with `history: true`
+  const history = config.history === true ? createHistory(root) : null;
   // What the line above Approve says an approval does besides posting (spec 0007 D1, server/decision.js): landing, and the run a trigger asks for
   const approvalRun = triggersOf(config).find(([event]) => event === 'spec.approved');
   const decisionFacts = {
@@ -516,6 +522,21 @@ export function createCornfieldServer(config, opts = {}) {
       const file = inside(root, config.topology);
       if (!file) return sendJson(res, 404, { error: `${config.topology} is not there yet: run cornfield sync` });
       return sendFile(req, res, file, reqPath);
+    }
+    if (reqPath === '/api/history') {
+      if (!history) return sendJson(res, 404, { ok: false, error: 'History is off. Set history: true in cornfield.config.js to read the repo\'s git history (docs/config.md#history).' });
+      const file = inside(root, config.topology);
+      const got = file && readPlain(file);
+      if (!got) return sendJson(res, 404, { ok: false, error: `${config.topology} is not there yet: run cornfield sync` });
+      let topology;
+      try { topology = JSON.parse(got.body.toString('utf8')); } catch { return sendJson(res, 422, { ok: false, error: `${config.topology} is not valid JSON` }); }
+      try {
+        const data = await history.get(topology, `${got.stats.mtimeMs}|${got.stats.size}`);
+        return sendJson(res, 200, { ok: true, ...data });
+      } catch (err) {
+        if (err.code !== 'ENOHISTORY') throw err;
+        return sendJson(res, 503, { ok: false, error: err.message });
+      }
     }
     if (reqPath === '/topology.cloud.json') {
       const file = inside(root, CLOUD_FILE);

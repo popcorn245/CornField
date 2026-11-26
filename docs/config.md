@@ -24,6 +24,7 @@ export default {
   embed: { origins: ['https://tasks.example.com'] },
   proxy: { '/api/': 'http://127.0.0.1:3245' },
   importMap: {},
+  history: true,   // read the repo's git history (see History below)
   dataDir: null,
 };
 ```
@@ -312,6 +313,19 @@ Every key is optional. An unknown key is refused.
 - it is at most **512 KB**.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails.
+
+## History
+
+`history: true` lets cornfield read the repo's git history for the map ([spec 0014](specs/0014-history.md)): which commits changed each node, when each node was born, and the trail each commit names, from spec to issue to pull request. It is off unless set.
+
+```js
+history: true,   // or false, the default
+```
+
+- **What is read.** `git log` of the checked-out branch, first parent only (a merged pull request is its one squash or merge commit), at most 5000 commits, newest first, with renames followed. It is read when the page first asks (`GET /api/history`) and kept until `HEAD` or the map changes.
+- **What runs.** Only `git`, with a fixed list of arguments and no shell. Nothing in the repo's own git config can run a program from it: the pager, an external diff, text conversion, signature checks and fsmonitor are all turned off for the call. It never writes.
+- **The trail.** A commit's pull request is the last `(#N)` in its subject; its issues an earlier `(#N)` and `Closes`, `Fixes` or `Resolves #N`; its issue keys a `[CF-45]`; its specs a `spec 0012` in its message, or a spec file (`docs/specs/NNNN-*.md`) it changed. What a commit does not name is shown as a gap, never guessed.
+- **Where it runs.** git must be installed where cornfield runs, and the repo must be a checkout with its history (a shallow clone has only the commits it fetched). Otherwise the route answers 503 with the reason.
 
 ## Layers
 
