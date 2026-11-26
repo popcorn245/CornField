@@ -1,6 +1,6 @@
 # Spec 0014: History (the map's own git history: replay it, trace a node to its spec, and a History layer)
 
-Status: **draft, a mock for review.** Nothing is decided until the maintainer answers the questions below. Its proposal is [proposals/0014-history.json](proposals/0014-history.json), with three mockups in [proposals/0014-history/](proposals/0014-history/). The mockups are stills of an explorable mock that runs on cornfield's own history (`explore.html` beside them, which reads `history.json`; serve the folder to open it, since a mockup inside cornfield never runs script).
+Status: **approved** (maintainer, in chat, 2026-11-26: "approved, let's get it"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). The four questions put with the mock are answered as recommended (below). Its proposal is [proposals/0014-history.json](proposals/0014-history.json), with three mockups in [proposals/0014-history/](proposals/0014-history/). The mockups are stills of an explorable mock that runs on cornfield's own history (`explore.html` beside them, which reads `history.json`; serve the folder to open it, since a mockup inside cornfield never runs script).
 
 ## What the maintainer asked for
 
@@ -27,7 +27,7 @@ The mock is built from cornfield's own repo: the 320 nodes of `topology.json`, p
 - A commit's **pull request** is the last `(#N)` in its title. Its **issues** are an earlier `(#N)`, an issue key like `[CF-45]` that an issue's title carries, or `Closes #N`. Its **specs** are a `spec 00NN` in its message, or a spec file it changed.
 - Commit authors are left out: never a real person in a fixture.
 
-## Decisions, as proposed
+## Decisions
 
 ### D1. Replay: the map grows on a timeline
 
@@ -58,16 +58,16 @@ Mockup: [history-layer.png](proposals/0014-history/history-layer.png).
 
 ### D4. Where history comes from
 
-- A new `core/history.js` reads the repo's history once per change of `HEAD` and keeps, per commit: its hash, date, title, pull request, issues, specs and the nodes it touched; per node: when it was born and its commits.
+- With `history: true` in the config, a new `core/history.js` reads the repo's history once per change of `HEAD` and keeps, per commit: its hash, date, title, pull request, issues, specs and the nodes it touched; per node: when it was born and its commits.
 - A new route, `GET /api/history`, serves it (allowlisted on purpose), and the page reads it only when the History layer or Replay is first used.
 - Links go to the forge cornfield already knows (`forge` in the config), so a Forgejo repo links to Forgejo.
 
-## The questions
+## The questions, answered
 
-1. **How cornfield reads git.** Cornfield never runs anything from the repo, and today runs no program at all. Recommended: run `git log` read-only with fixed arguments (no repo hooks or config run by it), behind a setting that is off for a repo cornfield does not own. The alternatives are reading `.git` directly (a pack-file reader, heavy) or asking the forge's API (slow, and only the forge's view).
-2. **Replay layout.** Recommended: today's layout, still, with nodes budding in (the mock). The alternative is laying out each commit's map again so it grows outward, which moves nodes as you watch.
-3. **The trail's sources.** Recommended: what the commit says (titles, keys, `Closes #N`, spec numbers, spec files), as in the mock, plus the forge's own link from a pull request to the issues it closes, read once and kept. Should a commit that names nothing be flagged in `validate`, or only shown as a gap?
-4. **Nodes that moved or went away.** A renamed file starts a new node in the mock. Recommended: follow renames (`git log --follow`), and show removed nodes as ghosts during a replay. Or leave both for later.
+1. **How cornfield reads git:** it runs `git log` itself, read-only, with fixed arguments and nothing from the repo's own config run by it (no hooks, pager, external diff or text conversion), behind the setting `history` (off unless it is set). Reading `.git` directly, or asking the forge's API, were set aside.
+2. **Replay layout:** today's layout, still, with nodes budding in, as in the mock.
+3. **The trail's sources:** what the commit says (titles, keys, `Closes #N`, spec numbers, spec files), as in the mock, plus later the forge's own link from a pull request to the issues it closes. A commit that names nothing is shown as a gap, and `validate` does not flag it.
+4. **Nodes that moved or went away:** renames are followed, so a moved file keeps its history; removed nodes show as ghosts during a replay.
 
 ## What gets built, in order
 
