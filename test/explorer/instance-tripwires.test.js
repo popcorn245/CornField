@@ -53,6 +53,9 @@ export const CONVERTED = [
   'engine/strings.js',
   'engine/flow-ui.js',
   'engine/search-status.js',
+  // Spec 0014 step 2: a node's history
+  'history.js',
+  'history-model.js',
   // Step 3 (spec 0011 D5, D6): where the data comes from
   'engine/source.js',
   'engine/theme-sheet.js',

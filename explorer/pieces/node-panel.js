@@ -370,7 +370,7 @@ export function mount(root, inst, options = {}) {
   }
 
   const metaList = own('drawer-meta-list');
-  scope.listen(metaList, 'click', (e) => { if (!onLinesClick(e)) toggleCapped(e.target); });
+  scope.listen(metaList, 'click', (e) => { if (!onLinesClick(e) && !onHistoryClick(e)) toggleCapped(e.target); });
   scope.listen(metaList, 'change', onLinesChange);
 
   /** Keeps "9 connected · 3 off screen" true as the camera moves (after every draw, while a node is selected and its panel is open) */
@@ -389,6 +389,26 @@ export function mount(root, inst, options = {}) {
     if (!box || !state.selectedNode) return;
     box.innerHTML = sections.threadsSection(state.selectedNode);
     addParts(box);
+  }
+
+  /** Draws "History" again in the open panel (spec 0014 D2: the history was read, a spec was picked, or Show all); nothing else in the panel moves */
+  function repaintHistory() {
+    const box = own('drawer-history');
+    const node = state.selectedNode;
+    if (!box || !node || gone) return;
+    const active = inst.active();
+    const key = active && box.contains(active) ? (active.dataset.historySpec ? `spec:${active.dataset.historySpec}` : active.hasAttribute('data-history-all') ? 'all' : '') : '';
+    box.innerHTML = inst.ask('history:section', node) || '';
+    addParts(box);
+    if (key.startsWith('spec:')) { const el = [...box.querySelectorAll('[data-history-spec]')].find((x) => `spec:${x.dataset.historySpec}` === key); if (el) el.focus(); }
+    else if (key === 'all') { const first = box.querySelector('.hx-history-commit a'); if (first) first.focus(); }
+  }
+  /** A spec's chip in "History" picks it (or ends the pick); "Show all" lists every commit */
+  function onHistoryClick(e) {
+    const spec = e.target.closest && e.target.closest('[data-history-spec]');
+    if (spec) { inst.emit('history:pick', spec.dataset.historySpec); return true; }
+    if (e.target.closest && e.target.closest('[data-history-all]')) { inst.emit('history:all'); return true; }
+    return false;
   }
 
   /** What the Work view put first in the panel for a node of code (the Work layer's "Open work", or the work touching it in the Work view): its elements and its markup */
@@ -437,6 +457,7 @@ export function mount(root, inst, options = {}) {
     <div id="drawer-live">${live}</div>
     ${nodeMockupsHtml(state, node.id)}
     <div id="drawer-threads">${sections.threadsSection(node)}</div>
+    <div id="drawer-history">${inst.ask('history:section', node) || ''}</div>
     ${sections.diffSection(node)}`;
     addParts(metaList);
     inst.emit('threads:ensure'); // the Work list reads the threads once, for "Mentioned in"
@@ -573,6 +594,7 @@ export function mount(root, inst, options = {}) {
   });
   // The threads that mention nodes changed (the list was read, or the map changed): the section is drawn again
   scope.on('threads:changed', () => repaintThreads());
+  scope.on('history:changed', () => repaintHistory());
   scope.on('work:changed', () => repaintWork());
   // The dim layer behind the panel: on a phone a tap there folds the panel to its peek; elsewhere it closes it
   if (!inline) {

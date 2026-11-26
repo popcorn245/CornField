@@ -62,6 +62,7 @@ import { initTheme, setThemeChoice } from './theme.js';
 import { initAccountMenu } from './account-menu.js';
 import { watchHeaderFit } from './header-fit.js';
 import { watchHint } from './hint.js';
+import { initHistory } from './history.js';
 
 /** The instance and its map: made by `startPage`, the one of this document */
 let inst;
@@ -203,6 +204,7 @@ export function startPage() {
     initWhatIf(); // before a proposal can open, so its edits come with it
     initReview(); // the decision follows the what-if editor's edits
     initMockups(); // a proposal's screens open from the node they name
+    initHistory(inst, config); // a node's commits and their trails in the node panel, read when first shown (history.js; only with `history: true`)
     // /?proposal=<slug> (&source=, &proposalView=) opens a proposal, as a host would ask for one (page-address.js)
     const proposalOpened = await openFromAddress(inst, window.location.search);
     // The live layer (live.js): loads only once a live layer goes on in the Layers menu; with no source it stays off

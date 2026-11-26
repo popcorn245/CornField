@@ -188,3 +188,16 @@
 /* The head never shrinks: the body is a flex column that scrolls, and a short box (a panel in a host's 200px place, a short window) would squash the head to its
    min-height, laying a title that wraps, or a kicker that does ("Added by" a proposal), over the line under it */
 .hx-drawer-head { min-height: var(--corn-panel-head-height); flex-shrink: 0; }
+
+/* History (spec 0014 D2): a node's commits, each with its trail from spec to issue to pull request to commit; a gap is dashed */
+.hx-history-stats { margin: 0; color: var(--corn-text-2); font-size: var(--corn-text-sm); }
+.hx-history-k { margin: var(--corn-space-3) 0 var(--corn-space-1); font-size: var(--corn-text-xs); font-weight: 600; color: var(--corn-text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.hx-history-issues { margin: var(--corn-space-2) 0 0; font-size: var(--corn-text-sm); color: var(--corn-text-2); }
+.hx-history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-history-commit { display: flex; flex-direction: column; gap: var(--corn-space-1); padding: var(--corn-space-3) var(--corn-space-4); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); }
+.hx-history-subject { color: var(--corn-text); overflow-wrap: anywhere; }
+.hx-trail { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1); }
+.hx-trail-arrow { color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-trail-chip { display: inline-flex; align-items: center; padding: 0 var(--corn-space-2); min-height: 22px; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); color: var(--corn-text-2); font-size: var(--corn-text-xs); text-decoration: none; white-space: nowrap; }
+a.hx-trail-chip:hover { border-color: var(--corn-accent-hover); color: var(--corn-text); }
+.hx-trail-chip[data-trail="gap"] { border-style: dashed; color: var(--corn-text-3); }
