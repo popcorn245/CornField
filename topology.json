@@ -11170,7 +11170,12 @@
     {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0014-history"
+    },
+    {
+      "from": "page-doc-docs-specs-0014-history",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-26T19:24:19.473Z"
+  "updatedAt": "2026-11-26T19:49:56.670Z"
 }
