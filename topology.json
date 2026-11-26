@@ -11151,7 +11151,12 @@
       "from": "page-doc-docs-specs-0013-words",
       "to": "page-doc-docs-threads",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0013-words",
+      "to": "page-doc-docs-specs-0012-work-as-a-view",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-26T08:59:46.058Z"
+  "updatedAt": "2026-11-26T09:07:14.989Z"
 }

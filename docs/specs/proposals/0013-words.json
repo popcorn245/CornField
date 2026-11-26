@@ -57,7 +57,7 @@
         "set": {
           "desc": "Checks a topology against its schema, and every word a node carries against the glossary."
         },
-        "why": "an unknown word is reported like an unknown kind"
+        "why": "an unknown word is reported like an unknown type"
       },
       {
         "id": "core-explorer-pieces-layers",
@@ -72,13 +72,6 @@
           "desc": "What is selected: a node with its words, or a piece of work with what it is connected to and its actions."
         },
         "why": "a node shows its words, the word to use instead of one to avoid, and a thread to ask about it"
-      },
-      {
-        "id": "core-server-embed",
-        "set": {
-          "desc": "Cornfield inside another app: the components, the routes they read, and the words a host picks."
-        },
-        "why": "a host can pick words to tie together"
       }
     ]
   },
@@ -86,6 +79,12 @@
     "add": [
       {
         "from": "core-core-validate",
+        "to": "core-core-glossary",
+        "dashed": true,
+        "label": "imports"
+      },
+      {
+        "from": "core-server-server",
         "to": "core-core-glossary",
         "dashed": true,
         "label": "imports"
@@ -111,7 +110,7 @@
     {
       "node": "core-explorer-engine-words",
       "path": "0013-words/words-layer.svg",
-      "title": "The Words layer on the Map view with Invoice picked: its six nodes tied to the word, the rest dimmed, and the dictionary open beside the map"
+      "title": "The Words layer on the Map view with Invoice picked: the five nodes that carry it and the one named with a word to avoid, tied to the word, the rest dimmed, and the dictionary open beside the map"
     },
     {
       "node": "core-explorer-pieces-node-panel",
