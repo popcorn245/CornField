@@ -14,6 +14,11 @@
  *   haloWidth(count, max)             a halo's width on screen (px) for how often its node changed
  *   historyRowOf(status, heat)        the Layers menu's row under Overlays
  *   specBarHtml(pick, ctx)            the bar on the map while a spec is picked: `Spec 0012 · Work as a view: 6 commits, 72 nodes`
+ *   commitKind(subject)               feat, fix, docs or other: a timeline mark's colour
+ *   replayFrame(history, edges, at)   Replay (spec 0014 D1): what the map holds at a commit, what was born at it and what it changed
+ *   replayCount(frame, total)         the count in the corner: `212 nodes · 340 edges · commit 45 of 132 · 3 born`
+ *   stepWords(frame, ctx)             what a step says to a screen reader
+ *   speedMs(total, speed)             how long a commit stays on screen while Replay plays
  */
 
 import { escapeHtml as esc } from '../core/text.js';
@@ -157,7 +162,7 @@ export function historySectionHtml(node, ctx) {
   const issues = t.issues.length ? `<p class="hx-history-issues">Issues: ${t.issues.map((i) => { const href = ctx.links && ctx.links.issue(i); return href ? `<a class="hx-link" data-corn="text-link" href="${esc(href)}" target="_blank" rel="noreferrer">#${esc(i)}</a>` : `#${esc(i)}`; }).join(', ')}</p>` : '';
   const shown = ctx.all ? t.commits : t.commits.slice(0, HISTORY_CAP);
   const rows = shown.map((c) => `<li class="hx-history-commit" data-corn="row">`
-    + `<div class="hx-row-meta">${esc(dayOf(c.date, ctx.locale))} · ${c.nodes.length} ${c.nodes.length === 1 ? 'node' : 'nodes'}${t.born && c.index === t.born.index ? ' · <span class="hx-history-born">born here</span>' : ''}</div>`
+    + `<div class="hx-row-meta">${esc(dayOf(c.date, ctx.locale))} · ${c.nodes.length} ${c.nodes.length === 1 ? 'node' : 'nodes'}${t.born && c.index === t.born.index ? ' · <span class="hx-history-born">born here</span>' : ''} · <button type="button" class="hx-textbtn" data-corn-kind="quiet" data-history-at="${c.index}" aria-label="Replay the map at this commit: ${esc(c.subject)}">Replay here</button></div>`
     + `<div class="hx-history-subject">${esc(c.subject)}</div>`
     + trailHtml(c, ctx)
     + '</li>');
@@ -246,3 +251,69 @@ export function specBarHtml(pick, { links, specs }) {
   return `<span class="hx-history-bar-text">${name}${label}: ${c} ${c === 1 ? 'commit' : 'commits'}, ${n} ${n === 1 ? 'node' : 'nodes'}</span>`
     + `<button type="button" class="hx-btn hx-btn--quiet hx-textact" data-corn-kind="quiet" data-history-unpick>Show the whole map</button>`;
 }
+
+/** A commit's kind, from its conventional title: `feat`, `fix`, `docs`, or `other` */
+export function commitKind(subject) {
+  const m = /^(\w+)(?:\([^)]*\))?!?:/.exec(String(subject || ''));
+  const k = m ? m[1].toLowerCase() : '';
+  return k === 'feat' || k === 'fix' || k === 'docs' ? k : 'other';
+}
+
+/** The parent of each node, by its ownership edge (no kind, not dashed): where a node buds from */
+export function parentsOf(edges) {
+  const out = new Map();
+  for (const e of edges || []) if (e && !e.dashed && !e.kind && e.from !== e.to && !out.has(e.to)) out.set(e.to, e.from);
+  return out;
+}
+
+/**
+ * The map at a commit (spec 0014 D1): every node born by then (a node the history does not hold, newer than it, is always there), the edges
+ * between them, the nodes born at this commit and those it changed.
+ * @param {{ commits: object[], nodes: Record<string, { born: number }> }} history
+ * @param {{ from: string, to: string }[]} edges the map's edges
+ * @param {number} at a commit's index
+ */
+export function replayFrame(history, edges, at) {
+  const commits = history.commits;
+  const i = Math.max(0, Math.min(commits.length - 1, Number.isInteger(at) ? at : commits.length - 1));
+  const hidden = new Set();
+  const born = [];
+  for (const [id, e] of Object.entries(history.nodes || {})) {
+    if (e.born > i) hidden.add(id);
+    else if (e.born === i) born.push(id);
+  }
+  const all = Object.keys(history.nodes || {}).length;
+  const shownEdges = (edges || []).filter((e) => !hidden.has(e.from) && !hidden.has(e.to)).length;
+  const commit = commits[i];
+  return { at: i, total: commits.length, commit, hidden, born: born.sort(), changed: (commit && commit.nodes) || [], nodes: all - hidden.size, edges: shownEdges };
+}
+
+/** The count in the corner of the timeline */
+export function replayCount(f) {
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  return `${plural(f.nodes, 'node', 'nodes')} · ${plural(f.edges, 'edge', 'edges')} · commit ${f.at + 1} of ${f.total}${f.born.length ? ` · ${f.born.length} born` : ''}`;
+}
+
+/**
+ * What a step says to a screen reader: the commit, then what was born and what changed, by name (the first few).
+ * @param {ReturnType<typeof replayFrame>} f
+ * @param {{ labelOf: (id: string) => string, locale?: string }} ctx
+ */
+export function stepWords(f, { labelOf, locale }) {
+  const c = f.commit || {};
+  const names = (ids) => {
+    const first = ids.slice(0, 3).map(labelOf);
+    return ids.length > 3 ? `${first.join(', ')} and ${ids.length - 3} more` : first.length > 1 ? `${first.slice(0, -1).join(', ')} and ${first[first.length - 1]}` : first.join('');
+  };
+  const parts = [`Commit ${f.at + 1} of ${f.total}, ${dayOf(c.date, locale)}: ${c.subject || ''}.`];
+  if (f.born.length) parts.push(`Born: ${names(f.born)}.`);
+  const changed = f.changed.filter((id) => !f.born.includes(id));
+  if (changed.length) parts.push(`Changed: ${names(changed)}.`);
+  parts.push(`${f.nodes} ${f.nodes === 1 ? 'node' : 'nodes'} on the map.`);
+  return parts.join(' ');
+}
+
+/** The speeds Replay plays at */
+export const SPEEDS = Object.freeze([1, 2, 4]);
+/** How long a commit stays on screen while Replay plays (ms): the whole history in about 40 seconds at 1×, never under 40 ms or over 700 ms a commit */
+export const speedMs = (total, speed = 1) => Math.max(40, Math.min(700, 40_000 / Math.max(1, total))) / (SPEEDS.includes(speed) ? speed : 1);

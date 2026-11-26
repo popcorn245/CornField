@@ -408,6 +408,8 @@ export function mount(root, inst, options = {}) {
     const spec = e.target.closest && e.target.closest('[data-history-spec]');
     if (spec) { inst.emit('history:pick', spec.dataset.historySpec); return true; }
     if (e.target.closest && e.target.closest('[data-history-all]')) { inst.emit('history:all'); return true; }
+    const at = e.target.closest && e.target.closest('[data-history-at]');
+    if (at) { inst.emit('history:replay', Number(at.dataset.historyAt)); return true; } // the timeline moves to the commit (spec 0014 D2)
     return false;
   }
 

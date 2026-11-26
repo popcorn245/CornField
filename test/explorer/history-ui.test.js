@@ -220,3 +220,73 @@ describe('the History layer', () => {
   });
 });
 
+describe('Replay', () => {
+  const visible = (id) => !!sceneNode(id);
+  const strip = () => q('.hx-timeline');
+
+  it('shows its button only when history is on', () => {
+    fakeServer();
+    mount({ history: false, forge: FORGE });
+    expect($('replay-btn').hidden).toBe(true);
+    stop();
+    mount();
+    expect($('replay-btn').hidden).toBe(false);
+  });
+
+  it('reads the history, then shows the map at its first commit and steps through it, the keyboard\'s playhead saying where it is', async () => {
+    const server = fakeServer();
+    mount();
+    const inst = pageInstance();
+    inst.reducedMotion = true; // nothing plays by itself, nothing buds
+    const said = [];
+    const offSaid = inst.on('announce', (t) => said.push(t));
+    inst.emit('history:replay');
+    await settle();
+    render.renderNow();
+    expect(server.calls).toEqual(['/api/history']);
+    expect($('replay-btn').getAttribute('aria-pressed')).toBe('true');
+    expect(state.replay.at).toBe(0);
+    expect(visible('core-auth')).toBe(true);
+    expect(visible('core-db')).toBe(false); // born at the second commit
+    const range = strip().querySelector('input[type="range"]');
+    expect([range.min, range.max, range.value]).toEqual(['0', '2', '0']);
+    expect(range.getAttribute('aria-valuetext')).toContain('Commit 1 of 3');
+    expect(strip().querySelector('.hx-timeline-count').textContent).toBe('4 nodes · 3 edges · commit 1 of 3 · 4 born');
+    expect(q('[data-replay="back"]').disabled).toBe(true);
+    // a step forward: core-db is born, and the commit's nodes pulse (a still ring under reduced motion)
+    click(q('[data-replay="forward"]'));
+    render.renderNow();
+    expect(visible('core-db')).toBe(true);
+    expect(qa('.hx-replay-pulse').map((p) => p.dataset.node).sort()).toEqual(['core-auth', 'core-db', 'pkg-server']);
+    expect(q('.hx-replay-pulses').classList.contains('is-static')).toBe(true);
+    expect(strip().querySelector('.hx-timeline-line').textContent).toContain('Spec 0007');
+    expect(said[said.length - 1]).toMatch(/^Commit 2 of 3, .+: feat\(auth\): sign-in <b>now<\/b>\. Born: db\.js\. Changed: auth\.js and server\. 5 nodes on the map\.$/);
+    // scrubbing to the last commit, then Now: the map as it is
+    range.value = '2';
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(state.historyAt).toBe(2);
+    expect(q('[data-replay="forward"]').disabled).toBe(true);
+    click(q('[data-replay="now"]'));
+    expect(state.replay).toBe(null);
+    expect(state.historyAt).toBe(null);
+    expect(strip()).toBe(null);
+    expect($('replay-btn').getAttribute('aria-pressed')).toBe('false');
+    expect(visible('core-db')).toBe(true);
+    offSaid();
+  });
+
+  it('opens at a commit chosen in a node\'s History, paused', async () => {
+    fakeServer();
+    mount();
+    pageInstance().reducedMotion = false;
+    selectNode(pick('core-auth'));
+    await settle();
+    click(q('[data-history-at="1"]'));
+    await settle();
+    expect(state.replay.at).toBe(1);
+    expect(q('[data-replay="play"]').getAttribute('aria-label')).toBe('Play');
+    pageInstance().emit('history:replay');
+    expect(state.replay).toBe(null);
+  });
+});
+

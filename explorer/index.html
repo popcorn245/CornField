@@ -63,6 +63,9 @@
         </button>
       </div>
 
+      <!-- Replay (spec 0014 D1, explorer/history-replay.js): the map grows on a timeline, commit by commit; shown when the config has history on -->
+      <button type="button" id="replay-btn" class="hx-layers-chip hx-replay-btn" data-action="history-replay" data-corn-kind="secondary" aria-pressed="false" hidden title="Replay the map's history, commit by commit">Replay</button>
+
       <!-- The Layers chip: how many of the layers are on; it opens the layers menu. On a phone it sits on the map, top left. It is a piece (explorer/pieces/layers.js): page.js mounts it here. Until then a stand-in (its markup without ids) holds its place, so the first paint has the chip and nothing moves when the piece comes; test/explorer/page-pieces.test.js keeps the two the same -->
       <!--corn-placeholder:layers/menu-->
       <div class="hx-menu-wrap hx-layers">

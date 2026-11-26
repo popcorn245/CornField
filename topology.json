@@ -3257,6 +3257,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "A node's history on an instance (spec 0014 D2): reads `GET /api/history` (core/history.js) once, the first time the node panel asks, and answers the panel's History section; picking a spec lights e… (explorer/history.js)"
+    },
+    {
+      "id": "core-explorer-history-replay",
+      "label": "history-replay.js",
+      "type": "core",
+      "file": "explorer/history-replay.js",
+      "summary": "Replay (spec 0014 D1): the map grows on a timeline, commit by commit, like cells in a dish.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Replay (spec 0014 D1): the map grows on a timeline, commit by commit, like cells in a dish. (explorer/history-replay.js)"
     }
   ],
   "edges": [
@@ -11276,7 +11286,35 @@
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-history-replay"
+    },
+    {
+      "from": "core-explorer-history-replay",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history-replay",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history-replay",
+      "to": "core-explorer-history-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history",
+      "to": "core-explorer-history-replay",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-26T20:34:17.597Z"
+  "updatedAt": "2026-11-26T20:48:47.182Z"
 }

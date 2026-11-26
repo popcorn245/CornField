@@ -55,3 +55,31 @@
 /* The bar while a spec is picked: what it reached, and the way back to the whole map */
 .hx-history-bar { position: absolute; top: var(--corn-space-3); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: var(--corn-space-3); max-width: calc(100% - var(--corn-space-6)); padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-pill); font-size: var(--corn-text-sm); color: var(--corn-text); }
 .hx-history-bar-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Replay (spec 0014 D1, history-replay.js): the timeline strip along the bottom of the map, and the pulse on what a commit changed */
+.hx-replay-btn[aria-pressed="true"] { background: var(--corn-surface-3); color: var(--corn-text); border-color: var(--corn-accent); }
+.hx-timeline { position: absolute; left: var(--corn-space-4); right: var(--corn-space-4); bottom: var(--corn-space-4); z-index: 3; display: flex; flex-direction: column; gap: var(--corn-space-1); padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); color: var(--corn-text); font-size: var(--corn-text-sm); }
+.hx-timeline-bar { display: flex; align-items: center; gap: var(--corn-space-2); }
+.hx-timeline-btn { min-width: 28px; height: 26px; padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text); font: inherit; cursor: pointer; }
+.hx-timeline-btn:hover:not(:disabled) { background: var(--corn-surface-3); }
+.hx-timeline-btn:disabled { opacity: 0.4; cursor: default; }
+.hx-timeline-btn:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-timeline-count { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.hx-timeline-track { position: relative; height: 34px; }
+.hx-timeline-marks { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hx-timeline-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: pointer; }
+.hx-timeline-range::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+.hx-timeline-range::-moz-range-track { height: 100%; background: transparent; }
+.hx-timeline-range::-webkit-slider-thumb { -webkit-appearance: none; width: 3px; height: 34px; border-radius: var(--corn-radius-pill); background: var(--corn-text); }
+.hx-timeline-range::-moz-range-thumb { width: 3px; height: 34px; border: 0; border-radius: var(--corn-radius-pill); background: var(--corn-text); }
+.hx-timeline-range:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-timeline-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); min-width: 0; }
+.hx-timeline-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.hx-replay-pulses { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.hx-replay-pulse { position: absolute; width: 0; height: 0; --r: 12px; }
+.hx-replay-pulse::before { content: ""; position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); box-sizing: border-box; border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-history-week); animation: hx-replay-pulse 0.9s ease-out 1 forwards; }
+@keyframes hx-replay-pulse { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.7); opacity: 0; } }
+.hx-replay-pulses.is-static .hx-replay-pulse::before { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-replay-pulse::before { animation: none !important; }
+}

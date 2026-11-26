@@ -18,12 +18,15 @@
  *   history:all      (none) (emit)              the section lists every commit, not only the newest
  *   history:changed  (none) (emitted)           the read ended, or a pick changed: the open panel draws its History section again
  *   history:legend   { active } (emitted)       the History layer is drawn: the Layers menu shows its legend
+ *   history:replay   at? (emit)                 open Replay (history-replay.js) at a commit, or close it when it is open and no commit is named
+ *   history:at       (none) (emitted)           the timeline's commit moved (`state.historyAt`): the halos follow it
  */
 
 import { credentialed } from './engine/connection.js';
 import { announce } from './engine/keyboard.js';
 import { onLayersChange, redrawLayers } from './engine/layers.js';
 import { layerOn } from './layer-model.js';
+import { createReplay } from './history-replay.js';
 import { HISTORY_LAYER, MAX_HALOS, forgeLinks, haloWidth, heatOf, historyRowOf, historySectionHtml, specBarHtml, specFiles, specReach } from './history-model.js';
 
 /** Where the server answers the history (server/server.js) */
@@ -37,10 +40,8 @@ export const HISTORY_PATH = '/api/history';
 export function initHistory(inst, config) {
   /** The dot of the Layers menu's row: this week's halo colour, as the theme has it */
   const haloColor = () => {
-    const root = inst.doc && inst.doc.documentElement;
-    const view = inst.doc && inst.doc.defaultView;
-    const v = root && view && view.getComputedStyle ? view.getComputedStyle(root).getPropertyValue('--corn-history-week').trim() : '';
-    return v || 'currentColor';
+    const read = inst.tokenReader();
+    return (read && read('--corn-history-week').trim()) || 'currentColor';
   };
   const { state } = inst;
   const on = !!(config && config.history === true);
@@ -138,8 +139,12 @@ export function initHistory(inst, config) {
     if (inst.map) inst.map.render();
   }
 
-  async function load() {
-    if (mem.status !== 'idle') return;
+  let reading = null;
+  function load() {
+    if (mem.status === 'idle') reading = read();
+    return reading || Promise.resolve();
+  }
+  async function read() {
     mem.status = 'loading';
     try {
       const res = await credentialed(inst)(HISTORY_PATH);
@@ -172,7 +177,24 @@ export function initHistory(inst, config) {
     inst.emit('history:changed');
   }
 
+  const replay = mem.status === 'off' ? null : createReplay(inst, {
+    ready: () => mem.status === 'ready',
+    history: () => mem.history,
+    load,
+    links: mem.links,
+    specs: () => { if (!mem.specs) mem.specs = specFiles(state.nodes); return mem.specs; },
+  });
+
   if (mem.status !== 'off') {
+    const btn = inst.el('replay-btn');
+    if (btn) btn.hidden = false;
+    stops.push(inst.on('history:replay', (at) => {
+      if (Number.isInteger(at)) { if (replay.open()) replay.stop(); replay.start(at); return; }
+      if (replay.open()) replay.stop(); else replay.start(0);
+    }));
+    stops.push(inst.on('view', () => { if (state.view !== 'orbit' && replay.open()) replay.stop(); }));
+    stops.push(inst.on('history:changed', () => { if (replay.open()) replay.repaint(); }));
+    stops.push(() => { replay.destroy(); if (btn) btn.hidden = true; });
     // The Layers menu's row under Overlays (engine/layers.js `layerRows`), in the colour of this week's halo
     state.historyRow = () => historyRowOf(mem.status, mem.status === 'ready' ? heatNow() : null, haloColor());
     stops.push(onLayersChange(inst, layerChanged));

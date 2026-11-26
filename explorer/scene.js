@@ -290,6 +290,7 @@ export function isNodeVisible(state, node, { viewer = false } = {}) {
   if (state.view === 'work') return node.hidden !== true; // the Work view (spec 0012): its layers set `hidden` on the nodes (work-view.js)
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
+  if (state.replay && state.replay.hidden.has(node.id)) return false; // Replay (history-replay.js, spec 0014 D1): a node not yet born at the timeline's commit
   if (node.type === 'root') return true;
   return layerShows(state, node, viewer ? state.activeLayers : layersOf(state)) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
 }
@@ -736,6 +737,34 @@ export function emphasiseScenario(scene, scn, opts = {}) {
  * @param {{reduceMotion?: boolean}} [opts] `reduceMotion`: describe no packets (prefers-reduced-motion)
  * @returns {Scene}
  */
+/**
+ * Replay's budding (spec 0014 D1): a node being born grows out of its parent and settles into its place. `bud` holds, by node id, where it buds
+ * from and how far it has come (`t`, 0 to 1, eased); its lines follow it. The layout itself never moves.
+ * @param {{ nodes: object[], edges: object[] }} scene
+ * @param {Map<string, { x: number, y: number, t: number }>} bud
+ */
+export function budScene(scene, bud) {
+  const at = new Map();
+  for (const n of scene.nodes) {
+    const b = bud.get(n.id);
+    if (!b) continue;
+    const t = Math.max(0, Math.min(1, b.t));
+    n.x = b.x + (n.x - b.x) * t;
+    n.y = b.y + (n.y - b.y) * t;
+    n.r *= Math.max(0.15, t);
+    n.alpha *= Math.max(0.2, t);
+    at.set(n.id, n);
+  }
+  for (const e of scene.edges) {
+    const a = at.get(e.from);
+    const z = at.get(e.to);
+    if (!a && !z) continue;
+    if (a) { e.x1 = a.x; e.y1 = a.y; e.r1 = a.r; }
+    if (z) { e.x2 = z.x; e.y2 = z.y; e.r2 = z.r; }
+    if (e.curve) e.curve = { cx: (e.x1 + e.x2) / 2, cy: (e.y1 + e.y2) / 2 };
+  }
+}
+
 export function buildScene(state, opts = {}) {
   const preset = state.view === 'dataflow';
   const subgraph = state.scenario ? scenarioSubgraph(state) : state.selectedNode ? getActiveSubgraph(state.selectedNode, viewEdgesOf(state), { throughChildren: !!state.throughChildren, kind: state.selectedKind || null }) : null;
@@ -752,6 +781,7 @@ export function buildScene(state, opts = {}) {
     theme: 'dark',
     version: state.sceneVersion || 0,
   };
+  if (state.replay && state.replay.bud && state.replay.bud.size) budScene(scene, state.replay.bud);
   if (state.view === 'house') decorateHouseScene(scene, state); // its bands and tray as lanes, rooms unlabelled (house-model.js)
   if (state.view === 'work' && state.workLanes) scene.decor.lanes = state.workLanes; // its lanes and their titles (work-model.js)
   if (state.scenario) emphasiseScenario(scene, state.scenario, opts);
