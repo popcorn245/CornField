@@ -23,7 +23,8 @@
  */
 
 import { escapeHtml as escHtml } from '../../core/text.js';
-import { summarize } from '../../core/proposal.js';
+import { usableLinks } from '../../core/schema.js';
+import { summarize, MAX_LINKS, MAX_LINK_LABEL } from '../../core/proposal.js';
 import { PROPOSAL_VIEWS, chipText, barCounts, proposalPanelHtml, yoursText, sourceChip, pullNumberOf, malformedLinkWords } from '../proposal-model.js';
 import { reviewWords } from '../review-model.js';
 import { waitingLineWords } from '../waiting-model.js';
@@ -75,6 +76,8 @@ export const markup = ({ edit = true } = {}) => ({
     + '</div>'
     + '</div>'
     + '</div>'
+    // The proposal's own links (`links` of the file): made in renderBar, only when it has some
+    + '<nav id="proposal-links" class="hx-proposal-links" aria-label="Links for this proposal" hidden></nav>'
     + '<details id="proposal-errors" class="hx-proposal-errors" data-corn="proposal-errors" hidden>'
     + '<summary data-corn="summary" id="proposal-errors-count"></summary>'
     + '<ul id="proposal-errors-list"></ul>'
@@ -94,6 +97,9 @@ export function problemsHtml(errors, max = 8) {
   if (errors.length > max) shown.push(`<li class="hx-faint">and ${errors.length - max} more</li>`);
   return shown.join('');
 }
+
+/** One link of the proposal: it opens in a new tab, and says so to a screen reader. The label is escaped; the href passed `usableLinks` and goes nowhere but its attribute */
+const linkHtml = (l) => `<a class="hx-proposal-link" data-corn="link" href="${escHtml(l.href)}" target="_blank" rel="noopener noreferrer"><span>${escHtml(l.label)}</span><span class="hx-sr-only"> (opens in a new tab)</span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h7v7M13 3L7 9" /></svg></a>`;
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const safeHref = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
@@ -233,6 +239,7 @@ export function mount(root, inst, options = {}) {
     if (yours) chip.insertAdjacentHTML('beforeend', `<span class="hx-proposal-sep" aria-hidden="true"> · </span><span class="hx-proposal-count hx-proposal-yours"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit" aria-hidden="true"></span>${escHtml(yours)}</span>`);
     addParts(chip);
     own('proposal-mode').textContent = t(inst, state.proposalView);
+    paintLinks(p);
 
     for (const btn of bar.querySelectorAll('[data-action="proposal-view"]')) {
       const on = btn.dataset.view === state.proposalView;
@@ -253,6 +260,15 @@ export function mount(root, inst, options = {}) {
       own('proposal-errors-count').textContent = `${plural(errors.length, 'problem')} in this proposal`;
       own('proposal-errors-list').innerHTML = problemsHtml(errors);
     }
+  }
+
+  /** The proposal's links, beside Before / Diff / After. A proposal can come from a pull request, so each is checked again here: what is not a link the file format accepts is left out */
+  function paintLinks(p) {
+    const nav = own('proposal-links');
+    const links = usableLinks(p && p.links, { max: MAX_LINKS, maxLabel: MAX_LINK_LABEL });
+    nav.hidden = links.length === 0;
+    nav.innerHTML = links.map(linkHtml).join('');
+    addParts(nav);
   }
 
   // ---------------------------------------------------------------------------

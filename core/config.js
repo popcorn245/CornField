@@ -46,6 +46,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { repoReader } from './repo.js';
+import { linkProblems } from './schema.js';
 import { themeProblems } from './theme.js';
 import { brandProblems } from './brand.js';
 import { stringsProblems } from './strings.js';
@@ -415,10 +416,7 @@ export function configProblems(c) {
     } else if (!inRepo(c.proposals)) out.push('"proposals" is the proposals folder inside the repo, written relative to it (or { dir, approveLands }).');
   }
   if (c.links !== undefined) {
-    if (!Array.isArray(c.links)) out.push('"links" is a list of { label, href }.');
-    else c.links.forEach((l, i) => {
-      if (!isObject(l) || !isText(l.label) || !/^(https?:\/\/|\/)/.test(String(l.href || ''))) out.push(`links[${i}] is { label, href } with an http(s) or same-origin href.`);
-    });
+    for (const p of linkProblems(c.links)) out.push(p.message);
   }
   out.push(...themeProblems(c.theme));
   out.push(...brandProblems(c.brand));

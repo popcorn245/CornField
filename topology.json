@@ -4270,6 +4270,30 @@
     },
     {
       "from": "tool-ci",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "uses actions/checkout · uses actions/setup-node · uses actions/upload-pages-artifact · uses actions/deploy-pages · uses docker/setup-buildx-action · uses docker/login-action · uses docker/metadata-action · uses docker/build-push-action · secret-scan.yml: downloads from github.com",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-npm",
+      "kind": "calls",
+      "status": "live",
+      "label": "pages.yml: npm ci · release.yml: npm ci · release.yml: npm install · release.yml: downloads from registry.npmjs.org · test.yml: npm ci",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run /tmp",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
       "to": "ext-ghcr",
       "kind": "calls",
       "status": "live",
@@ -11098,6 +11122,18 @@
       "label": "imports"
     },
     {
+      "from": "core-core-config",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-proposal",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0013-words"
     },
@@ -11105,31 +11141,7 @@
       "from": "page-doc-docs-specs-0013-words",
       "to": "page-doc-docs-adr-0006-safe-actions-only",
       "dashed": true
-    },
-    {
-      "from": "tool-ci",
-      "to": "ext-github",
-      "kind": "calls",
-      "status": "live",
-      "label": "uses actions/checkout · uses actions/setup-node · uses actions/upload-pages-artifact · uses actions/deploy-pages · uses docker/setup-buildx-action · uses docker/login-action · uses docker/metadata-action · uses docker/build-push-action · secret-scan.yml: downloads from github.com",
-      "when": "deploy"
-    },
-    {
-      "from": "tool-ci",
-      "to": "ext-npm",
-      "kind": "calls",
-      "status": "live",
-      "label": "pages.yml: npm ci · release.yml: npm ci · release.yml: npm install · release.yml: downloads from registry.npmjs.org · test.yml: npm ci",
-      "when": "deploy"
-    },
-    {
-      "from": "tool-ci",
-      "to": "ext-docker-hub",
-      "kind": "calls",
-      "status": "live",
-      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run /tmp",
-      "when": "deploy"
     }
   ],
-  "updatedAt": "2026-11-22T10:39:31.824Z"
+  "updatedAt": "2026-11-26T08:56:43.202Z"
 }
