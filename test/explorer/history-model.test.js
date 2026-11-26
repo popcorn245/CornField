@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { forgeLinks, specFiles, nodeTrail, specReach, trailHtml, heatOf, haloWidth, historyRowOf, specBarHtml } from '../../explorer/history-model.js';
+import { forgeLinks, specFiles, nodeTrail, specReach, trailHtml, heatOf, haloWidth, historyRowOf, specBarHtml, commitKind, parentsOf, replayFrame, replayCount, stepWords, speedMs } from '../../explorer/history-model.js';
 
 const sha = 'ab'.repeat(20);
 
@@ -105,5 +105,46 @@ describe('the History layer\'s heat', () => {
     expect(html).toContain('href="https://github.com/o/r/blob/HEAD/docs/specs/0012-x.md"');
     expect(html).toContain('Work &lt;i&gt;as&lt;/i&gt; a view: 1 commit, 2 nodes');
     expect(specBarHtml({ spec: '0099', nodes: new Set(), commits: 0 }, { links: null, specs })).toContain('<b>Spec 0099</b>: 0 commits, 0 nodes');
+  });
+});
+
+describe('Replay', () => {
+  const H = {
+    commits: [
+      { sha: 'a'.repeat(40), date: '2026-10-01T10:00:00Z', subject: 'start', nodes: ['root', 'pkg'] },
+      { sha: 'b'.repeat(40), date: '2026-10-05T10:00:00Z', subject: 'feat(x): a, b and c', nodes: ['pkg', 'a', 'b', 'c', 'd'] },
+      { sha: 'c'.repeat(40), date: '2026-10-09T10:00:00Z', subject: 'fix: a', nodes: ['a'] },
+    ],
+    nodes: { root: { born: 0 }, pkg: { born: 0 }, a: { born: 1 }, b: { born: 1 }, c: { born: 1 }, d: { born: 1 } },
+  };
+  const E = [{ from: 'root', to: 'pkg' }, { from: 'pkg', to: 'a' }, { from: 'pkg', to: 'b' }, { from: 'a', to: 'b', kind: 'usage', dashed: true }, { from: 'new', to: 'pkg' }];
+
+  it('reads a commit\'s kind from its title', () => {
+    expect(['feat(x): y', 'fix: y', 'docs(spec): y', 'chore: y', 'Feat!: y', 'no kind'].map(commitKind)).toEqual(['feat', 'fix', 'docs', 'other', 'feat', 'other']);
+  });
+
+  it('holds at a commit the nodes born by then and the lines between them, and what it bore and changed', () => {
+    const f0 = replayFrame(H, E, 0);
+    expect([...f0.hidden].sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(f0).toMatchObject({ at: 0, total: 3, born: ['pkg', 'root'], nodes: 2, edges: 2 }); // root-pkg, and new-pkg: a node newer than the history is always there
+    const f1 = replayFrame(H, E, 1);
+    expect(f1).toMatchObject({ born: ['a', 'b', 'c', 'd'], nodes: 6, edges: 5 });
+    expect(replayCount(f1)).toBe('6 nodes · 5 edges · commit 2 of 3 · 4 born');
+    expect(replayCount(replayFrame(H, E, 2))).toBe('6 nodes · 5 edges · commit 3 of 3');
+    expect(replayFrame(H, E, 99).at).toBe(2);
+    expect(parentsOf(E).get('b')).toBe('pkg');
+  });
+
+  it('says a step in words: the commit, who was born, what changed', () => {
+    const labelOf = (id) => `${id}.js`;
+    expect(stepWords(replayFrame(H, E, 1), { labelOf, locale: 'en-GB' })).toBe('Commit 2 of 3, 5 Oct 2026: feat(x): a, b and c. Born: a.js, b.js, c.js and 1 more. Changed: pkg.js. 6 nodes on the map.');
+    expect(stepWords(replayFrame(H, E, 2), { labelOf, locale: 'en-GB' })).toBe('Commit 3 of 3, 9 Oct 2026: fix: a. Changed: a.js. 6 nodes on the map.');
+  });
+
+  it('plays the whole history in about forty seconds, within bounds', () => {
+    expect(speedMs(100)).toBe(400);
+    expect(speedMs(100, 4)).toBe(100);
+    expect(speedMs(5)).toBe(700);
+    expect(speedMs(5000)).toBe(40);
   });
 });

@@ -46,6 +46,7 @@ export function createState() {
     /** The spec picked in a node's History (history.js, spec 0014 D3): `{ spec, nodes }`, the nodes its commits touched, lit while the rest dims; or null */
     historyPick: null,
     historyAt: null, // the timeline's commit (spec 0014 D1), an index into the history; null is the newest
+    replay: null, // Replay (history-replay.js, spec 0014 D1): { at, hidden: Set of the nodes not born yet, bud: Map of the nodes budding }
     historyRow: null, // the History layer's row in the Layers menu (history.js), while the config has history on
     /** The id of the search match the stepping is on (search.js), or null: the map draws its halo and places its label first of the matches */
     searchCurrent: null,

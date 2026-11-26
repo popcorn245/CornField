@@ -116,6 +116,10 @@ const ACTIONS = {
     setView(state.view === 'dataflow' ? 'orbit' : 'dataflow');
   },
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
+  'history-replay': () => { // Replay (spec 0014 D1) runs on the Map view: from another view it goes there first
+    if (state.view !== 'orbit') { closeDrawer(); setView('orbit'); }
+    inst.emit('history:replay');
+  },
   'retry': () => loadTopology(),
   'set-theme': (el) => setThemeChoice(el.dataset.choice),
 };
