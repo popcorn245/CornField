@@ -21,4 +21,6 @@ export default {
   worktrees: '.claude/worktrees',
   proposals: 'docs/specs/proposals',
   links: [{ label: 'GitHub', href: 'https://github.com/popcorn245/cornfield' }],
+  // cornfield reads its own git history for the map (spec 0014, docs/config.md#history)
+  history: true,
 };

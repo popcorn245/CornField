@@ -33,6 +33,7 @@
  *     embed: { origins: [] },                 // exact origins of sibling apps that may read, and decide a review, as the signed-in maintainer (docs/embedding.md)
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
+ *     history: false,                         // true: read the repo's git history for the History layer, a node's commits and Replay (docs/config.md#history; spec 0014)
  *     dataDir: null,                          // where cornfield keeps its own state (reviews; the SQLite file in v1)
  *   }
  *
@@ -182,6 +183,7 @@ export const DEFAULTS = Object.freeze({
   embed: { origins: [] },
   proxy: {},
   importMap: {},
+  history: false,
   dataDir: null,
 });
 
@@ -393,6 +395,7 @@ export function configProblems(c) {
       if (l !== undefined && (!isText(l) || l.includes(',') || l.trim() !== l || l.length > MAX_LABEL)) out.push(`threads.label is the name of the label that makes an issue an idea, like "idea": text of at most ${MAX_LABEL} characters, no comma, no space at either end.`);
     }
   }
+  if (c.history !== undefined && typeof c.history !== 'boolean') out.push('"history" is true or false: true reads the repo\'s git history (docs/config.md#history).');
   if (c.releaseNotes !== undefined) {
     if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
     else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');

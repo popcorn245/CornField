@@ -3227,6 +3227,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0014: History (the map's own git history: replay it, trace a node to its spec, and a History layer) (docs/specs/0014-history.md)."
+    },
+    {
+      "id": "core-core-history",
+      "label": "history.js",
+      "type": "core",
+      "file": "core/history.js",
+      "summary": "The map's own history (spec 0014 D4): which commits changed each node, when each node was born, and, for each commit, the trail it names from spec to issue to pull request.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map's own history (spec 0014 D4): which commits changed each node, when each node was born, and, for each commit, the trail it names from spec to issue to pull request. (core/history.js)"
     }
   ],
   "edges": [
@@ -11175,7 +11185,22 @@
       "from": "page-doc-docs-specs-0014-history",
       "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-history"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-history",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-specs-0014-history",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-26T19:49:56.670Z"
+  "updatedAt": "2026-11-26T19:53:01.710Z"
 }
