@@ -363,6 +363,10 @@ There are 69 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-work-edge-work` | the line from one piece of work to another (`became`, `closes`, `opened` ...; default `#818cf8`). Drawn at full strength where it joins the selection, so it is checked at 3:1 against the ground |
 | `--corn-work-edge-code` | the line from a piece of work to the code it touches (`changes`, `mentions`, `restarts`; `#cbd5e1`) |
 | `--corn-work-edge-adds` | the dashed line to the code a proposal adds (`#2dd4bf`) |
+| **History layer** (spec 0014) | |
+| `--corn-history-week` | the halo of a node changed in the week before the timeline's commit (`#f472b6`; (light) `#be185d`) |
+| `--corn-history-month` | a node changed within 30 days of it (`#a78bfa`; (light) `#6d28d9`) |
+| `--corn-history-old` | a node last changed over a month before it (`#94a3b8`; (light) `#64748b`) |
 | **Node fill by kind** | |
 | `--corn-map-node-root` | the fill of a `root` node |
 | `--corn-map-node-app` | the fill of an `app` node |

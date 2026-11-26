@@ -11264,7 +11264,19 @@
       "to": "core-explorer-history",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-history",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-26T20:21:08.230Z"
+  "updatedAt": "2026-11-26T20:34:17.597Z"
 }

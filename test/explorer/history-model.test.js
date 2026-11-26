@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { forgeLinks, specFiles, nodeTrail, specReach, trailHtml } from '../../explorer/history-model.js';
+import { forgeLinks, specFiles, nodeTrail, specReach, trailHtml, heatOf, haloWidth, historyRowOf, specBarHtml } from '../../explorer/history-model.js';
 
 const sha = 'ab'.repeat(20);
 
@@ -60,5 +60,50 @@ describe('the trail', () => {
     expect(html).not.toContain('<b>');
     expect(html).not.toContain('<i>');
     expect(html).not.toContain('href');
+  });
+});
+
+describe('the History layer\'s heat', () => {
+  const H = {
+    commits: [
+      { date: '2026-09-01T00:00:00Z' }, { date: '2026-10-20T00:00:00Z' }, { date: '2026-10-28T00:00:00Z' }, { date: '2026-11-01T00:00:00Z' },
+    ],
+    nodes: { a: { commits: [0, 1, 2, 3] }, b: { commits: [1] }, c: { commits: [0] }, d: { commits: [3] }, e: { commits: [] } },
+  };
+
+  it('counts each node\'s commits up to a commit, and how lately, from that commit\'s own date', () => {
+    const now = heatOf(H);
+    expect(now.at).toBe(3);
+    expect(now.max).toBe(4);
+    expect([...now.nodes.keys()].sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(now.nodes.get('a')).toMatchObject({ count: 4, last: 3, band: 'week' });
+    expect(now.nodes.get('b')).toMatchObject({ count: 1, band: 'month' }); // 12 days
+    expect(now.nodes.get('c').band).toBe('old');
+    const then = heatOf(H, 1);
+    expect(then.nodes.has('d')).toBe(false); // not born yet
+    expect(then.nodes.get('a')).toMatchObject({ count: 2, band: 'week' });
+    expect(heatOf(H, 99).at).toBe(3);
+    expect(heatOf(null)).toMatchObject({ at: -1, max: 0 });
+  });
+
+  it('widens with how often, by the square root, from 1.5 to 6 px', () => {
+    expect(haloWidth(0, 4)).toBe(0);
+    expect(haloWidth(1, 4)).toBe(3.8);
+    expect(haloWidth(4, 4)).toBe(6);
+    expect(haloWidth(1, 9)).toBe(3);
+  });
+
+  it('says in its row what it has read', () => {
+    expect(historyRowOf('idle', null, '#fff')).toMatchObject({ key: 'history-halos', label: 'History', overlay: true, countText: 'not read yet' });
+    expect(historyRowOf('ready', heatOf(H), '#fff').countText).toBe('4 nodes');
+    expect(historyRowOf('error', null, '#fff').countText).toBe('not read');
+  });
+
+  it('names a picked spec on its bar, its title as text', () => {
+    const specs = new Map([['0012', { file: 'docs/specs/0012-x.md', label: 'Work <i>as</i> a view' }]]);
+    const html = specBarHtml({ spec: '0012', nodes: new Set(['a', 'b']), commits: 1 }, { links: forgeLinks({ type: 'github', url: 'https://github.com', repo: 'o/r' }), specs });
+    expect(html).toContain('href="https://github.com/o/r/blob/HEAD/docs/specs/0012-x.md"');
+    expect(html).toContain('Work &lt;i&gt;as&lt;/i&gt; a view: 1 commit, 2 nodes');
+    expect(specBarHtml({ spec: '0099', nodes: new Set(), commits: 0 }, { links: null, specs })).toContain('<b>Spec 0099</b>: 0 commits, 0 nodes');
   });
 });

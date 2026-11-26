@@ -93,6 +93,7 @@ export function layerRows(inst) {
   const project = state.projectLayers.filter((l) => held.has(l.key)).map((l) => ({ key: l.key, label: l.label, desc: l.desc || '', project: true, ...projectDot(l) }));
   // A starting row a project layer has taken every node from goes (spec 0009 D7, example 3); with no project layer, every starting row stays, as it always was
   const starting = LAYER_DEFS.filter((l) => !l.overlay && (held.has(l.key) || !left.has(l.key))).map(dotted);
+  const halos = state.historyRow && state.historyRow(); // the History layer's row, when the config has history on (history.js): an overlay, off to start
   const badges = state.workRow && state.workRow(); // the Work layer's row, when the page has a forge and somebody is signed in (work-view.js): an overlay, off to start
   const known = new Set([...LAYER_DEFS.map((l) => l.key), ...state.projectLayers.map((l) => l.key)]);
   const extra = [];
@@ -101,7 +102,7 @@ export function layerRows(inst) {
     known.add(key);
     extra.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: rowColor(inst, { type: key, group: key }, NO_COLOR), desc: `Nodes of the type ${key}` });
   });
-  return { layers: [...orderRows(project, starting, state.layerOrder), ...extra], overlays: [...LAYER_DEFS.filter((l) => l.overlay).map(dotted), ...(badges ? [badges] : [])] };
+  return { layers: [...orderRows(project, starting, state.layerOrder), ...extra], overlays: [...LAYER_DEFS.filter((l) => l.overlay).map(dotted), ...(badges ? [badges] : []), ...(halos ? [halos] : [])] };
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +142,7 @@ export function setProjectLayers(inst, raw) {
   for (const l of LAYER_DEFS) defaults[l.key] = !STARTS_OFF.has(l.key);
   for (const l of cfg.add) defaults[l.key] = true;
   defaults['work-badges'] = false;
+  defaults['history-halos'] = false; // the History layer (history-model.js HISTORY_LAYER)
   for (const k of cfg.off) defaults[k] = false;
   state.layerDefaults = defaults;
   const mem = memoryOf(inst);

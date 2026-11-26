@@ -19,6 +19,10 @@ import { initSheets } from '../../explorer/sheets.js';
 import { closeDrawer, selectNode } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initHistory } from '../../explorer/history.js';
+// @ts-expect-error plain JS modules, no declarations
+import { setLayer, setProjectLayers } from '../../explorer/layers.js';
+// @ts-expect-error plain JS modules, no declarations
+import { layerRows } from '../../explorer/engine/layers.js';
 import { explorerPage } from '../helpers.js';
 
 const page = explorerPage({ pieces: ['map'] });
@@ -71,13 +75,14 @@ function mount(config = { history: true, forge: FORGE }) {
   canvas.getContext = () => ctx;
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
-  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', historyPick: null, forge: config.forge || null });
+  Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', historyPick: null, historyAt: null, forge: config.forge || null });
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   setMap(MAP.nodes.map((n) => ({ ...n })), MAP.edges);
   resetKeyboardForTests();
   initKeyboard();
   initSheets();
+  setProjectLayers(undefined);
   stop = initHistory(pageInstance(), config);
 }
 
@@ -159,4 +164,59 @@ describe('a node\'s History', () => {
     expect(qa('#drawer-history a')).toEqual([]);
     expect(qa('.hx-history-commit')).toHaveLength(3);
   });
+
+  it('puts a picked spec on the map as a bar, with its file linked and the way back', async () => {
+    fakeServer();
+    mount();
+    selectNode(pick('core-auth'));
+    await settle();
+    click(q('[data-history-spec="0007"]'));
+    const bar = q('.hx-history-bar');
+    expect(bar.querySelector('.hx-history-bar-text').textContent).toBe('Spec 0007 · Sign-in: 1 commit, 3 nodes');
+    expect(bar.querySelector('a').getAttribute('href')).toBe('https://github.com/owner/name/blob/HEAD/docs/specs/0007-sign-in.md');
+    click(bar.querySelector('[data-history-unpick]'));
+    expect(state.historyPick).toBe(null);
+    expect(q('.hx-history-bar')).toBe(null);
+  });
 });
+
+describe('the History layer', () => {
+  const row = () => layerRows(pageInstance()).overlays.find((r) => r.key === 'history-halos');
+
+  it('has no row, and reads nothing, when history is off', async () => {
+    const server = fakeServer();
+    mount({ history: false, forge: FORGE });
+    expect(row()).toBe(undefined);
+    await settle();
+    expect(server.calls).toEqual([]);
+  });
+
+  it('is a row under Overlays, off to start; turned on it reads the history once and puts a halo on each node it changed', async () => {
+    const server = fakeServer();
+    mount();
+    expect(row()).toMatchObject({ label: 'History', overlay: true, countText: 'not read yet' });
+    await settle();
+    expect(server.calls).toEqual([]);
+    expect(q('.hx-history-halo')).toBe(null);
+    setLayer('history-halos', true);
+    expect(row().countText).toBe('reading…');
+    await settle();
+    render.renderNow();
+    expect(server.calls).toEqual(['/api/history']);
+    expect(row().countText).toBe('4 nodes');
+    const halos = qa('.hx-history-halo');
+    expect(halos).toHaveLength(4); // root, pkg-server, core-auth, core-db; the spec page no commit changed has none
+    expect(q('.hx-history-halos').getAttribute('aria-hidden')).toBe('true');
+    // core-auth changed in all three commits (the widest), core-db once, four days before the newest (this week); root eight days before (this month)
+    const byNode = Object.fromEntries(halos.map((h) => [h.dataset.node, h]));
+    expect(Object.keys(byNode).sort()).toEqual(['core-auth', 'core-db', 'pkg-server', 'root']);
+    expect(byNode['core-auth'].style.getPropertyValue('--w')).toBe('6px');
+    expect(byNode['core-db'].dataset.band).toBe('week');
+    expect(byNode.root.dataset.band).toBe('month');
+    setLayer('history-halos', false);
+    render.renderNow();
+    expect(qa('.hx-history-halo')).toEqual([]);
+    expect(server.calls).toEqual(['/api/history']);
+  });
+});
+

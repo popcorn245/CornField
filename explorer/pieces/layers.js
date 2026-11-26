@@ -61,6 +61,13 @@ export const markup = () => ({
       <div class="hx-legend-row"><span class="hx-run-swatch hx-run-swatch--flight" aria-hidden="true"></span><span>In flight: a pulsing ring (still under reduced motion)</span></div>
       <div class="hx-legend-row"><span class="hx-run-swatch hx-run-swatch--collision" aria-hidden="true"></span><span>Collision: dashed ring, ⚠ and the words, where two open runs change one node</span></div>
     </div>
+    <div id="history-legend" class="hx-menu-section" data-corn="menu-section" hidden>
+      <div class="hx-menu-title" data-corn="menu-title"><span>History</span></div>
+      <div class="hx-legend-row"><span class="hx-history-swatch hx-history-swatch--wide" aria-hidden="true"></span><span>A wider halo: changed more often</span></div>
+      <div class="hx-legend-row"><span class="hx-history-swatch" data-band="week" aria-hidden="true"></span><span>Changed this week</span></div>
+      <div class="hx-legend-row"><span class="hx-history-swatch" data-band="month" aria-hidden="true"></span><span>Changed this month</span></div>
+      <div class="hx-legend-row"><span class="hx-history-swatch" data-band="old" aria-hidden="true"></span><span>Not for over a month (as of the timeline's commit)</span></div>
+    </div>
     <div id="proposal-legend" class="hx-menu-section" data-corn="menu-section" hidden>
       <div class="hx-menu-title" data-corn="menu-title"><span>Proposal marks</span></div>
       <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added" data-corn="mark-dot" data-corn-state="added"></span><span>Added: dashed ring</span></div>
@@ -316,7 +323,8 @@ export function mount(root, inst, options = {}) {
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);
-  scope.on('runs:map', ({ active }) => { const legend = own('runs-legend'); if (legend) legend.hidden = !active; }); // runs are on the map (the Work list): the legend says what each mark is
+  scope.on('runs:map', ({ active }) => { const legend = own('runs-legend'); if (legend) legend.hidden = !active; });
+  scope.on('history:legend', ({ active }) => { const legend = own('history-legend'); if (legend) legend.hidden = !active; }); // the History layer is drawn (history.js): what a halo's width and colour say // runs are on the map (the Work list): the legend says what each mark is
   // The marks legend is there while a proposal is open (the proposal's bar says so: engine/proposal.js)
   const showLegend = (open) => { const legend = own('proposal-legend'); if (legend) legend.hidden = !open; };
   scope.on('proposal:draw', ({ open }) => showLegend(open));

@@ -41,3 +41,17 @@
 .hx-run-tag { position: absolute; left: 0; top: calc(var(--r) + 4px); transform: translateX(-50%); white-space: nowrap; padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-map-collision); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-map-collision); font-size: var(--corn-text-xs); font-weight: 700; }
 .hx-run-swatch { display: inline-block; width: 14px; height: 14px; flex: none; box-sizing: border-box; border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-added); }
 .hx-run-swatch--collision { border: var(--corn-border-strong) dashed var(--corn-map-collision); }
+
+/* The History layer (spec 0014 D3, history.js): a halo round each node the history changed; its width how often (--w), its colour how lately */
+.hx-history-halos { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+.hx-history-halos[hidden] { display: none; }
+.hx-history-halo { position: absolute; width: 0; height: 0; --r: 12px; --w: 2px; --halo: var(--corn-history-old); }
+.hx-history-halo::before { content: ""; position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); box-sizing: border-box; border-radius: 50%; border: var(--w) solid var(--halo); opacity: 0.7; }
+.hx-history-halo[data-band="week"], .hx-history-swatch[data-band="week"] { --halo: var(--corn-history-week); }
+.hx-history-halo[data-band="month"], .hx-history-swatch[data-band="month"] { --halo: var(--corn-history-month); }
+.hx-history-halo[data-band="old"], .hx-history-swatch[data-band="old"] { --halo: var(--corn-history-old); }
+.hx-history-swatch { --halo: var(--corn-text-3); display: inline-block; width: 14px; height: 14px; flex: none; box-sizing: border-box; border-radius: 50%; border: var(--corn-border-strong) solid var(--halo); }
+.hx-history-swatch--wide { border-width: calc(var(--corn-border-strong) * 2); }
+/* The bar while a spec is picked: what it reached, and the way back to the whole map */
+.hx-history-bar { position: absolute; top: var(--corn-space-3); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: var(--corn-space-3); max-width: calc(100% - var(--corn-space-6)); padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-pill); font-size: var(--corn-text-sm); color: var(--corn-text); }
+.hx-history-bar-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
