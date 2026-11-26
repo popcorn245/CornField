@@ -481,3 +481,92 @@ describe('each piece alone, in a root with nothing of the others', () => {
     bar.destroy();
   });
 });
+
+describe('the links a proposal carries', () => {
+  const withLinks = (links) => ({ ...proposal(), links });
+  const shown = () => [...root.querySelectorAll('#proposal-links a')];
+
+  it('sit in the bar under its name: each opens in a new tab, never hands over the opener, and is named for a screen reader', () => {
+    make({ fetch: server() });
+    const { bar } = mountAll();
+    bar.update({ proposal: withLinks([{ label: 'Picture book', href: 'https://example.com/book/?spec=0099&a=1' }, { label: 'Docs', href: '/docs/new' }]), slug: '0099-new', source: 'pull/21' });
+    const nav = root.querySelector('#proposal-links');
+    expect(nav.hidden).toBe(false);
+    expect(nav.tagName).toBe('NAV');
+    expect(nav.getAttribute('aria-label')).toBe('Links for this proposal');
+    expect(nav.getAttribute("part")).toBeNull();
+    const links = shown();
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['https://example.com/book/?spec=0099&a=1', '/docs/new']);
+    for (const a of links) {
+      expect(a.getAttribute('target')).toBe('_blank');
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(a.getAttribute("part")).toBe("link");
+      expect(a.hasAttribute('tabindex')).toBe(false); // a real link: in the tab order, with Enter
+    }
+    expect(links[0].textContent).toBe('Picture book (opens in a new tab)');
+    expect(links[0].querySelector('svg').getAttribute('aria-hidden')).toBe('true');
+    // beside Before / Diff / After: in the same body as the bar's head, which holds them
+    expect(nav.parentElement).toBe(root.querySelector('#proposal-body'));
+    expect(nav.previousElementSibling.classList.contains('hx-proposal-head')).toBe(true);
+    bar.destroy();
+  });
+
+  it('are drawn from text: a label with markup is text, and an href that fails the check is not drawn at all', () => {
+    make({ fetch: server() });
+    const { bar } = mountAll();
+    bar.update({
+      proposal: withLinks([
+        { label: '<img src=x onerror=alert(1)>', href: 'https://example.com/a"onmouseover="x' },
+        { label: 'Script', href: 'javascript:alert(1)' },
+        { label: 'Data', href: 'data:text/html,<script>1</script>' },
+        { label: 'Off-site shortcut', href: '//evil.example.com' },
+        { label: '', href: '/empty' },
+        'https://example.com/bare',
+        { label: 'Extra', href: '/extra', onclick: 'alert(1)' },
+      ]),
+      slug: '0099-new', source: 'pull/21',
+    });
+    const links = shown();
+    expect(root.querySelector('#proposal-links img')).toBeNull();
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['https://example.com/a"onmouseover="x', '/extra']); // a quote is part of the value, not a new attribute
+    expect(links[0].getAttribute('onmouseover')).toBeNull();
+    expect(links[0].textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(links[1].getAttribute('onclick')).toBeNull();
+    expect(root.innerHTML).not.toMatch(/javascript:|data:text|evil\.example/);
+    bar.destroy();
+  });
+
+  it('are at most 8 and a label is cut off before it is drawn: the page asks again', () => {
+    make({ fetch: server() });
+    const { bar } = mountAll();
+    bar.update({ proposal: withLinks(Array.from({ length: 12 }, (_, i) => ({ label: `Link ${i}`, href: `/l/${i}` }))), slug: '0099-new', source: 'pull/21' });
+    expect(shown()).toHaveLength(8);
+    bar.update({ proposal: withLinks([{ label: 'x'.repeat(61), href: '/long' }]), slug: '0099-new', source: 'pull/21' });
+    expect(shown()).toHaveLength(0);
+    expect(root.querySelector('#proposal-links').hidden).toBe(true);
+    bar.destroy();
+  });
+
+  it('a proposal without links draws none, and the row is gone again when the next proposal has none', () => {
+    make({ fetch: server() });
+    const { bar } = mountAll();
+    bar.update({ proposal: proposal(), slug: '0099-new', source: 'pull/21' });
+    expect(root.querySelector('#proposal-links').hidden).toBe(true);
+    expect(root.querySelector('#proposal-links').children).toHaveLength(0);
+    bar.update({ proposal: withLinks([{ label: 'Docs', href: '/docs' }]), slug: '0099-new', source: 'pull/21' });
+    expect(shown()).toHaveLength(1);
+    bar.update({ proposal: proposal(), slug: '0099-new', source: 'pull/21' });
+    expect(root.querySelector('#proposal-links').hidden).toBe(true);
+    expect(shown()).toHaveLength(0);
+    for (const bad of ['text', 5, {}, null]) { bar.update({ proposal: { ...proposal(), links: bad }, slug: '0099-new', source: 'pull/21' }); expect(shown()).toHaveLength(0); }
+    bar.destroy();
+  });
+
+  it('are in the bar of a box of its own too (<corn-proposal>)', () => {
+    make({ fetch: server() });
+    const bar = proposalPiece.mount(root, inst, { inline: true });
+    bar.update({ proposal: withLinks([{ label: 'Docs', href: '/docs' }]), slug: '0099-new', source: 'pull/21' });
+    expect(shown().map((a) => a.getAttribute('href'))).toEqual(['/docs']);
+    bar.destroy();
+  });
+});

@@ -107,16 +107,24 @@ a.hx-proposal-source { min-height: 24px; } /* a link: at least the WCAG 2.5.8 ta
 a.hx-proposal-source:hover { color: var(--corn-text); text-decoration: underline; }
 a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
 .hx-proposal-source[data-corn-state="draft"] { border-color: color-mix(in srgb, var(--corn-changed) 50%, transparent); }
+/* The proposal's own links (its `links`): a row of text links under the head, each leaving the page in a new tab */
+.hx-proposal-links { display: flex; flex-wrap: wrap; gap: var(--corn-space-1) var(--corn-space-4); margin-top: var(--corn-space-2); }
+.hx-proposal-links[hidden] { display: none; }
+.hx-proposal-link { display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 24px; max-width: 100%; color: var(--corn-text-2); font-size: var(--corn-text-sm); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.hx-proposal-link:hover { color: var(--corn-text); }
+.hx-proposal-link:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-proposal-link svg { flex: none; }
 .hx-proposal-ways { display: flex; flex-wrap: wrap; gap: var(--corn-space-2) var(--corn-space-3); margin-top: var(--corn-space-3); }
 .hx-proposal-ways[hidden] { display: none; }
 .hx-proposal-ways .hx-btn { height: auto; min-height: 32px; padding: var(--corn-space-1) var(--corn-space-4); white-space: normal; text-align: left; }
 @container corn-box (max-width: 767px) {
   .hx-proposal-source { grid-column: 1 / -1; order: 1; justify-self: start; }
+  .hx-proposal-link { min-height: 44px; font-size: var(--corn-text-md); } /* targets a thumb can hit */
   .hx-proposal-ways .hx-btn, a.hx-proposal-source { min-height: 44px; } /* targets a thumb can hit */
   .hx-proposal-source { padding: 0; border: 0; border-radius: 0; background: none; } /* a line of the sheet, not a pill 44px tall */
   a.hx-proposal-source { text-decoration: underline; text-underline-offset: 3px; }
   /* The note open: the field, Cancel and the send button are all there is, so all of them stay above the keyboard */
-  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line, .hx-rc-scroll, .hx-rc-tabs, .hx-proposal-peek) { display: none; } /* the review column's lists too: the sheet holds the note and its buttons */
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-links, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line, .hx-rc-scroll, .hx-rc-tabs, .hx-proposal-peek) { display: none; } /* the review column's lists too: the sheet holds the note and its buttons */
   /* Reflow: nothing is wider than the sheet, and long words and counts wrap instead of being cut */
   .hx-proposal-bar { overflow-x: hidden; overflow-wrap: anywhere; }
   .hx-proposal-head { grid-template-columns: minmax(0, 1fr) auto; }

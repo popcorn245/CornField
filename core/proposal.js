@@ -27,6 +27,7 @@
  *                   change?: [{ from, to, kind?, flow?, set: { …fields }, why }],
  *                   remove?: [{ from, to, kind?, flow?, why }] },
  *     mockups?:   [{ node, path, title }],
+ *     links?:     [{ label, href }],
  *     scenarios?: [{ id, title, steps: [{ node } | { edge: { from, to, kind?, flow? } }, + text, + ms?,
  *                    + actor?, at?, check?, expect?], stepMs?, linkNodes?, actor?, down? }] }
  *
@@ -36,6 +37,10 @@
  *    backslash, no hidden segment) and ends in one of MOCKUP_EXTENSIONS. The explorer opens a mockup from its node;
  *    approving the proposal covers the files (server/mockups.js). HTML and SVG are untrusted content from a branch:
  *    the server and the explorer never let them run script (docs/proposals.md).
+ *  - Links: `links` lists pages that belong to this one proposal (a walkthrough, a design doc, a preview), at most
+ *    MAX_LINKS. Each is a `label` (text, at most MAX_LINK_LABEL characters) and an `href`: an http: or https: address,
+ *    or a path in the site (one slash). Nothing else (`javascript:`, `data:`) and no other key. The check is the config's
+ *    `links` check (core/schema.js); the explorer shows them beside Before / Diff / After and asks again before it draws one.
  *  - An edge is identified by `from` + `to` + `kind`. No `kind` is the ownership edge (parent → child);
  *    a `flow` edge also names its `flow` (one of FLOW_KINDS), and that is part of its identity.
  *  - `parent` on an added node adds the ownership edge `parent → id`; `parent` is not a node field and
@@ -70,15 +75,18 @@
  *    the derived map to them; a proposal is a sketch.
  */
 
-import { NODE_THEMES, EDGE_KINDS, FLOW_KINDS, DEVICE_KINDS, EXTERNAL_KINDS, LIVE_ID_PREFIX, parseLiveId, isLiveNode, personaNodeId, callFieldProblems } from './schema.js';
+import { NODE_THEMES, linkProblems, EDGE_KINDS, FLOW_KINDS, DEVICE_KINDS, EXTERNAL_KINDS, LIVE_ID_PREFIX, parseLiveId, isLiveNode, personaNodeId, callFieldProblems } from './schema.js';
 
-const TOP_KEYS = ['version', 'spec', 'title', 'summary', 'nodes', 'edges', 'mockups', 'scenarios'];
+const TOP_KEYS = ['version', 'spec', 'title', 'summary', 'nodes', 'edges', 'mockups', 'links', 'scenarios'];
 const MOCKUP_KEYS = ['node', 'path', 'title'];
 /** The file types a mockup may be, by lower-case extension. `.html` and `.svg` are untrusted content and are served sandboxed */
 export const MOCKUP_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'html'];
 /** Mockups in one proposal, and the characters of a path */
 export const MAX_MOCKUPS = 40;
 export const MAX_MOCKUP_PATH = 200;
+/** Links in one proposal, and the characters of a link's label */
+export const MAX_LINKS = 8;
+export const MAX_LINK_LABEL = 60;
 const SCENARIO_KEYS = ['id', 'title', 'steps', 'stepMs', 'linkNodes', 'actor', 'down'];
 const STEP_KEYS = ['node', 'edge', 'text', 'ms', 'actor', 'at', 'check', 'expect'];
 /** What a step's `check` may ask (spec 0029 section 3): a route and a method, or a table, an op and a row shape */
@@ -500,6 +508,11 @@ export function validateProposal(topology, proposal) {
       if (!isText(m.node)) err(`${p}.node`, 'A mockup needs the "node" it belongs to.');
       else if (!touched.has(m.node)) err(`${p}.node`, `Mockup is beside node "${m.node}", which this proposal does not add, change or remove. Name a node the proposal touches.`);
     });
+  }
+
+  // --- links
+  if (proposal.links !== undefined) {
+    for (const p of linkProblems(proposal.links, { max: MAX_LINKS, maxLabel: MAX_LINK_LABEL, closed: true })) err(`links${p.at}`, p.message);
   }
 
   return errors;

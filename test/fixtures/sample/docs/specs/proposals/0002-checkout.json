@@ -23,6 +23,10 @@
     {"node": "page-api-checkout", "path": "0002-checkout/receipt.html", "title": "The receipt filed in Nextcloud"},
     {"node": "page-web-cart", "path": "0002-checkout/basket.png", "title": "The basket, with a link to the checkout"}
   ],
+  "links": [
+    {"label": "Checkout walkthrough", "href": "https://example.com/walkthroughs/0002-checkout"},
+    {"label": "Docs", "href": "/docs/checkout"}
+  ],
   "scenarios": [
     {
       "id": "adult-pays",
