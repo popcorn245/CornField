@@ -1,6 +1,6 @@
 # Spec 0013: Words (a dictionary of the project's own words, as a layer that ties nodes together)
 
-Status: **draft, for alignment on the mock.** The decisions below are what the mock shows; the questions at the end are open. Its proposal is [proposals/0013-words.json](proposals/0013-words.json), with three mockups in [proposals/0013-words/](proposals/0013-words/).
+Status: **approved** (maintainer, in chat, 2026-11-26: "Okay get it right and review and merge it"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). The four questions put with the mock are answered as recommended (below). Its proposal is [proposals/0013-words.json](proposals/0013-words.json), with three mockups in [proposals/0013-words/](proposals/0013-words/).
 
 ## What the maintainer asked for
 
@@ -17,7 +17,7 @@ The two ideas, as their sources define them:
 - **The half of grill-with-docs cornfield has is the talking.** Threads (spec 0005) and proposals (the Decide lane) carry the interview and its decisions; the words it settles on land in a glossary file cornfield never reads.
 - **Newcomers meet cornfield's own words cold.** Run, runner, thread, proposal, handoff: the page uses them and explains none of them.
 
-## Decisions (as mocked)
+## Decisions
 
 ### D1. A glossary in the repo is where words and their meanings live
 
@@ -29,7 +29,7 @@ The two ideas, as their sources define them:
 
 - A node gains an optional `words` list of word ids (`"words": ["invoice"]`), checked by `validate` against the glossary: an unknown word is reported, as an unknown kind is today.
 - A deriver may fill `words` in. Cornfield itself only suggests: a node whose name holds a word, or a word to avoid, is listed as a suggestion and is not tagged until someone accepts it.
-- A host can pass words in, as it passes a selection: `<corn-map words="invoice payment">`, and `#words=invoice,payment` in the link (the same address rules as spec 0011).
+- Words can be picked from outside, as a node can: `?words=invoice,payment` in cornfield's address, and a `words` property on the components (spec 0011 D6: what the page takes from the address bar, a component takes as a property). A word the glossary does not hold is ignored, never drawn.
 
 ### D3. The Words layer on the Map and Flow views
 
@@ -48,7 +48,7 @@ Mockup: [words-layer.svg](proposals/0013-words/words-layer.svg).
 ### D5. The node panel shows a node's words
 
 - Under its kind and name: each word with its meaning. A word to avoid says so, and names the word to use instead.
-- Two actions, both safe in the sense of [ADR 0006](../adr/0006-safe-actions-only.md), both writing nothing in the repo themselves: **Tag it <word> instead** opens a proposal that changes this node's words; **Ask an agent to grill this word** starts a thread with the word and the node mentioned, so the interview of grill-with-docs runs where threads already run.
+- **Start a thread about this word** is [Start a thread about this](../threads.md) with the word filled in: the New idea form opens with the title `The word bill on bills` and the node's `[[node-id]]` and the word in the text, all editable, and nothing is opened until the maintainer presses Open idea. It posts through the same route, so nothing new is allowed ([ADR 0006](../adr/0006-safe-actions-only.md)). The interview of grill-with-docs then runs where threads already run: an agent asked from that thread settles the word and changes the glossary or the node's words in a pull request, as any other change.
 
 Mockup: [node-panel-words.svg](proposals/0013-words/node-panel-words.svg).
 
@@ -60,15 +60,23 @@ Mockup: [node-panel-words.svg](proposals/0013-words/node-panel-words.svg).
 
 Mockup: [ai-coding-shelf.svg](proposals/0013-words/ai-coding-shelf.svg).
 
-## Questions for the maintainer
+## The questions, answered
 
-1. **Shelves.** Both, as mocked? Or only the project's words, or only the AI coding words?
-2. **Where words live.** The glossary for meanings plus `words` on nodes, as mocked? Or free tags with no meanings, or no tags at all and words matched against names?
-3. **Tying.** A pill and dashed ties while a word is picked, as mocked? Or words as nodes of their own, with edges, always drawn?
-4. **Keeping words honest.** Cornfield reads and flags, and the writing stays with an agent in a thread or a proposal, as mocked? Or cornfield writes the glossary itself, which would need a new safe action?
+1. **Shelves:** both. The project's words tag and tie nodes; the AI coding words only explain.
+2. **Where words live:** the glossary holds the words and their meanings; nodes carry `words`. Cornfield suggests tags from names and never applies one by itself.
+3. **Tying:** a pill and dashed ties while a word is picked. Words are not nodes, and the layout does not move.
+4. **Keeping words honest:** cornfield reads and flags. Writing the glossary stays with people and agents, through a thread and a pull request.
+
+## What gets built, in order
+
+Each step is its own pull request and release; cornfield's page keeps working after each.
+
+1. **Reading words** (D1, D2): `core/glossary.js` reads `GLOSSARY.md` and `GLOSSARY-MAP.md`; `words.glossary` in the config; `words` on a node in the schema; `validate` reports an unknown word and lists the suggestions; the words in the page's data; docs.
+2. **The Words layer and the dictionary** (D3, D4, D5): the layer, its chips and ties, the theme tokens, the Dictionary piece with the project's shelf, the node panel's words and its thread action, search finding a word, and `?words=` with the components' `words` property.
+3. **The AI coding shelf** (D6): its words, written for cornfield, and the dotted words in the page with their meaning on hover and focus.
 
 ## What is not in this spec
 
-- Writing the glossary from the page.
+- Writing the glossary, or a node's words, from the page.
 - Decision records (ADRs) as nodes. A later spec could put them beside the words.
 - Words in other languages.

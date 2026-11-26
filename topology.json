@@ -11141,7 +11141,17 @@
       "from": "page-doc-docs-specs-0013-words",
       "to": "page-doc-docs-adr-0006-safe-actions-only",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0013-words",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0013-words",
+      "to": "page-doc-docs-threads",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-26T08:56:43.202Z"
+  "updatedAt": "2026-11-26T08:59:46.058Z"
 }
