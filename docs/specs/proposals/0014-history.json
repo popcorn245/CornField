@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "spec": "0014",
+  "title": "History",
+  "summary": "The map's own git history. Replay the map growing commit by commit on a timeline; open a node to see every commit that changed it, each traced from spec to issue to pull request to commit with links to the forge; and a History layer that shows how often and how lately each node changed.",
+  "nodes": {
+    "add": [
+      {
+        "id": "core-core-history",
+        "label": "history.js",
+        "type": "core",
+        "parent": "pkg-core",
+        "file": "core/history.js",
+        "desc": "Reads the repo's history once per HEAD: each commit's pull request, issues, specs and the nodes it touched, and when each node was born."
+      },
+      {
+        "id": "core-explorer-engine-history",
+        "label": "history.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/engine/history.js",
+        "desc": "The History layer and replay on the map: halos by how often and how lately a node changed, nodes budding in as the timeline plays, and what a picked spec reached."
+      },
+      {
+        "id": "core-explorer-pieces-timeline",
+        "label": "timeline.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/pieces/timeline.js",
+        "desc": "The timeline strip: one mark per commit, play, step and scrub, and the trail of the commit at the playhead."
+      }
+    ],
+    "change": [
+      {
+        "id": "core-server-server",
+        "set": {
+          "desc": "The server: the page, its data, and the routes it allows, GET /api/history among them."
+        },
+        "why": "history is served by a new allowlisted route"
+      },
+      {
+        "id": "core-explorer-pieces-layers",
+        "set": {
+          "desc": "The Layers menu: the map's layers, the History layer among them, and in the Work view one layer per kind of work."
+        },
+        "why": "History is a layer"
+      },
+      {
+        "id": "core-explorer-pieces-node-panel",
+        "set": {
+          "desc": "What is selected: a node with its history (each commit traced from spec to issue to pull request), or a piece of work with what it is connected to and its actions."
+        },
+        "why": "a node shows its commits and the trail behind each"
+      }
+    ]
+  },
+  "edges": {
+    "add": [
+      {
+        "from": "core-server-server",
+        "to": "core-core-history",
+        "dashed": true,
+        "label": "imports"
+      },
+      {
+        "from": "core-explorer-engine-history",
+        "to": "core-core-history",
+        "label": "reads"
+      },
+      {
+        "from": "core-explorer-pieces-timeline",
+        "to": "core-explorer-engine-history",
+        "label": "plays"
+      },
+      {
+        "from": "core-explorer-pieces-node-panel",
+        "to": "core-explorer-engine-history",
+        "label": "picks a spec"
+      }
+    ]
+  },
+  "mockups": [
+    {
+      "node": "core-explorer-pieces-timeline",
+      "path": "0014-history/replay.png",
+      "title": "Replay paused at commit 42 of 132: 178 nodes grown so far, the nodes this commit changed ringed, the timeline along the bottom with the commit's trail"
+    },
+    {
+      "node": "core-explorer-pieces-node-panel",
+      "path": "0014-history/node-history.png",
+      "title": "The node panel of node-panel.js: 8 commits, the three specs behind it, and each commit traced from spec to issue to pull request to commit, with gaps shown dashed"
+    },
+    {
+      "node": "core-explorer-engine-history",
+      "path": "0014-history/history-layer.png",
+      "title": "The History layer with spec 0012 picked: the 72 nodes its 6 commits touched lit and named, the rest dimmed, and halos by how often and how lately each node changed"
+    }
+  ]
+}
