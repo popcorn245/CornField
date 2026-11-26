@@ -43,6 +43,8 @@ export function createState() {
     /** The config's `forge` (`{ type, url, repo, baseBranch? }`), or null: where a node's file is opened (file-url.js) */
     forge: null,
     searchQuery: '',
+    /** The spec picked in a node's History (history.js, spec 0014 D3): `{ spec, nodes }`, the nodes its commits touched, lit while the rest dims; or null */
+    historyPick: null,
     /** The id of the search match the stepping is on (search.js), or null: the map draws its halo and places its label first of the matches */
     searchCurrent: null,
     /** The id of the node the pointer is on (input.js): a node with no label is named by a chip while it is */

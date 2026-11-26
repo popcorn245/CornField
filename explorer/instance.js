@@ -99,6 +99,8 @@
  *   player:seat     bar -> true  the dock's owner (engine/sheets.js) seats the scenario player's bar as a sheet above the node panel's
  *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work list's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
  *   threads:ensure  (none)  (emit) the node panel was filled: the Work list reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
+ *   history:section node -> HTML | undefined  (ask, answered by history.js when the config says `history: true`) the node panel's History section (spec 0014 D2); history:pick spec | null
+ *                   (emit): light what a spec's commits reached; history:all (emit): list every commit; history:changed (emit): the panel draws History again
  *   work:list       { open }  the Work list opened or closed (pieces/work-list.js)
  *   work:pick       { kind, key } -> true  (ask, answered by the Work view: explorer/work-view.js) select the node of that piece of work (`pull`, `issue`, `thread`, `run`, `deploy`, `proposal`, and its number, id or slug) on the map; no answer: the Work piece shows it in the node panel alone, as it shows work older than the graph's 14 days
  *   work:panel      node -> { replace, badge, title, html } | undefined  (ask, answered by the Work view) what the node panel shows for a piece of work or, in the Work view, a node of code; the html holds `forge-detail`, where the Work piece draws the actions

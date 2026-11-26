@@ -3237,6 +3237,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map's own history (spec 0014 D4): which commits changed each node, when each node was born, and, for each commit, the trail it names from spec to issue to pull request. (core/history.js)"
+    },
+    {
+      "id": "core-explorer-history-model",
+      "label": "history-model.js",
+      "type": "core",
+      "file": "explorer/history-model.js",
+      "summary": "The pure half of a node's history (spec 0014 D2): the links of a commit's trail on the forge, and the node panel's History section.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of a node's history (spec 0014 D2): the links of a commit's trail on the forge, and the node panel's History section. (explorer/history-model.js)"
+    },
+    {
+      "id": "core-explorer-history",
+      "label": "history.js",
+      "type": "core",
+      "file": "explorer/history.js",
+      "summary": "A node's history on an instance (spec 0014 D2): reads `GET /api/history` (core/history.js) once, the first time the node panel asks, and answers the panel's History section; picking a spec lights e…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A node's history on an instance (spec 0014 D2): reads `GET /api/history` (core/history.js) once, the first time the node panel asks, and answers the panel's History section; picking a spec lights e… (explorer/history.js)"
     }
   ],
   "edges": [
@@ -11200,7 +11220,51 @@
       "from": "page-doc-docs-config",
       "to": "page-doc-docs-specs-0014-history",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-history-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-history"
+    },
+    {
+      "from": "core-explorer-history-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history-model",
+      "to": "core-explorer-file-url",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history",
+      "to": "core-explorer-engine-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-history",
+      "to": "core-explorer-history-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-history",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-26T19:53:01.710Z"
+  "updatedAt": "2026-11-26T20:21:08.230Z"
 }

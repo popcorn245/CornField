@@ -325,6 +325,8 @@ history: true,   // or false, the default
 - **What is read.** `git log` of the checked-out branch, first parent only (a merged pull request is its one squash or merge commit), at most 5000 commits, newest first, with renames followed. It is read when the page first asks (`GET /api/history`) and kept until `HEAD` or the map changes.
 - **What runs.** Only `git`, with a fixed list of arguments and no shell. Nothing in the repo's own git config can run a program from it: the pager, an external diff, text conversion, signature checks and fsmonitor are all turned off for the call. It never writes.
 - **The trail.** A commit's pull request is the last `(#N)` in its subject; its issues an earlier `(#N)` and `Closes`, `Fixes` or `Resolves #N`; its issue keys a `[CF-45]`; its specs a `spec 0012` in its message, or a spec file (`docs/specs/NNNN-*.md`) it changed. What a commit does not name is shown as a gap, never guessed.
+- **Where it shows.** A node's panel gets a **History** section: its commits, newest first, each with its trail, and the specs behind it. A spec's chip lights every node that spec's commits reached and dims the rest; the chip again, or closing the panel, ends it.
+- **Its look.** No new styling hook: the History section is a `section`, each commit a `row`, each link of a trail a `text-link`, and "Show all" a `more` ([theming](theming.md)). A trail's parts carry `data-trail` (`spec`, `issue`, `pull`, `commit`, or `gap` for what a commit does not name), and a spec's chip `data-history-spec`.
 - **Where it runs.** git must be installed where cornfield runs, and the repo must be a checkout with its history (a shallow clone has only the commits it fetched). Otherwise the route answers 503 with the reason.
 
 ## Layers

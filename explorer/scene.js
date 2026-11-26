@@ -589,9 +589,11 @@ function buildNodes(state, subgraph) {
     // deep dimming for what is not connected; a proposal's Diff view fades what it does not touch, less deeply, and a removed node is faded too
     // A search's matches are what the reader asked for: a selection's focus does not dim them, so each keeps its label (spec 0008 D4)
     const dimmed = state.view === 'work' ? PROPOSAL_DIM_ALPHA : DIM_ALPHA; // the Work view dims to what the mock shows: the rest is still readable
-    let alpha = subgraph && !connected && !(searching && match) ? dimmed : 1;
+    const picked = !!state.historyPick && state.historyPick.nodes.has(node.id); // a picked spec's nodes are what the reader asked for, as a search's matches are
+    let alpha = subgraph && !connected && !(searching && match) && !picked ? dimmed : 1;
     if (searching && !match && !selected && !(subgraph && connected)) alpha = dimmed; // a search dims what it did not find, as a focus does
     if (node.dim === true) alpha = Math.min(alpha, dimmed); // "Waiting on you" (work-view.js)
+    if (state.historyPick && !picked && !selected) alpha = Math.min(alpha, dimmed); // a picked spec lights what it reached (history.js, spec 0014 D3)
     const greyed = grey && !!focus && !focus.touched.has(node.id);
     if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, greyed ? GREY_ALPHA : PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
