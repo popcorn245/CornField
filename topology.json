@@ -3307,6 +3307,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0016: The Work inbox (Work opens on what needs you; the lane map becomes Graph) (docs/specs/0016-work-inbox.md)."
+    },
+    {
+      "id": "core-explorer-inbox-model",
+      "label": "inbox-model.js",
+      "type": "core",
+      "file": "explorer/inbox-model.js",
+      "summary": "The Work inbox's rules, the pure half (spec 0016 D2 to D4): no DOM, no `window`, no clock of its own.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work inbox's rules, the pure half (spec 0016 D2 to D4): no DOM, no `window`, no clock of its own. (explorer/inbox-model.js)"
     }
   ],
   "edges": [
@@ -11491,7 +11501,22 @@
       "from": "page-doc-docs-specs-0016-work-inbox",
       "to": "page-doc-docs-specs-0012-work-as-a-view",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-inbox-model"
+    },
+    {
+      "from": "core-explorer-inbox-model",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-specs-0016-work-inbox",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-27T04:12:18.450Z"
+  "updatedAt": "2026-11-27T04:29:52.052Z"
 }
