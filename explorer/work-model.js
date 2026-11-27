@@ -5,8 +5,10 @@
  * (server/work-graph.js: `{ ok, nodes, edges, problems }`) to nodes the scene draws, where they sit, what a layer hides, what the node panel
  * says of one, what search finds and what an address asks for. No DOM, no state, no fetch: work-view.js (the page's half) holds those.
  *
- *   - `workScene(graph, mapNodes)`   the nodes and edges of the Work view: the work, the code it touches (copies of the map's nodes, and the planned
- *                                    ones a proposal adds), and the lines between them with their words
+ *   - `workScene(graph, mapNodes, mapEdges)`  the nodes and edges of the Work view: the work, the code it touches (copies of the map's nodes, and the planned
+ *                                    ones a proposal adds) grouped by area (spec 0015 D1), the lines between them with their words, and a spec pull request's
+ *                                    threads folded into its proposal (spec 0015 D2)
+ *   - `drawnEdges(nodes, edges, open)`  the lines the scene walks: a line to code in a closed area ends at the area
  *   - `layoutWork(nodes, edges, { phone })`  where each node sits, and the lanes behind them; writes `x`, `y` and `r` on the nodes it is given
  *   - `applyFilters(nodes, edges, { layers, waiting })`  sets `hidden` (a layer is off) and `dim` ("Waiting on you" is on) on the nodes
  *   - `layerRowsOf(nodes)`           the Layers menu's rows in the Work view, each with its count in words
@@ -22,6 +24,7 @@ import { runName, canAnswer } from './runs-model.js';
 import { cornState } from './corn-state.js';
 import { escapeHtml as esc } from '../core/text.js';
 import { safeUrl } from './pieces/work-common.js';
+import { areaOf, mapIndex } from '../core/release-notes.js';
 
 /** The words of a kind of work, singular and as a layer */
 export const KIND_WORDS = Object.freeze({ thread: 'Thread', issue: 'Issue', proposal: 'Proposal', run: 'Agent run', pull: 'Pull request', deploy: 'Deploy' });
@@ -71,6 +74,8 @@ export const relWord = (rel) => (Object.hasOwn(REL_WORDS, rel) ? REL_WORDS[rel][
  * than that on screen); on a phone a piece of work is drawn as its tag alone */
 export const LABEL_CHARS = 34;
 export const DRAWN_CHARS = 28;
+/** The most characters of a title drawn after a node's tag on a desktop (spec 0015 D7: the lanes have the width the grouped code gives back) */
+export const TITLE_CHARS = 32;
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 /** The same, cut at a word when one is near the end of what fits */
 const clipWords = (s, n) => { if (s.length <= n) return s; const cut = s.slice(0, n - 1); const sp = cut.lastIndexOf(' '); return `${(sp > n * 0.6 ? cut.slice(0, sp) : cut).trimEnd()}…`; };
@@ -156,9 +161,15 @@ export function oldItem(kind, src) {
  * The scene of the Work view.
  * @param {{ nodes?: object[], edges?: { from: string, to: string, rel: string }[] } | null} graph the server's answer
  * @param {{ id: string, label?: string, type?: string }[]} mapNodes the map's nodes (the code a piece of work touches is found among them by id)
- * @returns {{ nodes: object[], edges: object[], counts: { work: number, code: number, waiting: number } }}
+ * @param {{ from: string, to: string, kind?: string }[]} [mapEdges] the map's edges: its ownership edges say which area a node of code is in (core/release-notes.js `areaOf`)
+ * @returns {{ nodes: object[], edges: object[], counts: { work: number, code: number, waiting: number, areas: number, folded: number } }}
+ *
+ * The code is grouped by area (spec 0015 D1): an area's node (`area: true`, its id the map's node of the area, `members` the ids of its nodes that work touches,
+ * `self` when the area's own node is one of them) is drawn in the code column, and each node of code carries the `areaId` it is in; a planned node joins the
+ * area of its parent (a planned parent's, up to the map), else is an area of its own. A thread whose only links are `discusses` or `became` to the proposal of a
+ * spec pull request is not drawn (spec 0015 D2): it carries `foldedInto` (that proposal's id), and the proposal the ids of its threads, `folded`.
  */
-export function workScene(graph, mapNodes) {
+export function workScene(graph, mapNodes, mapEdges = []) {
   const items = Array.isArray(graph && graph.nodes) ? graph.nodes : [];
   const links = Array.isArray(graph && graph.edges) ? graph.edges : [];
   const onMap = new Map((mapNodes || []).map((n) => [n.id, n]));
@@ -197,11 +208,113 @@ export function workScene(graph, mapNodes) {
     if (!base && !plan) continue;
     code++;
     nodes.push(base
-      ? { ...base, x: 0, y: 0, r: CODE_R, touches: by.size, degree: by.size, hidden: false, dim: false }
-      : { id, type: plannedType(plan.type), label: text(plan.label) || id, planned: true, r: CODE_R, touches: by.size, degree: by.size, x: 0, y: 0, groupName: CODE_LAYER_WORDS });
+      ? { ...base, x: 0, y: 0, r: CODE_R, touches: by.size, degree: by.size, hidden: false, dim: false, by: [...by] }
+      : { id, type: plannedType(plan.type), label: text(plan.label) || id, planned: true, r: CODE_R, touches: by.size, degree: by.size, x: 0, y: 0, groupName: CODE_LAYER_WORDS, by: [...by] });
   }
+  groupByArea(nodes, onMap, planned, mapIndex({ nodes: mapNodes || [], edges: mapEdges || [] }));
+  const folded = foldThreads(nodes, edges);
   const waiting = nodes.filter((n) => n.waiting).length;
-  return { nodes, edges, counts: { work: work.size, code, waiting } };
+  return { nodes, edges, counts: { work: work.size, code, waiting, areas: nodes.filter((n) => n.area).length, folded } };
+}
+
+/** The radius of an area's node in the Work view: a little bigger than its nodes' */
+export const AREA_R = 13;
+
+/**
+ * Groups the code by area (spec 0015 D1): writes `areaId` on every node of code, and adds the node of each area that is not itself touched.
+ * The area of a node of the map is the ancestor just below the root (core/release-notes.js `areaOf`); a planned node's is its parent's (a planned parent's in turn).
+ */
+function groupByArea(nodes, onMap, planned, index) {
+  const areaOfMap = (node) => (node.type === 'root' ? null : areaOf(node, index).id);
+  const areaOfPlanned = (plan) => {
+    let at = plan;
+    const seen = new Set();
+    while (!seen.has(at.id)) {
+      seen.add(at.id);
+      const up = text(at.parent);
+      if (onMap.has(up)) return areaOfMap(onMap.get(up)) || at.id; // the root's own child is an area
+      if (!planned.has(up)) return at.id;
+      at = planned.get(up);
+    }
+    return at.id;
+  };
+  const code = nodes.filter((n) => !n.work);
+  const groups = new Map();
+  for (const n of code) {
+    n.areaId = onMap.has(n.id) ? areaOfMap(onMap.get(n.id)) || n.id : areaOfPlanned(planned.get(n.id) || { id: n.id });
+    (groups.get(n.areaId) || groups.set(n.areaId, []).get(n.areaId)).push(n);
+  }
+  const byId = new Map(code.map((n) => [n.id, n]));
+  for (const [id, members] of groups) {
+    const own = byId.get(id);
+    const base = onMap.get(id);
+    const area = own || (base ? { ...base, x: 0, y: 0, hidden: false, dim: false } : { id, type: 'page', label: id, x: 0, y: 0 });
+    area.area = true;
+    area.self = !!own;
+    area.r = AREA_R;
+    area.members = members.map((n) => n.id);
+    area.size = members.length; // how many of its nodes work touches: the number drawn beside its name
+    area.planned = members.every((n) => n.planned === true); // drawn as planned (dashed) only while every node of it is
+    area.mapped = !!(own ? onMap.has(id) : base); // the map holds the area's own node: "Show on the map" goes to it
+    area.touches = new Set(members.flatMap((n) => n.by || [])).size;
+    area.degree = area.touches;
+    area.groupName = CODE_LAYER_WORDS;
+    if (!own) nodes.push(area);
+  }
+  for (const n of code) delete n.by;
+}
+
+/** A spec pull request's conversation folded into its proposal (spec 0015 D2): a thread whose every line is `discusses` or `became` to such a proposal. How many were folded. */
+function foldThreads(nodes, edges) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const specPull = (n) => !!n && n.work === 'proposal' && Number.isInteger(n.item.number);
+  let count = 0;
+  for (const n of nodes) {
+    if (n.work !== 'thread') continue;
+    const mine = edges.filter((e) => e.from === n.id || e.to === n.id);
+    if (!mine.length || !mine.every((e) => e.from === n.id && (e.kind === 'discusses' || e.kind === 'became') && specPull(byId.get(e.to)))) continue;
+    const into = byId.get((mine.find((e) => byId.get(e.to).item.number === n.item.number) || mine[0]).to);
+    n.foldedInto = into.id;
+    (into.folded || (into.folded = [])).push(n.id);
+    count++;
+  }
+  return count;
+}
+
+/**
+ * The lines the scene walks in the Work view (`state.edges`): the work's own, a line to code in a closed area moved to end at the area (one per piece of work,
+ * area and rel, `via` naming the nodes it stands for), and for the open area the lines (drawn nowhere: `tone: 'area'`) that tie it to its nodes (an ownership:
+ * no kind) and to the work that touches them (their rel), so that selecting it lights them.
+ * @param {object[]} nodes the view's nodes (`workScene`)
+ * @param {object[]} edges the view's edges (`workScene`)
+ * @param {string | null} [open] the id of the open area
+ */
+export function drawnEdges(nodes, edges, open = null) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = [];
+  const seen = new Map();
+  const touching = new Set();
+  for (const e of edges) {
+    const to = e.tone === 'code' ? byId.get(e.to) : null;
+    const area = to && to.areaId && to.areaId !== to.id && to.areaId !== open ? to.areaId : null;
+    if (to && to.areaId === open && open) touching.add(`${e.from}|${e.kind}`);
+    const end = area || e.to;
+    const key = `${e.from}->${end}|${e.kind}`;
+    const had = seen.get(key);
+    if (had) { if (area) had.via.push(e.to); continue; }
+    const line = area ? { ...e, to: area, via: [e.to] } : e.tone === 'code' ? { ...e, via: [] } : e;
+    seen.set(key, line);
+    out.push(line);
+  }
+  if (open) {
+    // the area owns its nodes (a line with no kind, as the map's ownership is: the node panel says "Owns 3"), and the work touching them touches it, by the same rel
+    for (const n of nodes) if (n.areaId === open && n.id !== open && !n.hidden) out.push({ from: open, to: n.id, tone: 'area' });
+    for (const k of touching) {
+      const [from, kind] = k.split('|');
+      if (!seen.has(`${from}->${open}|${kind}`)) out.push({ from, to: open, kind, tone: 'area', word: relWord(kind) });
+    }
+  }
+  return out;
 }
 
 /**
@@ -215,16 +328,25 @@ export function workScene(graph, mapNodes) {
  * @param {string} key the line's key
  * @param {{ PROPOSED_DASH: number[], USAGE_DASH: number[] }} dashes the map's two dash patterns
  * @param {Partial<Record<'work' | 'code' | 'adds', string>>} [colors] what the theme's `--corn-work-edge-<name>` tokens say (`state.workEdgeColors`); a name it does not set is drawn in its default (core/schema.js WORK_EDGE_THEMES)
+ * @param {{ selected?: string | null, hover?: string | null }} [focus] the selected node's id and the one under the pointer: a line from work to code is drawn only for
+ *   them (spec 0015 D1), or for the area the code is in; null when the line is not drawn (and for the lines that tie an open area to its nodes, which are never drawn)
  */
-export function workEdge(edge, source, target, connected, focused, key, dashes, colors) {
-  const lit = focused && connected;
+export function workEdge(edge, source, target, connected, focused, key, dashes, colors, focus = {}) {
+  if (edge.tone === 'area') return null;
+  let mine = false;
+  if (edge.tone === 'code') {
+    const ends = (id) => !!id && (id === source.id || id === target.id || id === target.areaId);
+    mine = ends(focus.selected);
+    if (!mine && !ends(focus.hover)) return null;
+  }
+  const lit = focused && (connected || mine);
   const name = edge.kind === 'adds' ? 'adds' : edge.tone === 'work' ? 'work' : 'code';
   const color = (colors && colors[name]) || WORK_EDGE_THEMES[name];
   const faded = source.dim === true && target.dim === true; // "Waiting on you" is on and neither end waits
   return {
     key, from: edge.from, to: edge.to, kind: edge.kind,
     x1: source.x, y1: source.y, x2: target.x, y2: target.y, r1: source.r, r2: target.r,
-    color, width: lit ? 2.4 : 1.4, alpha: faded ? 0.12 : focused ? (connected ? 1 : 0.08) : 0.35,
+    color, width: lit ? 2.4 : edge.tone === 'code' ? 1.8 : 1.4, alpha: faded ? 0.12 : lit ? 1 : edge.tone === 'code' ? 0.6 : focused ? (connected ? 1 : 0.08) : 0.35, // a line to code not of the selection is the pointer's
     dash: edge.kind === 'adds' ? dashes.PROPOSED_DASH : edge.kind === 'mentions' ? dashes.USAGE_DASH : null,
     ticks: 0, curve: null, arrow: false, end: null, glow: 0, glowColor: null,
     label: lit ? { text: typeof edge.word === 'string' && edge.word ? edge.word : edge.kind, x: (source.x + target.x) / 2, y: (source.y + target.y) / 2, color, italic: false } : null,
@@ -243,13 +365,15 @@ export const CODE_R = 9;
 export const byLane = (a, b) => (a.waiting === b.waiting ? 0 : a.waiting ? -1 : 1) || (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 /** Most touched first, then by name: the order of the code */
 export const byTouch = (a, b) => (b.touches || 0) - (a.touches || 0) || String(a.label).localeCompare(String(b.label)) || (a.id < b.id ? -1 : 1);
+/** The areas: the most nodes touched first, then the most work, then by name */
+export const byArea = (a, b) => ((b.drawn ?? b.size) || 0) - ((a.drawn ?? a.size) || 0) || byTouch(a, b);
 
 /**
  * The sizes the layout works in. World units, laid out for the zoom the first fit will have, so a name under a node (11 px at least, whatever the zoom: labels.js) has
  * the room on screen it needs: a cell is wide enough for a name, a row tall enough for a disc and a name under it, and lanes next to each other are staggered by half a row
  * so a name that runs past its lane lands between the next lane's. `margin` is what the first fit leaves on screen around the lanes, in px (the names at the edge, and the toggles at the top).
  */
-const DESK = { cell: 200, row: 70, codeCell: 190, codeRow: 44, gap: 14, pad: 6, margin: { x: 100, top: 56, bottom: 24 }, caps: [100, 64, 48, 40, 32, 28, 24, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 5] };
+const DESK = { cell: 236, row: 70, codeCell: 190, codeRow: 44, gap: 14, pad: 6, margin: { x: 100, top: 56, bottom: 24 }, caps: [100, 64, 48, 40, 32, 28, 24, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 5] };
 const PHONE = { cell: 104, row: 84, codeCell: 150, codeRow: 40, gap: 12, pad: 4, margin: { x: 36, top: 112, bottom: 16 } };
 /** A lane's title (screen px) the first node sits under, and a name under a node (its gap and its line, px) */
 const TITLE_PX = 40;
@@ -263,7 +387,11 @@ const lane = (key, title, count, x, y, w, h) => ({ key, name: title, count, x, y
 /** The text drawn under a node: a piece of work's tag and the start of its title (a phone: the tag), the name of a node of code (a phone: the start of it) */
 function nameNodes(nodes, phone) {
   for (const n of nodes) {
-    if (n.work) { const tag = tagOf(n.item); n.labelText = phone ? tag : `${tag} · ${clipWords(n.title, Math.max(8, DRAWN_CHARS - tag.length - 3))}`; }
+    if (n.work) {
+      const tag = tagOf(n.item);
+      const folded = n.folded && n.folded.length ? ` · ${n.folded.length} ${n.folded.length === 1 ? 'thread' : 'threads'}` : ''; // its conversations, folded into it (spec 0015 D2)
+      n.labelText = phone ? `${tag}${n.folded && n.folded.length ? ` · ${n.folded.length}` : ''}` : `${tag} · ${clipWords(n.title, TITLE_CHARS)}${folded}`;
+    } else if (n.area) n.labelText = `${clip(String(n.label), phone ? 12 : 26)} · ${n.drawn ?? n.size}`; // an area: its name and how many of its nodes work touches (the work drawn)
     else n.labelText = clip(String(n.label), phone ? 12 : 32);
   }
 }
@@ -296,7 +424,9 @@ export function layoutWork(nodes, { phone = false, width = 1200, height = 800, p
   for (const n of shown.filter((x) => x.work && !x.draft && !known.has(x.id))) stages.find((s) => s.key === { thread: 'talk', issue: 'talk', proposal: 'decide', run: 'build', pull: 'build', deploy: 'ship' }[n.work]).nodes.push(n);
   stages.forEach((s) => s.nodes.sort(byLane));
   const drafts = shown.filter((n) => n.draft).sort(byLane);
-  const code = shown.filter((n) => !n.work).sort(byTouch);
+  // the code column: the areas, most touched first, each with its nodes under it while it is open (spec 0015 D1)
+  const code = shown.filter((n) => n.area).sort(byArea);
+  for (const a of code) a.inside = shown.filter((n) => !n.work && !n.area && n.areaId === a.id).sort(byTouch);
   const v = { width: Math.max(160, width), height: Math.max(160, height) };
   return phone ? layoutPhone(stages, drafts, code, v, padding) : layoutDesk(stages, drafts, code, v, padding);
 }
@@ -317,7 +447,7 @@ function layoutDesk(stages, drafts, code, v, p) {
     const parts = lanes.map((l, i) => {
       const cell = l.code ? c.codeCell : c.cell;
       const row = l.code ? c.codeRow : c.row;
-      const r = l.code ? CODE_R : 20;
+      const r = l.code ? AREA_R : 20;
       const { cols, rows } = cut(l.nodes.length, cap);
       const w = cols * cell + 2 * c.pad;
       const stagger = cols > 1 || i % 2 ? 0.5 : 0;
@@ -342,20 +472,38 @@ function layoutDesk(stages, drafts, code, v, p) {
   }
   const { g } = best;
   const out = [];
+  const order = [];
+  let bottom = g.h;
   for (const part of g.parts) {
     const { l, i, cell, row, r, cols, rows } = part;
+    if (l.code) {
+      // an open area's nodes sit under it, in its column, and push the areas below it down; the fit is the closed column's, so opening one moves nothing else
+      const at = new Array(cols).fill(0);
+      l.nodes.forEach((n, j) => {
+        const col = Math.floor(j / rows);
+        const x = part.x + c.pad + (col + 0.5) * cell;
+        const y = (k) => g.room + AREA_R + (k + ((i + col) % 2) * 0.5) * row;
+        n.x = x;
+        n.y = y(at[col]++);
+        order.push(n.id);
+        for (const m of n.inside) { m.x = x + 12; m.y = y(at[col]++); order.push(m.id); }
+      });
+      const h = Math.max(g.h, g.room + 2 * AREA_R + (Math.max(...at) - 0.5) * row + NAME_PX / z + 8);
+      bottom = Math.max(bottom, h);
+      out.push(lane(l.key, l.title, l.nodes.length, part.x, 0, part.w, h));
+      continue;
+    }
     l.nodes.forEach((n, j) => {
       const col = Math.floor(j / rows);
       n.x = part.x + c.pad + (col + 0.5) * cell;
       n.y = g.room + r + (j % rows + ((i + col) % 2) * 0.5) * row;
+      order.push(n.id);
     });
     out.push(lane(l.key, l.title, l.nodes.length, part.x, 0, part.w, g.h));
   }
-  const order = g.parts.flatMap((part) => part.l.nodes.map((n) => n.id));
-  let bottom = g.h;
   if (drafts.length) {
     // the band: columns of the lanes' own cell, as many as the row is wide, staggered as the lanes' are; it starts a gap under the row
-    const top = g.h + c.gap;
+    const top = bottom + c.gap; // under the row, and under an open area that runs past it
     const room = TITLE_PX / z;
     const cols = Math.max(1, Math.floor((g.w - 2 * c.pad) / c.cell));
     const rows = Math.ceil(drafts.length / cols);
@@ -371,8 +519,9 @@ function layoutDesk(stages, drafts, code, v, p) {
   return { lanes: out, order, bounds: { x: 0, y: 0, w: g.w, h: bottom }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
 }
 
-function layoutPhone(stages, drafts, code, v, p) {
+function layoutPhone(stages, drafts, areas, v, p) {
   const c = PHONE;
+  const code = areas.flatMap((a) => [a, ...a.inside]); // a phone's column: each area, and the open one's nodes after it
   const bands = [stages[0], stages[1], ...(drafts.length ? [{ key: 'drafts', title: DRAFT_LANE_TITLE, nodes: drafts }] : []), { key: 'build-ship', title: 'Build · Ship', nodes: [...stages[2].nodes, ...stages[3].nodes] }];
   const plan = (z, perRow, codeCols) => {
     const room = TITLE_PX / z;
@@ -389,7 +538,7 @@ function layoutPhone(stages, drafts, code, v, p) {
     const hBands = y - c.gap;
     const codeRows = Math.max(1, Math.ceil(code.length / codeCols));
     const wCode = code.length ? codeCols * c.codeCell + 2 * c.pad : 0;
-    const hCode = code.length ? room + 2 * CODE_R + (codeRows - 1 + (codeCols > 1 ? 0.5 : 0)) * c.codeRow + below + 8 : 0;
+    const hCode = code.length ? room + 2 * AREA_R + (codeRows - 1 + (codeCols > 1 ? 0.5 : 0)) * c.codeRow + below + 8 : 0;
     return { parts, wBand, wCode, hBands, hCode, codeRows, room, w: wBand + (code.length ? c.gap + wCode : 0), h: Math.max(hBands, hCode) };
   };
   let z = 0.5;
@@ -413,8 +562,8 @@ function layoutPhone(stages, drafts, code, v, p) {
   }
   if (code.length) {
     const x0 = g.wBand + c.gap;
-    code.forEach((n, j) => { const col = Math.floor(j / g.codeRows); n.x = x0 + c.pad + (col + 0.5) * c.codeCell; n.y = g.room + CODE_R + (j % g.codeRows + (col % 2) * 0.5) * c.codeRow; });
-    out.push(lane('code', CODE_LANE_TITLE, code.length, x0, 0, g.wCode, g.hCode));
+    code.forEach((n, j) => { const col = Math.floor(j / g.codeRows); n.x = x0 + c.pad + (col + 0.5) * c.codeCell + (n.area ? 0 : 8); n.y = g.room + AREA_R + (j % g.codeRows + (col % 2) * 0.5) * c.codeRow; });
+    out.push(lane('code', CODE_LANE_TITLE, areas.length, x0, 0, g.wCode, g.hCode));
   }
   return { lanes: out, order: [...g.parts.flatMap((part) => part.b.nodes.map((n) => n.id)), ...code.map((n) => n.id)], bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
 }
@@ -427,17 +576,19 @@ function layoutPhone(stages, drafts, code, v, p) {
 export const startLayers = () => Object.fromEntries(LAYER_KEYS.map((k) => [k, k !== DRAFT_LAYER]));
 
 /**
- * Sets `hidden` and `dim` on the nodes. A piece of work is hidden when its layer is off; code when its layer is off or every piece of work that touches it is
- * hidden (only code that work touches is drawn). With "Waiting on you" on, everything that does not wait is dimmed.
+ * Sets `hidden` and `dim` on the nodes. A piece of work is hidden when its layer is off, and a thread folded into its proposal always (spec 0015 D2); code when its
+ * layer is off or every piece of work that touches it is hidden (only code that work touches is drawn): an area while any of its nodes is drawn, a node of an area
+ * only while that area is open (`open`, spec 0015 D1). With "Waiting on you" on, everything that does not wait is dimmed.
  */
-export function applyFilters(nodes, edges, { layers = startLayers(), waiting = false } = {}) {
+export function applyFilters(nodes, edges, { layers = startLayers(), waiting = false, open = null } = {}) {
   const on = (key) => layers[key] !== false;
   const shown = new Set();
-  for (const n of nodes) { n.hidden = n.draft ? !on(DRAFT_LAYER) : n.work ? !on(workType(n.work)) : false; if (n.work && !n.hidden) shown.add(n.id); }
+  for (const n of nodes) { n.hidden = n.foldedInto ? true : n.draft ? !on(DRAFT_LAYER) : n.work ? !on(workType(n.work)) : false; if (n.work && !n.hidden) shown.add(n.id); }
   const reached = new Set();
   for (const e of edges) if (e.tone === 'code' && shown.has(e.from)) reached.add(e.to);
   for (const n of nodes) {
-    if (!n.work) n.hidden = !on(CODE_LAYER) || !reached.has(n.id);
+    if (n.area) { n.drawn = n.members.filter((id) => reached.has(id)).length; n.hidden = !on(CODE_LAYER) || !n.drawn; n.open = n.id === open; } // `drawn`: how many of its nodes the work drawn touches
+    else if (!n.work) n.hidden = !on(CODE_LAYER) || !reached.has(n.id) || (!!n.areaId && n.areaId !== n.id && n.areaId !== open);
     n.dim = waiting && !n.waiting;
   }
   return nodes;
@@ -445,7 +596,7 @@ export function applyFilters(nodes, edges, { layers = startLayers(), waiting = f
 
 /** The Layers menu's rows in the Work view: `{ key, label, color, desc, countText }`, the six kinds, the local drafts and the code they touch */
 export function layerRowsOf(nodes) {
-  const of = (kind) => nodes.filter((n) => n.work === kind && !n.draft);
+  const of = (kind) => nodes.filter((n) => n.work === kind && !n.draft && !n.foldedInto); // a thread folded into its proposal is not drawn, nor counted (spec 0015 D2)
   const word = (n, w) => `${n} ${w}`;
   const rows = KIND_ORDER.map((kind) => {
     const list = of(kind);
@@ -459,7 +610,7 @@ export function layerRowsOf(nodes) {
   });
   const drafts = nodes.filter((n) => n.draft).length;
   rows.push({ key: DRAFT_LAYER, label: DRAFT_LAYER_WORDS, color: WORK_THEMES.proposal.color, desc: 'Proposals that are only files in the checkout: no pull request holds them, nobody has been asked to decide them', countText: word(drafts, 'local'), count: drafts });
-  const codeCount = nodes.filter((n) => !n.work).length;
+  const codeCount = nodes.filter((n) => !n.work && (!n.area || n.self)).length; // the nodes of code, not the areas they are grouped in
   rows.push({ key: CODE_LAYER, label: CODE_LAYER_WORDS, color: NODE_THEMES.page.color, desc: 'The code the work touches', countText: String(codeCount), count: codeCount });
   return rows;
 }
@@ -563,19 +714,23 @@ export function workPanelHtml(p, node, { color = () => '' } = {}) {
 
 /** The node panel's section for a node of code in the Work view: the work that touches it, and "Show on the map" (a planned node is not on the map yet) */
 export function codePanelHtml(node, touching, { color = () => '' } = {}) {
+  const planned = node.planned === true && !node.mapped; // an area drawn as planned whose own node the map holds is on the map
   const list = touching.length
     ? `<ul class="hx-work-links" data-corn="work-links">${touching.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dotOf(l.work, color)}${linkButton(l)}</li>`).join('')}</ul>`
     : '<p class="hx-faint">No work touches it now.</p>';
-  const show = node.planned ? '' : `<button type="button" class="hx-btn hx-btn--secondary hx-foot-btn" data-corn-kind="secondary" data-work-action="show-on-map" data-id="${esc(node.id)}">Show on the map</button>`;
-  return `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Work</div><div class="hx-fact-v">${node.planned ? '<p class="hx-faint">Planned: a proposal adds it, and the map does not hold it yet.</p>' : ''}${list}${show}</div></div>`;
+  const show = planned ? '' : `<button type="button" class="hx-btn hx-btn--secondary hx-foot-btn" data-corn-kind="secondary" data-work-action="show-on-map" data-id="${esc(node.id)}">Show on the map</button>`;
+  return `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Work</div><div class="hx-fact-v">${planned ? '<p class="hx-faint">Planned: a proposal adds it, and the map does not hold it yet.</p>' : ''}${list}${show}</div></div>`;
 }
 
 /** The work that touches a node of code, as the node panel lists it: `{ rel, id, label, work }` */
 export function touchedBy(node, nodes, edges) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
+  const ids = new Set(node.area ? node.members : [node.id]); // an area: the work touching any of its nodes, once per piece of work and rel
   const out = [];
+  const seen = new Set();
   for (const e of edges) {
-    if (e.to !== node.id) continue;
+    if (!ids.has(e.to) || !Object.hasOwn(REL_WORDS, e.kind) || seen.has(`${e.from}|${e.kind}`)) continue;
+    seen.add(`${e.from}|${e.kind}`);
     const from = byId.get(e.from);
     if (from && from.work) out.push({ rel: REL_WORDS[e.kind][1], id: from.id, label: from.label, work: from.work, waiting: from.waiting });
   }
@@ -608,6 +763,8 @@ export function arrowTarget(nodes, from, key) {
 
 /** What a screen reader hears when the keyboard lands on a node of the Work view: its name, its kind and state, what waits, and its place in the lanes */
 export function landingWords(node, index, count) {
+  const size = node.drawn ?? node.size;
+  if (node.area && !(node.self && size === 1)) return `${node.label}, area${node.planned ? ', planned' : ''}, ${size} ${size === 1 ? 'node' : 'nodes'} of it touched by ${node.touches || 0} ${node.touches === 1 ? 'piece' : 'pieces'} of work, ${node.open ? 'open' : 'closed'}, ${index + 1} of ${count}`;
   if (!node.work) return `${node.label}, code${node.planned ? ', planned' : ''}, ${node.touches || 0} ${node.touches === 1 ? 'piece' : 'pieces'} of work touch it, ${index + 1} of ${count}`;
   const item = node.item;
   return `${node.label}, ${KIND_WORDS[item.kind].toLowerCase()}${node.draft ? ' (a local draft)' : ''}, ${stateWordsOf(item).toLowerCase()}${node.waiting ? ', waiting on you' : ''}, ${index + 1} of ${count}`;
@@ -648,7 +805,7 @@ export function nodeForAddress(ask, nodes) {
   const hit = ask.kind === 'proposal'
     ? mine.find((n) => n.item.slug === ask.key) || mine.find((n) => specNumber(text(n.item.slug)) === ask.key)
     : ask.kind === 'run' ? mine.find((n) => n.item.runId === ask.key) : ask.kind === 'deploy' ? mine.find((n) => n.item.deployId === ask.key) : mine.find((n) => String(n.item.number) === ask.key);
-  return hit ? hit.id : null;
+  return hit ? hit.foldedInto || hit.id : null; // a thread folded into its proposal: the proposal (spec 0015 D2)
 }
 
 /** The address a node of work has in the page (`?pr=27`), so a link can be given; null for a node that has none (a deploy) */
@@ -675,19 +832,38 @@ export function openedWords({ work, code, waiting }) {
 // ---------------------------------------------------------------------------
 
 /** What the Work view keeps on the state (`state.work`): the answer, the scene made of it, the layers, the toggle, and the map it stands in for while it is open */
-export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], badges: new Map(), layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null, order: [], updating: false, stale: '', lastError: '' });
+export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], open: null, lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], badges: new Map(), layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null, order: [], updating: false, stale: '', lastError: '' });
 
-/** Makes the scene of an answer (`workScene`), keeps the node a selection named, and sets the filters; the layout is `applyWorkLayout`'s */
-export function setWorkGraph(state, graph, mapNodes) {
+/** Makes the scene of an answer (`workScene`), keeps the node a selection named and the area that was open, and sets the filters; the layout is `applyWorkLayout`'s */
+export function setWorkGraph(state, graph, mapNodes, mapEdges = []) {
   const w = state.work || (state.work = newWorkState());
-  const scene = workScene(graph, mapNodes);
+  const scene = workScene(graph, mapNodes, mapEdges);
+  if (w.open && !scene.nodes.some((n) => n.area && n.id === w.open)) w.open = null;
   w.graph = graph;
   w.nodes = scene.nodes;
   w.edges = scene.edges;
   w.counts = scene.counts;
   w.problems = Array.isArray(graph && graph.problems) ? graph.problems : [];
-  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting });
+  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting, open: w.open });
   return w;
+}
+
+/** The area a node of code is in, or the area itself; null for a piece of work */
+export const areaFor = (node) => (node && !node.work && (node.area ? node.id : node.areaId)) || null;
+
+/**
+ * Opens an area of the code column in place, or closes it (`id` null): its nodes are shown under it and the others' stay closed (spec 0015 D1). Sets the filters and
+ * the lines the scene walks; the page lays the view out again (`applyWorkLayout`). Whether anything changed.
+ */
+export function setOpenArea(state, id) {
+  const w = state.work;
+  if (!w) return false;
+  const next = id && w.nodes.some((n) => n.area && n.id === id) ? id : null;
+  if (w.open === next) return false;
+  w.open = next;
+  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting, open: w.open });
+  if (state.workLayers) state.edges = drawnEdges(w.nodes, w.edges, w.open);
+  return true;
 }
 
 /** Puts the Work view's nodes on the state, keeping the map's to put back (`leaveWork`) */
@@ -702,7 +878,7 @@ export function showWork(state) {
   const w = state.work;
   state.workEdge = workEdge; // the scene draws the Work view's lines with it (scene.js)
   state.nodes = w.nodes;
-  state.edges = w.edges;
+  state.edges = drawnEdges(w.nodes, w.edges, w.open); // a line to a closed area ends at the area (spec 0015 D1)
   state.rings = { rings: [], clusters: [] };
   state.workLayers = w.layers; // set only while the view is open (leaveWork clears it): the layer code reads its presence as the Work view
   state.workRows = layerRowsOf(w.nodes);

@@ -89,7 +89,7 @@ import { createHistory } from '../core/history.js';
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
 /** The pure core modules the explorer imports (no Node built-ins, no files): the only ones of core/ served */
-export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js', 'color.js', 'strings.js', 'layers.js'];
+export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js', 'color.js', 'strings.js', 'layers.js', 'release-notes.js'];
 /** The explorer files the sign-in pages load: cornfield's tokens, their own stylesheet and the script that applies Light or Dark. Served without a session. */
 const SIGN_IN_FILES = new Set(['/explorer/tokens.css', '/explorer/sign-in.css', '/explorer/theme-boot.js']);
 /** cornfield's own browser sources, by request path */

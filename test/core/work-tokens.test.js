@@ -55,10 +55,10 @@ describe('--corn-work-edge-<name>', () => {
   });
   it('is drawn in the theme\'s colour when it sets one, else in the default', () => {
     const edge = { from: 'a', to: 'b', kind: 'closes', tone: 'work', word: 'closes' };
-    const a = { x: 0, y: 0, r: 10 };
+    const a = { id: 'a', x: 0, y: 0, r: 10 };
     const dashes = { PROPOSED_DASH: [4, 4], USAGE_DASH: [2, 2] };
     expect(workEdge(edge, a, a, true, true, 'k', dashes).color).toBe(WORK_EDGE_THEMES.work);
     expect(workEdge(edge, a, a, true, true, 'k', dashes, { work: '#ff00ff' }).color).toBe('#ff00ff');
-    expect(workEdge({ ...edge, kind: 'adds', tone: 'code' }, a, a, true, true, 'k', dashes, { work: '#ff00ff' }).color).toBe(WORK_EDGE_THEMES.adds);
+    expect(workEdge({ ...edge, kind: 'adds', tone: 'code' }, a, a, true, true, 'k', dashes, { work: '#ff00ff' }, { selected: 'a' }).color).toBe(WORK_EDGE_THEMES.adds); // a line to code is drawn for the selection (spec 0015 D1)
   });
 });

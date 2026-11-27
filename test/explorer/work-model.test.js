@@ -1,6 +1,6 @@
 // The Work view's pure half (spec 0012 D2 to D5, D8): the scene of an answer, the layout, the filters, the layers' rows, the panel's words, the addresses.
 import { describe, it, expect } from 'vitest';
-import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, DRAWN_CHARS, workPanelHtml, codePanelHtml, arrowTarget, landingWords, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
+import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, TITLE_CHARS, workPanelHtml, drawnEdges, setOpenArea, workEdge, codePanelHtml, arrowTarget, landingWords, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
 import { buildScene, isNodeVisible } from '../../explorer/scene.js';
 import { WORK_KINDS, WORK_THEMES } from '../../core/schema.js';
 import { createState } from '../../explorer/instance-state.js';
@@ -154,7 +154,8 @@ describe('the layout (D3)', () => {
   it('names each node by its tag and the start of its title (a phone: the tag), the whole name staying the node\'s', () => {
     const { nodes } = workScene({ nodes: [{ id: 'issue:3', kind: 'issue', stage: 'talk', title: 'A very long title that goes on and on and on', state: 'open', open: true, waiting: false, number: 3, updated: '2026-11-12T00:00:00Z' }], edges: [] }, map);
     layoutWork(nodes, { width: 1440, height: 800 });
-    expect(nodes[0].labelText.length).toBeLessThanOrEqual(DRAWN_CHARS + 1);
+    expect(nodes[0].labelText.length).toBeLessThanOrEqual('Issue #3 · '.length + TITLE_CHARS);
+    expect(nodes[0].labelText).toBe('Issue #3 · A very long title that goes on…'); // cut at a word, at 32 characters (spec 0015 D7)
     expect(nodes[0].labelText.startsWith('Issue #3 · A very')).toBe(true);
     expect(nodes[0].label).toContain('A very long title');
     layoutWork(nodes, { phone: true, width: 390, height: 788 });
@@ -244,11 +245,17 @@ describe('the scene draws it (D2, D3)', () => {
     expect(scene.nodes.find((n) => n.id === 'issue:14').letters).toBe('!');
     expect(scene.nodes.find((n) => n.id === '/flow/start').mark).toBe('added'); // planned: drawn as added
     expect(scene.decor.lanes).toHaveLength(5);
-    const dash = (kind) => scene.edges.find((e) => e.kind === kind).dash;
-    expect(dash('closes')).toBeNull();
-    expect(dash('mentions')).not.toBeNull();
-    expect(dash('adds')).not.toBeNull();
-    expect(dash('mentions')).not.toEqual(dash('adds'));
+    // with nothing selected, only the lines between work (spec 0015 D1); the node under the pointer has its lines to code drawn
+    expect(scene.edges.filter((e) => ['changes', 'adds', 'mentions', 'restarts'].includes(e.kind))).toEqual([]);
+    state.hoverNodeId = 'proposal:0100-flow';
+    const adds = buildScene(state).edges.find((e) => e.kind === 'adds');
+    state.hoverNodeId = 'thread:31';
+    const mentions = buildScene(state).edges.find((e) => e.kind === 'mentions');
+    expect(scene.edges.find((e) => e.kind === 'closes').dash).toBeNull();
+    expect(mentions.dash).not.toBeNull();
+    expect(adds.dash).not.toBeNull();
+    expect(adds.label).toBeNull(); // the pointer's lines are not named
+    expect(mentions.dash).not.toEqual(adds.dash);
   });
   it('names a line beside it when a node at either end is selected, and dims all but the neighbours', () => {
     const { state } = stateOf();
@@ -258,7 +265,9 @@ describe('the scene draws it (D2, D3)', () => {
     expect(lit).toContain('pull:27>issue:14:closes');
     expect(lit).toContain('pull:27>api-billing:changes');
     expect(lit).toContain('run:run-0123456789ABCDEFGHIJKLMNOP>pull:27:opened'); // selected at the line's end
-    expect(scene.edges.find((e) => e.kind === 'adds').label).toBeNull();
+    expect(scene.edges.find((e) => e.kind === 'adds')).toBeUndefined(); // another piece of work's line to code is not drawn
+    expect(scene.edges.find((e) => e.kind === 'shipped').label).toBeTruthy();
+    expect(scene.edges.find((e) => e.kind === 'agent-on').label).toBeNull(); // a line between work that is not the selection's is drawn, faint
     expect(scene.nodes.find((n) => n.id === 'thread:31').alpha).toBeLessThan(0.5);
     expect(scene.nodes.find((n) => n.id === 'issue:14').alpha).toBe(1);
   });
@@ -266,7 +275,7 @@ describe('the scene draws it (D2, D3)', () => {
     const { state } = stateOf();
     const scene = buildScene(state);
     const by = (id) => scene.nodes.find((n) => n.id === id);
-    expect(by('pull:27').label).toBe('PR #27 · Page exports in…'); // cut at a word
+    expect(by('pull:27').label).toBe('PR #27 · Page exports in chunks'); // a title of up to 32 characters whole (spec 0015 D7)
     expect(by('proposal:0100-flow').labelKeep).toBe(true); // waits on you
     expect(by('run:run-0123456789ABCDEFGHIJKLMNOP').labelKeep).toBe(true);
     expect(by('pull:27').labelKeep).toBe(false); // the placing decides: no name for a node whose name would run into another
@@ -448,5 +457,198 @@ describe('two spec pull requests with one slug (the server\'s second id form)', 
     expect(new Set(laid.order).size).toBe(2);
     const out = workPanelHtml(panelOf(nodes[1], nodes, []), nodes[1], {});
     expect(out).toContain('data-work-ref="proposal:0100-flow@23"');
+  });
+});
+
+describe('the code grouped by area, its lines for the selection, and a spec\'s threads folded in (spec 0015 D1, D2, D7)', () => {
+  // the map: the root owns an app, a service and a core; api-billing owns a table and a page (ownership edges carry no kind)
+  const tree = [
+    { id: 'root', label: 'shop', type: 'root', x: 0, y: 0, r: 30 },
+    { id: 'api-billing', label: 'api-billing', type: 'app', x: 1, y: 1, r: 24 },
+    { id: 'invoices', label: 'invoices', type: 'table', x: 2, y: 2, r: 18 },
+    { id: 'billing-page', label: 'billing page', type: 'page', x: 3, y: 3, r: 14 },
+    { id: 'notifications', label: 'notifications', type: 'service', x: 5, y: 5, r: 20 },
+    { id: 'auth', label: 'auth', type: 'core', x: 3, y: 3, r: 20 },
+  ];
+  const owns = [['root', 'api-billing'], ['root', 'notifications'], ['root', 'auth'], ['api-billing', 'invoices'], ['api-billing', 'billing-page']].map(([from, to]) => ({ from, to }));
+  const more = {
+    ok: true,
+    nodes: [
+      ...graph.nodes.filter((n) => n.id !== '/flow/start'),
+      { id: '/flow/start', kind: 'code', planned: true, label: '/flow/start', type: 'page', parent: 'billing-page' }, // joins api-billing, through its parent
+      { id: 'reports', kind: 'code', planned: true, label: 'reports', type: 'app', parent: 'root' }, // a new app: an area of its own
+      { id: 'reports-page', kind: 'code', planned: true, label: 'reports page', type: 'page', parent: 'reports' },
+      { id: 'thread:21', kind: 'thread', stage: 'talk', title: 'Spec: A new flow', state: 'open', open: true, waiting: false, number: 21, threadKind: 'proposal', updated: '2026-11-11T00:00:00Z' },
+      { id: 'thread:22', kind: 'thread', stage: 'talk', title: 'Spec: A new flow, and auth', state: 'open', open: true, waiting: false, number: 22, threadKind: 'proposal', updated: '2026-11-11T00:00:00Z' },
+      { id: 'thread:23', kind: 'thread', stage: 'talk', title: 'An idea on its own', state: 'open', open: true, waiting: false, number: 23, threadKind: 'idea', updated: '2026-11-11T00:00:00Z' },
+    ],
+    edges: [
+      ...graph.edges,
+      { from: 'proposal:0100-flow', to: 'reports', rel: 'adds' },
+      { from: 'proposal:0100-flow', to: 'reports-page', rel: 'adds' },
+      { from: 'thread:21', to: 'proposal:0100-flow', rel: 'discusses' },
+      { from: 'thread:22', to: 'proposal:0100-flow', rel: 'discusses' },
+      { from: 'thread:22', to: 'auth', rel: 'mentions' }, // it points at code too: it stays in Talk
+    ],
+  };
+  const sceneOf = () => workScene(more, tree, owns);
+  const find = (nodes, id) => nodes.find((n) => n.id === id);
+
+  it('holds one node per area, named with how many of its nodes work touches; a planned node joins its parent\'s area', () => {
+    const { nodes, counts } = sceneOf();
+    const areas = nodes.filter((n) => n.area).map((n) => `${n.id}:${n.size}`).sort();
+    expect(areas).toEqual(['api-billing:3', 'auth:1', 'notifications:1', 'reports:2']);
+    expect(find(nodes, 'api-billing')).toMatchObject({ area: true, self: true, planned: false });
+    expect(find(nodes, 'api-billing').members.sort()).toEqual(['/flow/start', 'api-billing', 'invoices']);
+    expect(find(nodes, 'invoices').areaId).toBe('api-billing');
+    expect(find(nodes, '/flow/start').areaId).toBe('api-billing');
+    expect(find(nodes, 'reports-page').areaId).toBe('reports');
+    expect(find(nodes, 'reports')).toMatchObject({ area: true, planned: true }); // every node of it is planned: drawn dashed
+    expect(find(nodes, 'billing-page')).toBeUndefined(); // no work touches it
+    expect(counts.code).toBe(7);
+    expect(layerRowsOf(nodes).find((r) => r.key === CODE_LAYER).countText).toBe('7'); // the Layers row counts the nodes of code, as before
+    layoutWork(nodes, { width: 1440, height: 900 });
+    expect(find(nodes, 'api-billing').labelText).toBe('api-billing · 3');
+  });
+
+  it('an area not itself touched is a node of its own, the map\'s, drawn planned only while all of it is', () => {
+    const { nodes } = workScene({ nodes: [graph.nodes[4]], edges: [{ from: 'pull:27', to: 'invoices', rel: 'changes' }] }, tree, owns);
+    const area = find(nodes, 'api-billing');
+    expect(area).toMatchObject({ area: true, self: false, size: 1, planned: false, type: 'app', label: 'api-billing' });
+    expect(tree[1].area).toBeUndefined(); // the map's own node is left alone
+    expect(layerRowsOf(nodes).find((r) => r.key === CODE_LAYER).count).toBe(1);
+  });
+
+  it('keeps an area\'s nodes hidden until it opens, and opens one at a time', () => {
+    const { nodes, edges } = sceneOf();
+    applyFilters(nodes, edges, {});
+    expect(find(nodes, 'api-billing').hidden).toBe(false);
+    expect(find(nodes, 'invoices').hidden).toBe(true);
+    expect(find(nodes, 'reports-page').hidden).toBe(true);
+    applyFilters(nodes, edges, { open: 'api-billing' });
+    expect(find(nodes, 'invoices').hidden).toBe(false);
+    expect(find(nodes, '/flow/start').hidden).toBe(false);
+    expect(find(nodes, 'reports-page').hidden).toBe(true);
+    expect(find(nodes, 'api-billing').open).toBe(true);
+    applyFilters(nodes, edges, { layers: { ...startLayers(), [CODE_LAYER]: false }, open: 'api-billing' });
+    expect(nodes.filter((n) => !n.work).every((n) => n.hidden)).toBe(true);
+  });
+
+  it('ends a line to a closed area at the area, once per piece of work and rel, and ties an open one to its nodes', () => {
+    const { nodes, edges } = sceneOf();
+    const closed = drawnEdges(nodes, edges, null);
+    const pull = closed.filter((e) => e.from === 'pull:27' && e.kind === 'changes');
+    expect(pull.map((e) => e.to)).toEqual(['api-billing']);
+    expect(pull[0].via).toEqual(['invoices']);
+    expect(closed.find((e) => e.from === 'proposal:0100-flow' && e.kind === 'adds' && e.to === 'reports').via).toEqual(['reports-page']);
+    expect(closed.some((e) => e.tone === 'area')).toBe(false);
+    const open = drawnEdges(nodes, edges, 'api-billing');
+    expect(open.filter((e) => e.from === 'pull:27' && e.kind === 'changes').map((e) => e.to).sort()).toEqual(['api-billing', 'invoices']);
+    expect(open.filter((e) => e.tone === 'area' && e.from === 'api-billing').map((e) => e.to).sort()).toEqual(['/flow/start', 'invoices']);
+    expect(edges.filter((e) => e.from === 'pull:27' && e.kind === 'changes').map((e) => e.to).sort()).toEqual(['api-billing', 'invoices']); // the panel's edges stay whole
+  });
+
+  it('draws a line from work to code only for the selection and the node under the pointer, or the area the code is in', () => {
+    const dashes = { PROPOSED_DASH: [4, 4], USAGE_DASH: [2, 2] };
+    const pull = { id: 'pull:27', x: 0, y: 0, r: 20 };
+    const code = { id: 'invoices', areaId: 'api-billing', x: 1, y: 1, r: 9 };
+    const line = { from: 'pull:27', to: 'invoices', kind: 'changes', tone: 'code', word: 'changes' };
+    const draw = (focus, connected = false, focused = false) => workEdge(line, pull, code, connected, focused, 'k', dashes, {}, focus);
+    expect(draw({})).toBeNull();
+    expect(draw({ selected: 'issue:14' }, false, true)).toBeNull();
+    expect(draw({ selected: 'pull:27' }, true, true).label.text).toBe('changes');
+    expect(draw({ selected: 'api-billing' }, false, true).label.text).toBe('changes'); // the area is selected: its nodes' lines are its
+    const hovered = draw({ hover: 'pull:27' });
+    expect(hovered.label).toBeNull();
+    expect(hovered.alpha).toBeGreaterThan(0.35);
+    expect(workEdge({ ...line, tone: 'area' }, pull, code, true, true, 'k', dashes, {}, { selected: 'pull:27' })).toBeNull();
+    const work = workEdge({ from: 'pull:27', to: 'issue:14', kind: 'closes', tone: 'work' }, pull, { id: 'issue:14', x: 2, y: 2, r: 20 }, true, false, 'k', dashes, {}, {});
+    expect(work).not.toBeNull(); // the lines between work are drawn with nothing selected
+  });
+
+  it('opens an area in place: its nodes under it, the areas below pushed down, the lanes of work and the first fit where they were', () => {
+    const state = createState();
+    state.nodes = tree.map((n) => ({ ...n }));
+    state.edges = owns;
+    state.view = 'orbit';
+    setWorkGraph(state, more, state.nodes, owns);
+    state.view = 'work';
+    enterWork(state);
+    state.width = 1440;
+    state.height = 900;
+    applyWorkLayout(state);
+    const at = (id) => state.work.nodes.find((n) => n.id === id);
+    const before = { pull: { x: at('pull:27').x, y: at('pull:27').y }, fit: { ...state.work.fit } };
+    const areas = state.work.nodes.filter((n) => n.area).sort((a, b) => a.y - b.y).map((n) => n.id);
+    expect(areas[0]).toBe('api-billing'); // the most nodes touched first
+    const second = at(areas[1]).y;
+    expect(state.edges.some((e) => e.to === 'invoices')).toBe(false);
+    expect(setOpenArea(state, 'api-billing')).toBe(true);
+    applyWorkLayout(state);
+    expect(at('invoices').hidden).toBe(false);
+    expect(at('invoices').y).toBeGreaterThan(at('api-billing').y);
+    expect(at('invoices').y).toBeLessThan(at(areas[1]).y);
+    expect(at(areas[1]).y).toBeGreaterThan(second);
+    expect(at('pull:27')).toMatchObject(before.pull);
+    expect(state.work.fit).toEqual(before.fit);
+    expect(state.edges.some((e) => e.to === 'invoices')).toBe(true);
+    const lane = state.work.lanes.find((l) => l.key === 'code');
+    expect(lane.y + lane.h).toBeGreaterThan(Math.max(...state.work.nodes.filter((n) => !n.work && !n.hidden).map((n) => n.y)));
+    const order = state.work.order;
+    expect(order.slice(order.indexOf('api-billing') + 1, order.indexOf('api-billing') + 3).sort()).toEqual(['/flow/start', 'invoices']); // N and P step into it
+    // selecting the area lights its nodes and the work touching them
+    state.selectedNode = at('api-billing');
+    const scene = buildScene(state);
+    expect(scene.edges.some((e) => e.from === 'pull:27' && e.to === 'invoices' && e.label)).toBe(true);
+    expect(scene.nodes.find((n) => n.id === 'invoices').alpha).toBe(1);
+    expect(scene.nodes.find((n) => n.id === 'pull:27').alpha).toBe(1);
+    expect(scene.edges.some((e) => e.from === 'api-billing' && e.to === 'invoices')).toBe(false); // the area's own ties are not drawn
+    expect(state.edges.find((e) => e.from === 'api-billing' && e.to === 'invoices').kind).toBeUndefined(); // an ownership: the panel says "Owns"
+    expect(state.edges.some((e) => e.from === 'proposal:0100-flow' && e.to === 'api-billing' && e.kind === 'adds' && e.tone === 'area')).toBe(true); // the work touching its nodes, by rel
+    // the answer that comes next keeps what is open; closed, all is back where it was
+    setWorkGraph(state, more, tree, owns);
+    expect(state.work.open).toBe('api-billing');
+    showWork(state);
+    expect(setOpenArea(state, null)).toBe(true);
+    applyWorkLayout(state);
+    expect(at(areas[1]).y).toBe(second);
+    expect(at('invoices').hidden).toBe(true);
+  });
+
+  it('folds a spec pull request\'s conversation into its proposal, and keeps the others in Talk', () => {
+    const { nodes, edges, counts } = sceneOf();
+    applyFilters(nodes, edges, {});
+    expect(find(nodes, 'thread:21')).toMatchObject({ foldedInto: 'proposal:0100-flow', hidden: true });
+    expect(find(nodes, 'thread:22').foldedInto).toBeUndefined(); // it mentions code
+    expect(find(nodes, 'thread:23').foldedInto).toBeUndefined(); // it points at nothing
+    expect(find(nodes, 'thread:31').foldedInto).toBeUndefined(); // it mentions code
+    expect(find(nodes, 'thread:22').hidden).toBe(false);
+    expect(find(nodes, 'proposal:0100-flow').folded).toEqual(['thread:21']);
+    expect(counts.folded).toBe(1);
+    expect(layerRowsOf(nodes).find((r) => r.key === 'work-thread').count).toBe(3); // the drawn ones
+    const laid = layoutWork(nodes, { width: 1440, height: 900 });
+    expect(laid.order).not.toContain('thread:21');
+    expect(laid.lanes.find((l) => l.key === 'talk').count).toBe(4);
+    expect(find(nodes, 'proposal:0100-flow').labelText).toBe('Spec 0100 · A new flow · 1 thread');
+    expect(nodeForAddress({ kind: 'thread', key: '21' }, nodes)).toBe('proposal:0100-flow'); // ?thread=21 selects the proposal
+    expect(nodeForAddress({ kind: 'thread', key: '22' }, nodes)).toBe('thread:22');
+    const p = panelOf(find(nodes, 'proposal:0100-flow'), nodes, edges);
+    expect(p.links.find((l) => l.id === 'thread:21').rel).toBe('discussed in'); // still reachable from the panel
+  });
+
+  it('does not fold a thread into a local draft, or a thread another piece of work points at', () => {
+    const local = { nodes: [
+      { id: 'proposal:0001-local', kind: 'proposal', stage: 'decide', title: 'Local', state: 'local', open: true, waiting: false, slug: '0001-local', number: null, updated: '2026-11-01T00:00:00Z' },
+      { id: 'proposal:0100-flow', kind: 'proposal', stage: 'decide', title: 'A new flow', state: 'to-decide', open: true, waiting: true, slug: '0100-flow', number: 21, updated: '2026-11-11T00:00:00Z' },
+      { id: 'pull:30', kind: 'pull', stage: 'build', title: 'Closes it', state: 'open', open: true, waiting: false, number: 30, updated: '2026-11-11T00:00:00Z' },
+      { id: 'thread:5', kind: 'thread', stage: 'talk', title: 'Idea', state: 'open', open: true, waiting: false, number: 5, threadKind: 'idea', updated: '2026-11-11T00:00:00Z' },
+      { id: 'thread:6', kind: 'thread', stage: 'talk', title: 'Idea', state: 'open', open: true, waiting: false, number: 6, threadKind: 'idea', updated: '2026-11-11T00:00:00Z' },
+    ], edges: [
+      { from: 'thread:5', to: 'proposal:0001-local', rel: 'discusses' },
+      { from: 'thread:6', to: 'proposal:0100-flow', rel: 'became' },
+      { from: 'pull:30', to: 'thread:6', rel: 'closes' },
+    ] };
+    const { nodes } = workScene(local, tree, owns);
+    expect(nodes.some((n) => n.foldedInto)).toBe(false);
   });
 });

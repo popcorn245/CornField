@@ -16,7 +16,9 @@
  * is (the last answer stays on the map, and a refresh that fails keeps it and says so), the map's own card when the answer is refused (signed out, not a maintainer,
  * offline: pieces/status.js), and a quiet line naming what the server could not read (`problems`). It answers the node panel's `work:panel` ask with what a node says in
  * the Work view (the Work piece draws the actions into it), the Work list's `work:pick` ask by selecting that row's node, and holds the keys of the view: N and P step through
- * the lanes, an arrow goes to the nearest node that way. Every request goes through `credentialed`;
+ * the lanes, an arrow goes to the nearest node that way. The code column holds one node per area (spec 0015 D1): selecting an area opens it in place, a tap on it again
+ * or clearing the selection (Escape) closes it, and selecting a node of code (a search, an address, the keyboard) opens its area; a thread folded into its proposal
+ * (spec 0015 D2) selects the proposal. Every request goes through `credentialed`;
  * every word that comes from the forge is escaped or set as text, every link goes through `safeUrl` (work-model.js).
  *
  * The **Work layer** of the Map view (spec 0012 D4, work-badge-model.js and work-badges.js) shares this file's one read of the graph: turning the layer on asks for it only when the
@@ -45,7 +47,7 @@ import { stepFrom } from './keyboard-model.js';
 import { RUNS_POLL_MS } from './pieces/work-common.js';
 import { showWorkRef, openForge, closeForge } from './forge-panel.js';
 import {
-  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, addressOf, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
+  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, addressOf, applyFilters, areaFor, arrowTarget, drawnEdges, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setOpenArea, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
 
 const GRAPH_URL = '/api/forge/work-graph';
@@ -90,6 +92,8 @@ export function initWorkView(opts = {}) {
     i.on('work:available', ({ on: available }) => { paintList(available); i.emit('layers:redraw'); syncBadges(); });
     i.on('work:panel', (node) => panelFor(node));
     i.on('work:pick', (ref) => pickRef(ref));
+    i.on('selection', onSelection);
+    i.on('select', onTap);
     mapStyleOf(i).onChange(() => { paintEdgeColors(); if (on()) { state.workRows = layerRowsOf(work().nodes).map(themed); i.emit('layers:redraw'); i.touchScene(); render(); } });
   }
   state.workRow = () => (offered && inst().ask('work:on') ? badgeRowOf(work(), badgeColor('pull')) : null); // the Layers menu's row under Overlays (engine/layers.js `layerRows`)
@@ -432,8 +436,9 @@ function arrive(body, { select, ask, quiet }) {
   const first = w.status !== 'ok';
   const before = state.selectedNode ? state.selectedNode.id : null;
   const base = state.baseNodes && state.baseNodes.length ? state.baseNodes : (w.saved ? w.saved.nodes : state.nodes);
+  const baseEdges = state.baseNodes && state.baseNodes.length ? state.baseEdges : (w.saved ? w.saved.edges : state.edges); // its ownership edges say which area a node is in
   const had = w.badges ? w.badges.size : -1;
-  setWorkGraph(state, body, base);
+  setWorkGraph(state, body, base, baseEdges);
   w.badges = badgeIndex(w.nodes, w.edges);
   w.status = 'ok';
   w.updating = false;
@@ -495,7 +500,8 @@ function themed(row) {
 function refilter() {
   if (!on()) return;
   const w = work();
-  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting });
+  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting, open: w.open });
+  state.edges = drawnEdges(w.nodes, w.edges, w.open); // an open area's ties to the nodes it shows
   const sel = state.selectedNode;
   applyWorkLayout(state, { phone: isPhone() });
   state.workRows = layerRowsOf(w.nodes).map(themed);
@@ -507,11 +513,66 @@ function refilter() {
 
 /** Selects a node of the view by id: the panel opens, the camera follows (as a search's choice does) */
 export function pick(id, { frame = true, source = 'link' } = {}) {
-  const node = state.nodes.find((n) => n.id === id);
+  let node = state.nodes.find((n) => n.id === id);
+  if (node && node.foldedInto) node = state.nodes.find((n) => n.id === node.foldedInto); // a spec pull request's thread: its proposal (spec 0015 D2)
   if (!node) return false;
-  if (node.hidden) { work().layers[node.draft ? DRAFT_LAYER : node.work ? `work-${node.work}` : CODE_LAYER] = true; refilter(); }
+  const layer = node.draft ? DRAFT_LAYER : node.work ? `work-${node.work}` : CODE_LAYER;
+  if (node.hidden && work().layers[layer] === false) { work().layers[layer] = true; refilter(); }
+  openAreaOf(node); // a node of code: its area opens in place (spec 0015 D1)
   selectNode(inst(), node, { frame, source });
   return true;
+}
+
+// ---------------------------------------------------------------------------
+//  The code column's areas (spec 0015 D1): one open at a time, in place
+// ---------------------------------------------------------------------------
+
+/** Opens an area (null: closes the open one) and lays the view out again where it is: the camera stays, and what is open is said */
+function openArea(id, { say = true } = {}) {
+  if (!on() || work().status !== 'ok' || !setOpenArea(state, id)) return false;
+  applyWorkLayout(state, { phone: isPhone() });
+  state.workRows = layerRowsOf(work().nodes).map(themed);
+  inst().touchScene();
+  render();
+  if (say) {
+    const area = id ? work().nodes.find((n) => n.id === id) : null;
+    if (area) announce(inst(), `${area.label} open: ${area.drawn} ${area.drawn === 1 ? 'node' : 'nodes'} of code.`);
+  }
+  return true;
+}
+
+/** The area of a node of code, opened (a search's choice, an address, a step of the keyboard to it); nothing for a piece of work */
+function openAreaOf(node) {
+  const id = areaFor(node);
+  if (id && id !== work().open) openArea(id, { say: false });
+}
+
+/** Moments ago, the selection opened this area: the tap that chose it is not a second press (`onTap`) */
+let opened = null;
+
+/**
+ * The selection changed. A node of code opens its area; nothing selected (Escape, a click on the background) closes it; a thread folded into its proposal
+ * selects the proposal (spec 0015 D2: it is not drawn, the proposal stands for it).
+ */
+function onSelection({ node: picked }) {
+  if (!on() || work().status !== 'ok') return;
+  if (!picked) { openArea(null); return; }
+  const node = work().nodes.find((n) => n.id === picked.id); // the view's own node (a tap names the scene's)
+  if (!node) return;
+  if (node.foldedInto) { const into = state.nodes.find((n) => n.id === node.foldedInto); if (into) selectNode(inst(), into, { frame: true, source: 'link' }); return; }
+  const id = areaFor(node);
+  if (!id || id === work().open) return;
+  openArea(id, { say: false });
+  if (node.area) { opened = id; queueMicrotask(() => { opened = null; }); }
+}
+
+/** A tap on the map's node: on the area that is selected already, it opens or closes it (the first tap selected it, and the selection opened it) */
+function onTap(picked) {
+  const node = picked && on() ? work().nodes.find((n) => n.id === picked.id) : null;
+  if (!node || !node.area) return;
+  if (opened === node.id) { opened = null; return; }
+  if (!state.selectedNode || state.selectedNode.id !== node.id) return; // the selection opens it
+  if (openArea(work().open === node.id ? null : node.id)) inst().emit('node:show', { node: state.selectedNode, frame: false }); // the panel's lines say what is drawn now
 }
 
 /** "Waiting on you" on or off: everything that does not wait is dimmed (spec 0012 D3) */
@@ -519,7 +580,7 @@ function setWaiting(on_) {
   const w = work();
   if (w.waiting === on_) return;
   w.waiting = on_;
-  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting });
+  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting, open: w.open });
   inst().touchScene();
   paintBar();
   render();

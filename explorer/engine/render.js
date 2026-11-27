@@ -246,12 +246,13 @@ export function createMap(inst, opts = {}) {
 
   /**
    * The node the pointer is on (or null): a node with no label is named by a chip over the map while it is. Only the label layer
-   * draws again (the map has nothing new to show), so moving across the map costs one small redraw per node entered.
+   * draws again (the map has nothing new to show), so moving across the map costs one small redraw per node entered; in the Work view the scene too.
    */
   function setHoverNode(id) {
     const next = id || null;
     if (state.hoverNodeId === next) return;
     state.hoverNodeId = next;
+    if (state.view === 'work') { inst.touchScene(); render(); return; } // the Work view draws a node's lines to code while the pointer is on it (spec 0015 D1, scene.js)
     const labels = getLabelLayer();
     if (labels && state.canvas && state.width) labels.draw(getScene(), state.camera, { hover: next });
   }
