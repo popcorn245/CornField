@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Work inbox mock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: cornfield's header, then the Work view as an inbox: a queue on the left, the selected item's detail on the right.
+   Graph swaps the queue for the lane map (direction A's cleanups assumed). Tokens are cornfield's own, dark first. */
+:root {
+  --ground: #090d16; --surface-1: rgba(26,34,52,.86); --surface-2: rgba(30,41,59,.92); --surface-3: rgba(51,65,85,.9);
+  --line: rgba(255,255,255,.12); --line-soft: rgba(255,255,255,.07);
+  --text: #f8fafc; --text-2: #cbd5e1; --text-3: #9aa9bc;
+  --accent: #4f46e5; --accent-hover: #6265f1; --accent-text: #98a1fa; --accent-soft: rgba(98,101,241,.2); --focus: #818cf8;
+  --ok: #34d399; --warn: #fcd34d; --info: #7dd3fc; --bad: #fca5a5; --warn-soft: rgba(252,211,77,.14); --bad-soft: rgba(252,165,165,.12); --ok-soft: rgba(52,211,153,.12);
+  --k-thread: #a78bfa; --k-issue: #eab308; --k-proposal: #2dd4bf; --k-run: #818cf8; --k-pull: #60a5fa; --k-deploy: #4ade80; --k-code: #94a3b8;
+  --shadow: 0 8px 32px rgba(0,0,0,.45);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --ground: #f4f6fa; --surface-1: rgba(255,255,255,.92); --surface-2: rgba(241,245,249,.96); --surface-3: rgba(226,232,240,.96);
+  --line: rgba(15,23,42,.12); --line-soft: rgba(15,23,42,.07); --text: #0f172a; --text-2: #334155; --text-3: #475569;
+  --accent-text: #4f46e5; --accent-soft: rgba(79,70,229,.12); --focus: #4f46e5; --ok: #046f51; --warn: #854d0e; --info: #03679e; --bad: #b91c1c;
+  --warn-soft: rgba(234,179,8,.14); --bad-soft: rgba(185,28,28,.08); --ok-soft: rgba(4,111,81,.1);
+  --k-thread: #7c3aed; --k-issue: #ca8a04; --k-proposal: #0d9488; --k-run: #4f46e5; --k-pull: #2563eb; --k-deploy: #16a34a; --k-code: #64748b;
+  --shadow: 0 8px 28px rgba(15,23,42,.12); color-scheme: light; } }
+:root[data-theme="light"] {
+  --ground: #f4f6fa; --surface-1: rgba(255,255,255,.92); --surface-2: rgba(241,245,249,.96); --surface-3: rgba(226,232,240,.96);
+  --line: rgba(15,23,42,.12); --line-soft: rgba(15,23,42,.07); --text: #0f172a; --text-2: #334155; --text-3: #475569;
+  --accent-text: #4f46e5; --accent-soft: rgba(79,70,229,.12); --focus: #4f46e5; --ok: #046f51; --warn: #854d0e; --info: #03679e; --bad: #b91c1c;
+  --warn-soft: rgba(234,179,8,.14); --bad-soft: rgba(185,28,28,.08); --ok-soft: rgba(4,111,81,.1);
+  --k-thread: #7c3aed; --k-issue: #ca8a04; --k-proposal: #0d9488; --k-run: #4f46e5; --k-pull: #2563eb; --k-deploy: #16a34a; --k-code: #64748b;
+  --shadow: 0 8px 28px rgba(15,23,42,.12); color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--ground); color: var(--text); font: 13px/1.45 var(--font); overflow: hidden; }
+[hidden] { display: none !important; }
+button, input, textarea, select { font: inherit; color: inherit; }
+a { color: var(--accent-text); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+
+header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-right,0px)) 10px max(16px, env(safe-area-inset-left,0px));
+  border-bottom: 1px solid var(--line); background: var(--surface-1); position: relative; z-index: 5; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.brand i { width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg,#4299e1,#818cf8 50%,#e53e3e); display: block; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 9px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 4px 12px; border-radius: 7px; color: var(--text-3); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg button.fake { cursor: default; }
+.badge { min-width: 18px; height: 18px; border-radius: 9px; background: #facc15; color: #111; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; padding: 0 5px; font-variant-numeric: tabular-nums; }
+.vr { width: 1px; height: 20px; background: var(--line); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-size: 12px; white-space: nowrap; }
+.btn:hover { border-color: var(--accent-hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.big { height: 36px; padding: 0 16px; font-size: 13px; }
+.btn.danger { color: var(--bad); }
+.search { margin-left: auto; height: 30px; width: 220px; max-width: 40vw; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); padding: 0 10px; font-size: 12px; }
+.mock-tag { font-size: 11px; color: var(--text-3); border: 1px dashed var(--line); border-radius: 999px; padding: 3px 4px 3px 10px; display: inline-flex; align-items: center; gap: 6px; }
+.mock-tag select { border: 0; background: var(--surface-3); border-radius: 999px; font-size: 11px; padding: 2px 6px; }
+
+main { position: relative; min-height: 0; display: grid; grid-template-columns: minmax(340px, 440px) 1fr; }
+main.graph { grid-template-columns: 1fr 420px; }
+
+/* the queue */
+.queue { border-right: 1px solid var(--line); background: var(--surface-1); overflow-y: auto; min-height: 0; padding: 8px 0 40px; }
+.qhead { padding: 10px 16px 6px; display: flex; align-items: baseline; gap: 8px; }
+.qhead h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.qhead .sub { color: var(--text-3); font-size: 12px; }
+.group { margin-top: 8px; }
+.group > button.gh { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 16px 6px; cursor: pointer;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); }
+.group > button.gh:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.gh .n { font-variant-numeric: tabular-nums; }
+.gh .chev { margin-left: auto; transition: transform .15s; }
+.group.closed .chev { transform: rotate(-90deg); }
+.group.closed ul { display: none; }
+.gh .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text-3); opacity: .8; }
+.group.waiting .gh { color: var(--warn); }
+ul.rows { list-style: none; margin: 0; padding: 0 8px; display: grid; gap: 2px; }
+li.item { display: grid; grid-template-columns: 22px 1fr auto; gap: 2px 10px; align-items: start; padding: 9px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; position: relative; }
+li.item:hover { background: var(--surface-2); }
+li.item.sel { background: var(--accent-soft); border-color: var(--accent-hover); }
+li.item.gone { opacity: .45; }
+li.item .glyph { grid-row: span 2; padding-top: 1px; }
+li.item .t { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+li.item .ref { color: var(--text-3); font-weight: 400; margin-right: 4px; font-variant-numeric: tabular-nums; }
+li.item .why { grid-column: 2; color: var(--text-2); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+li.item .why.bad { color: var(--bad); }
+li.item .also { grid-column: 2 / 4; font-size: 12px; color: var(--warn); display: flex; gap: 6px; align-items: center; }
+li.item .age { grid-row: 1; grid-column: 3; color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+li.item .go { grid-row: 2; grid-column: 3; height: 24px; padding: 0 9px; font-size: 11.5px; opacity: 0; }
+li.item:hover .go, li.item.sel .go { opacity: 1; }
+@media (hover: none) { li.item .go { opacity: 1; } }
+.empty { padding: 28px 16px 8px; display: grid; gap: 6px; justify-items: start; }
+.empty b { font-size: 15px; }
+.empty span { color: var(--text-3); }
+
+/* detail */
+.detail { overflow-y: auto; min-height: 0; padding: 22px clamp(16px, 3vw, 40px) 60px; }
+.detail .inner { max-width: 760px; display: grid; gap: 18px; }
+.kindline { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.detail h2 { margin: 2px 0 0; font-size: 21px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--text-3); font-size: 12px; }
+.pill { border-radius: 999px; padding: 2px 9px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--line); background: var(--surface-2); color: var(--text-2); }
+.pill.waiting { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.pill.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.ask { border: 1px solid var(--line); background: var(--surface-1); border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; }
+.ask.waiting { border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.ask .q { font-size: 14px; }
+.ask .q small { display: block; color: var(--text-3); font-size: 12px; margin-bottom: 2px; }
+.ask .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ask .then { color: var(--text-3); font-size: 12px; }
+.ask textarea { width: 100%; min-height: 64px; resize: vertical; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); padding: 8px 10px; }
+.sec h3 { margin: 0 0 8px; font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; display: flex; gap: 8px; }
+.sec h3 .n { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.around { border: 1px solid var(--line-soft); border-radius: 14px; background: var(--surface-1); overflow: hidden; }
+.around svg { display: block; width: 100%; height: auto; }
+.around .cap { padding: 8px 12px; border-top: 1px solid var(--line-soft); display: flex; gap: 12px; align-items: center; color: var(--text-3); font-size: 11.5px; flex-wrap: wrap; }
+.around .cap .btn { margin-left: auto; height: 26px; }
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; }
+.kv dt { color: var(--text-3); } .kv dd { margin: 0; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px 3px 8px; font-size: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.chip:hover { border-color: var(--accent-hover); color: var(--text); }
+.chip.plain { cursor: default; }
+.chip.planned { border-style: dashed; }
+.checks { display: flex; gap: 6px; flex-wrap: wrap; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.faint { color: var(--text-3); }
+
+/* graph (direction A assumed) */
+.lanes { overflow: auto; position: relative; min-height: 0; padding: 16px; }
+.lanes-in { position: relative; display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)) minmax(190px, 1.2fr); gap: 12px; min-width: 900px; }
+.lane { border: 1px solid var(--line-soft); border-radius: 12px; background: color-mix(in srgb, var(--surface-1) 55%, transparent); padding: 10px 8px 14px; display: grid; gap: 8px; align-content: start; min-height: 420px; position: relative; z-index: 1; }
+.lane h4 { margin: 0 0 4px; text-align: center; font-size: 11px; color: var(--text-3); letter-spacing: .08em; }
+.lane.code { border-style: dashed; }
+.gnode { all: unset; box-sizing: border-box; display: grid; justify-items: center; gap: 4px; padding: 6px 4px; border-radius: 10px; cursor: pointer; text-align: center; font-size: 11.5px; color: var(--text-2); }
+.gnode:hover { background: var(--surface-2); }
+.gnode:focus-visible { outline: 2px solid var(--focus); }
+.gnode.dim { opacity: .4; }
+.gnode.sel { background: var(--accent-soft); color: var(--text); }
+.gnode .cnt { font-size: 10px; color: var(--text-3); }
+.cgroup { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 12px; background: var(--surface-2); color: var(--text-2); }
+.cgroup.lit { border-color: var(--accent-hover); color: var(--text); }
+.cgroup.dim { opacity: .4; }
+svg.wires { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: visible; }
+.graph .detail { border-left: 1px solid var(--line); background: var(--surface-1); }
+.graph .detail .inner { gap: 14px; }
+.graph .detail h2 { font-size: 18px; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--surface-3); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 12px; padding: 10px 10px 10px 14px; display: flex; gap: 12px; align-items: center; z-index: 20; max-width: calc(100% - 32px); }
+.toast .btn { height: 26px; }
+.keys { position: fixed; right: 16px; bottom: 14px; color: var(--text-3); font-size: 11px; z-index: 3; }
+kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; background: var(--surface-2); }
+.back { display: none; }
+
+@media (max-width: 760px) {
+  main, main.graph { grid-template-columns: 1fr; }
+  .queue { border-right: 0; }
+  .detail { position: fixed; inset: auto 0 0 0; top: var(--head, 64px); background: var(--ground); z-index: 8; border-top: 1px solid var(--line); box-shadow: var(--shadow); padding-top: 12px; }
+  main:not(.open) .detail { display: none; }
+  .back { display: inline-flex; justify-self: start; }
+  .search, .vr.opt, .keys { display: none; }
+  .mock-tag { order: 9; }
+  .kv { grid-template-columns: 110px 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><i aria-hidden="true"></i>cornfield</div>
+    <div class="seg" aria-label="View">
+      <button class="fake" aria-pressed="false" tabindex="-1">Map</button>
+      <button class="fake" aria-pressed="false" tabindex="-1">Flow</button>
+      <button aria-pressed="true" id="workTab">Work <span class="badge" id="badge"></span></button>
+    </div>
+    <div class="vr opt"></div>
+    <div class="seg" aria-label="Work as">
+      <button id="asInbox" aria-pressed="true">Inbox</button>
+      <button id="asGraph" aria-pressed="false">Graph</button>
+    </div>
+    <input class="search" id="search" type="search" placeholder="Search work…" aria-label="Search work">
+    <span class="mock-tag">Mock ·
+      <select id="dataset" aria-label="Data">
+        <option value="rig">the review rig, a busy day</option>
+        <option value="today">cornfield today, real</option>
+      </select>
+    </span>
+  </header>
+  <main id="main">
+    <section class="queue" id="queue" aria-label="Work inbox"></section>
+    <section class="lanes" id="lanes" hidden aria-label="Work graph"></section>
+    <section class="detail" id="detail" aria-live="polite"></section>
+  </main>
+</div>
+<div class="keys"><kbd>J</kbd> <kbd>K</kbd> move · <kbd>Enter</kbd> act · <kbd>G</kbd> graph</div>
+<div class="toast" id="toast" hidden role="status"><span id="toastText"></span><button class="btn" id="undo">Undo</button></div>
+
+<script id="data-rig" type="application/json">{"at":"2026-11-27T00:36:08.183Z","items":[{"id":"thread:23","kind":"thread","title":"Spec: Retire the old import","state":"open","open":true,"waiting":false,"number":23,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"comments":1},{"id":"thread:24","kind":"thread","title":"Spec: Swap Bot check for a new provider","state":"open","open":true,"waiting":false,"number":24,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"comments":1},{"id":"thread:25","kind":"thread","title":"Spec: One shared user-menu for every app","state":"open","open":true,"waiting":false,"number":25,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"comments":1},{"id":"thread:26","kind":"thread","title":"Spec: A second site","state":"open","open":true,"waiting":false,"number":26,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"comments":0},{"id":"thread:21","kind":"thread","title":"Spec: A new flow from api-catalog.example.test through api-support.example.test","state":"open","open":true,"waiting":false,"number":21,"updated":"2026-11-27T00:06:08.129Z","author":"agent-four","draft":false,"comments":0},{"id":"thread:22","kind":"thread","title":"Spec: Alerts to people","state":"open","open":true,"waiting":false,"number":22,"updated":"2026-11-27T00:06:08.129Z","author":"agent-four","draft":false,"comments":0},{"id":"thread:12","kind":"thread","title":"Meals page","state":"open","open":true,"waiting":false,"number":12,"updated":"2026-10-17T11:00:00Z","author":"agent-four","draft":false,"comments":2},{"id":"issue:5","kind":"issue","title":"Sign-in","state":"open","open":true,"waiting":false,"number":5,"updated":"2026-10-16T12:00:00Z","author":"maintainer-one","draft":false,"comments":1,"labels":["v1","server"]},{"id":"issue:3","kind":"issue","title":"Forge adapters","state":"open","open":true,"waiting":false,"number":3,"updated":"2026-10-15T10:00:00Z","author":null,"draft":false,"comments":0,"labels":[]},{"id":"proposal:0102-retire-a-feed","kind":"proposal","title":"Retire the old import","state":"approved","open":true,"waiting":false,"number":23,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"slug":"0102-retire-a-feed"},{"id":"proposal:0103-swap-a-provider","kind":"proposal","title":"Swap Bot check for a new provider","state":"sent-back","open":true,"waiting":false,"number":24,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"slug":"0103-swap-a-provider"},{"id":"proposal:0104-shared-component","kind":"proposal","title":"One shared user-menu for every app","state":"changed","open":true,"waiting":true,"number":25,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":false,"slug":"0104-shared-component"},{"id":"proposal:0105-second-site","kind":"proposal","title":"A second site","state":"draft-pr","open":true,"waiting":false,"number":26,"updated":"2026-11-27T00:06:08.130Z","author":"agent-four","draft":true,"slug":"0105-second-site"},{"id":"proposal:0100-new-flow-across-apps","kind":"proposal","title":"A new flow from api-catalog.example.test through api-support.example.test","state":"to-decide","open":true,"waiting":true,"number":21,"updated":"2026-11-27T00:06:08.129Z","author":"agent-four","draft":false,"slug":"0100-new-flow-across-apps","checks":[{"name":"validate","state":"success"},{"name":"docs","state":"running"}]},{"id":"proposal:0101-alerts-to-people","kind":"proposal","title":"Alerts to people","state":"draft-pr","open":true,"waiting":false,"number":22,"updated":"2026-11-27T00:06:08.129Z","author":"agent-four","draft":true,"slug":"0101-alerts-to-people"},{"id":"proposal:0013-meals","kind":"proposal","title":"Meals","state":"to-decide","open":true,"waiting":true,"number":12,"updated":"2026-10-17T11:00:00Z","author":"agent-four","draft":false,"slug":"0013-meals"},{"id":"run:run-01RIGRUN000000000000000000","kind":"run","title":"code on issue #5, asked by maintainer-one","state":"requested","open":true,"waiting":false,"number":null,"updated":"2026-11-27T00:31:55.877Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000000","short":"Run 000000","runKind":"code","profile":null,"brief":"Make the empty states friendlier","note":null,"tokens":null,"cost":null,"pull":null,"checks":null,"branch":null,"refs":{"issue":5}},{"id":"run:run-01RIGRUN000000000000000001","kind":"run","title":"code on issue #5, profile builder, asked by maintainer-one","state":"claimed","open":true,"waiting":false,"number":null,"updated":"2026-11-27T00:25:55.878Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000001","short":"Run 000001","runKind":"code","profile":"builder","brief":"Add the CSV export to the orders list","note":null,"tokens":null,"cost":null,"pull":null,"checks":null,"branch":null,"refs":{"issue":5}},{"id":"run:run-01RIGRUN000000000000000002","kind":"run","title":"code on issue #12, asked by maintainer-one","state":"working","open":true,"waiting":false,"number":null,"updated":"2026-11-27T00:15:55.878Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000002","short":"Run 000002","runKind":"code","profile":null,"brief":"Split the settings page in two","note":"Reading the page and its tests.","tokens":47000,"cost":1.1,"pull":13,"checks":"failure","branch":"claude/13-lint","refs":{"issue":12}},{"id":"run:run-01RIGRUN000000000000000003","kind":"run","title":"spec on proposal 0100-new-flow-across-apps, profile builder, asked by maintainer-one","state":"waiting","open":true,"waiting":true,"number":null,"updated":"2026-11-27T00:00:55.879Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000003","short":"Run 000003","runKind":"spec","profile":"builder","brief":"Draft the spec for 0100-new-flow-across-apps","note":"Plan ready: approve to build, or tell me what to change.","tokens":50000,"cost":1.4499999999999997,"pull":null,"checks":null,"branch":null,"refs":{"proposal":"0100-new-flow-across-apps"}},{"id":"run:run-01RIGRUN000000000000000004","kind":"run","title":"code on issue #5, asked by maintainer-one","state":"done","open":false,"waiting":false,"number":null,"updated":"2026-11-26T21:35:55.879Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000004","short":"Run 000004","runKind":"code","profile":null,"brief":"Fix the broken link in the footer","note":"Merged-ready: one file changed, the checks pass.","tokens":53000,"cost":1.7999999999999998,"pull":14,"checks":"success","branch":"wip","refs":{"issue":5}},{"id":"run:run-01RIGRUN000000000000000005","kind":"run","title":"code on issue #12, profile builder, asked by maintainer-one","state":"failed","open":false,"waiting":false,"number":null,"updated":"2026-11-26T20:35:55.879Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000005","short":"Run 000005","runKind":"code","profile":"builder","brief":"Upgrade the date picker","note":"The tests fail on the new version and I could not fix them in 20 minutes.","tokens":56000,"cost":2.15,"pull":null,"checks":"failure","branch":"claude/upgrade-picker","refs":{"issue":12}},{"id":"run:run-01RIGRUN000000000000000006","kind":"run","title":"code on issue #12, asked by maintainer-one","state":"stopped","open":false,"waiting":false,"number":null,"updated":"2026-11-26T19:35:55.880Z","author":"maintainer-one","draft":false,"runId":"run-01RIGRUN000000000000000006","short":"Run 000006","runKind":"code","profile":null,"brief":"Rename the orders table everywhere","note":"Stopped by a maintainer.","tokens":59000,"cost":2.4999999999999996,"pull":null,"checks":null,"branch":null,"refs":{"issue":12}},{"id":"pull:13","kind":"pull","title":"Lint everything","state":"open","open":true,"waiting":false,"number":13,"updated":"2026-10-17T12:30:00Z","author":"agent-four","draft":false,"checks":[{"name":"lint","state":"failure","canRerun":true},{"name":"test","state":"running","canRerun":false}],"files":2,"labels":["agent"]},{"id":"deploy:9001","kind":"deploy","title":"Deploy media","state":"running","open":true,"waiting":false,"number":null,"updated":"2026-10-18T09:01:00Z","author":null,"draft":false}],"edges":[{"from":"issue:5","to":"run:run-01RIGRUN000000000000000000","rel":"agent-on"},{"from":"issue:5","to":"run:run-01RIGRUN000000000000000001","rel":"agent-on"},{"from":"issue:5","to":"run:run-01RIGRUN000000000000000004","rel":"agent-on"},{"from":"proposal:0100-new-flow-across-apps","to":"page-api-catalog-api-v1-price-lists-id","rel":"changes"},{"from":"proposal:0100-new-flow-across-apps","to":"page-app-api-catalog-flow","rel":"adds"},{"from":"proposal:0100-new-flow-across-apps","to":"page-app-api-catalog-flow-done","rel":"adds"},{"from":"proposal:0100-new-flow-across-apps","to":"page-app-api-support-flow-api","rel":"adds"},{"from":"proposal:0100-new-flow-across-apps","to":"page-docs-site-authors-id-overview","rel":"changes"},{"from":"proposal:0100-new-flow-across-apps","to":"page-help-center-articles-id-overview","rel":"changes"},{"from":"proposal:0100-new-flow-across-apps","to":"run:run-01RIGRUN000000000000000003","rel":"agent-on"},{"from":"proposal:0100-new-flow-across-apps","to":"svc-dispatch-flow-notifier","rel":"adds"},{"from":"proposal:0100-new-flow-across-apps","to":"svc-scheduler-queue-scheduler","rel":"changes"},{"from":"proposal:0100-new-flow-across-apps","to":"table-flow-items","rel":"adds"},{"from":"proposal:0101-alerts-to-people","to":"device-camera-porch_cam","rel":"changes"},{"from":"proposal:0101-alerts-to-people","to":"page-app-api-marketing-alert-rules","rel":"adds"},{"from":"proposal:0101-alerts-to-people","to":"svc-client-geocoder","rel":"changes"},{"from":"proposal:0101-alerts-to-people","to":"svc-hook-on-alert","rel":"adds"},{"from":"proposal:0101-alerts-to-people","to":"svc-timer-quota-reset","rel":"changes"},{"from":"proposal:0101-alerts-to-people","to":"svc-timer-rate-limit-reset","rel":"changes"},{"from":"proposal:0101-alerts-to-people","to":"table-alert-rules","rel":"adds"},{"from":"proposal:0102-retire-a-feed","to":"app-shop","rel":"changes"},{"from":"proposal:0102-retire-a-feed","to":"ext-inbound-mail","rel":"changes"},{"from":"proposal:0102-retire-a-feed","to":"page-app-seller-portal-bulk-upload","rel":"adds"},{"from":"proposal:0102-retire-a-feed","to":"page-seller-portal-brands-id-overview","rel":"changes"},{"from":"proposal:0102-retire-a-feed","to":"page-shop-product-variants-id-edit","rel":"changes"},{"from":"proposal:0102-retire-a-feed","to":"page-shop-products-id-overview","rel":"changes"},{"from":"proposal:0102-retire-a-feed","to":"page-shop-search","rel":"changes"},{"from":"proposal:0102-retire-a-feed","to":"svc-client-tax-client","rel":"changes"},{"from":"proposal:0103-swap-a-provider","to":"ext-bot-check","rel":"changes"},{"from":"proposal:0103-swap-a-provider","to":"ext-new-provider","rel":"adds"},{"from":"proposal:0103-swap-a-provider","to":"page-developer-portal-login","rel":"changes"},{"from":"proposal:0103-swap-a-provider","to":"svc-client-provider-feed","rel":"adds"},{"from":"proposal:0103-swap-a-provider","to":"svc-effects-particle-effects","rel":"changes"},{"from":"proposal:0103-swap-a-provider","to":"table-provider-lines","rel":"adds"},{"from":"proposal:0104-shared-component","to":"molecule-avatar-group","rel":"changes"},{"from":"proposal:0104-shared-component","to":"molecule-shared-box","rel":"adds"},{"from":"proposal:0104-shared-component","to":"molecule-user-menu","rel":"changes"},{"from":"proposal:0104-shared-component","to":"page-schedule-board-login","rel":"changes"},{"from":"proposal:0104-shared-component","to":"pkg-shared-box","rel":"adds"},{"from":"proposal:0104-shared-component","to":"token-spacing","rel":"changes"},{"from":"proposal:0105-second-site","to":"app-returns-portal","rel":"changes"},{"from":"proposal:0105-second-site","to":"container-site-two-db","rel":"adds"},{"from":"proposal:0105-second-site","to":"container-site-two-web","rel":"adds"},{"from":"proposal:0105-second-site","to":"device-camera-porch_cam","rel":"changes"},{"from":"proposal:0105-second-site","to":"ext-site-two-line","rel":"adds"},{"from":"proposal:0105-second-site","to":"machine-rack-2","rel":"changes"},{"from":"proposal:0105-second-site","to":"machine-site-two","rel":"adds"},{"from":"proposal:0105-second-site","to":"stack-ops","rel":"changes"},{"from":"proposal:0105-second-site","to":"stack-site-two","rel":"adds"},{"from":"run:run-01RIGRUN000000000000000002","to":"pull:13","rel":"opened"},{"from":"thread:12","to":"proposal:0013-meals","rel":"discusses"},{"from":"thread:12","to":"run:run-01RIGRUN000000000000000002","rel":"agent-on"},{"from":"thread:12","to":"run:run-01RIGRUN000000000000000005","rel":"agent-on"},{"from":"thread:12","to":"run:run-01RIGRUN000000000000000006","rel":"agent-on"},{"from":"thread:21","to":"proposal:0100-new-flow-across-apps","rel":"discusses"},{"from":"thread:22","to":"proposal:0101-alerts-to-people","rel":"discusses"},{"from":"thread:23","to":"proposal:0102-retire-a-feed","rel":"discusses"},{"from":"thread:24","to":"proposal:0103-swap-a-provider","rel":"discusses"},{"from":"thread:25","to":"proposal:0104-shared-component","rel":"discusses"},{"from":"thread:26","to":"proposal:0105-second-site","rel":"discusses"}],"code":[{"id":"page-api-catalog-api-v1-price-lists-id","label":"/api/v1/price-lists/:id","type":"page","planned":false,"group":"api-catalog"},{"id":"page-app-api-catalog-flow","label":"/flow/start","type":"page","planned":true,"group":"planned"},{"id":"page-app-api-catalog-flow-done","label":"/flow/:flowId/done","type":"page","planned":true,"group":"planned"},{"id":"page-app-api-support-flow-api","label":"/api/v1/flow-items","type":"page","planned":true,"group":"planned"},{"id":"page-docs-site-authors-id-overview","label":"/authors/:id/overview","type":"page","planned":false,"group":"docs-site"},{"id":"page-help-center-articles-id-overview","label":"/articles/:id/overview","type":"page","planned":false,"group":"help-center"},{"id":"svc-dispatch-flow-notifier","label":"flow-notifier","type":"service","planned":true,"group":"planned"},{"id":"svc-scheduler-queue-scheduler","label":"queue-scheduler","type":"service","planned":false,"group":"api-people"},{"id":"table-flow-items","label":"flow_items","type":"table","planned":true,"group":"planned"},{"id":"device-camera-porch_cam","label":"Camera porch_cam","type":"device","planned":false,"group":"devices"},{"id":"page-app-api-marketing-alert-rules","label":"/alerts/rules/:ruleId","type":"page","planned":true,"group":"planned"},{"id":"svc-client-geocoder","label":"geocoder","type":"service","planned":false,"group":"api-commerce"},{"id":"svc-hook-on-alert","label":"on-alert","type":"service","planned":true,"group":"planned"},{"id":"svc-timer-quota-reset","label":"quota-reset","type":"service","planned":false,"group":"api-billing"},{"id":"svc-timer-rate-limit-reset","label":"rate-limit-reset","type":"service","planned":false,"group":"api-devices"},{"id":"table-alert-rules","label":"alert_rules","type":"table","planned":true,"group":"planned"},{"id":"app-shop","label":"shop.example.test","type":"app","planned":false,"group":"shop"},{"id":"ext-inbound-mail","label":"Inbound mail","type":"external","planned":false,"group":"outside services"},{"id":"page-app-seller-portal-bulk-upload","label":"/uploads/bulk","type":"page","planned":true,"group":"planned"},{"id":"page-seller-portal-brands-id-overview","label":"/brands/:id/overview","type":"page","planned":false,"group":"seller-portal"},{"id":"page-shop-product-variants-id-edit","label":"/product-variants/:id/edit","type":"page","planned":false,"group":"page"},{"id":"page-shop-products-id-overview","label":"/products/:id/overview","type":"page","planned":false,"group":"shop"},{"id":"page-shop-search","label":"/search","type":"page","planned":false,"group":"shop"},{"id":"svc-client-tax-client","label":"tax-client","type":"service","planned":false,"group":"api-identity"},{"id":"ext-bot-check","label":"Bot check","type":"external","planned":false,"group":"outside services"},{"id":"ext-new-provider","label":"New provider","type":"external","planned":true,"group":"planned"},{"id":"page-developer-portal-login","label":"/login","type":"page","planned":false,"group":"developer-portal"},{"id":"svc-client-provider-feed","label":"provider-feed","type":"service","planned":true,"group":"planned"},{"id":"svc-effects-particle-effects","label":"particle-effects","type":"service","planned":false,"group":"api-content"},{"id":"table-provider-lines","label":"provider_lines","type":"table","planned":true,"group":"planned"},{"id":"molecule-avatar-group","label":"avatar-group","type":"molecule","planned":false,"group":"ui"},{"id":"molecule-shared-box","label":"shared-box","type":"molecule","planned":true,"group":"planned"},{"id":"molecule-user-menu","label":"user-menu","type":"molecule","planned":false,"group":"ui"},{"id":"page-schedule-board-login","label":"/login","type":"page","planned":false,"group":"schedule-board"},{"id":"pkg-shared-box","label":"@shared/box","type":"pkg","planned":true,"group":"planned"},{"id":"token-spacing","label":"spacing tokens","type":"token","planned":false,"group":"tokens"},{"id":"app-returns-portal","label":"returns-portal.example.test","type":"app","planned":false,"group":"returns-portal"},{"id":"container-site-two-db","label":"site-two-db","type":"container","planned":true,"group":"planned"},{"id":"container-site-two-web","label":"site-two-web","type":"container","planned":true,"group":"planned"},{"id":"ext-site-two-line","label":"Second site line","type":"external","planned":true,"group":"planned"},{"id":"machine-rack-2","label":"rack-2","type":"machine","planned":false,"group":"world.json"},{"id":"machine-site-two","label":"site-two","type":"machine","planned":true,"group":"planned"},{"id":"stack-ops","label":"ops","type":"stack","planned":false,"group":"ops"},{"id":"stack-site-two","label":"site-two","type":"stack","planned":true,"group":"planned"}],"drafts":64}</script>
+<script id="data-today" type="application/json">{"at":"2026-11-27T00:35:00Z","drafts":0,"code":[],"edges":[],"items":[{"id":"issue:271","kind":"issue","title":"v0.51.9 is tagged but not released: the release run failed after the tag, and a re-run cannot finish it","state":"open","open":true,"waiting":false,"number":271,"updated":"2026-11-13T01:44:48Z","author":null,"comments":1,"labels":[]},{"id":"issue:275","kind":"issue","title":"A node's outer glow is much brighter in WebGL than in Canvas 2D beside straight sides","state":"open","open":true,"waiting":false,"number":275,"updated":"2026-11-13T08:56:14Z","author":null,"comments":0,"labels":["design","polish"]},{"id":"issue:270","kind":"issue","title":"Small leftovers from the file-safety work: raw values in messages, and a few rough edges","state":"open","open":true,"waiting":false,"number":270,"updated":"2026-11-13T00:20:11Z","author":null,"comments":0,"labels":[]},{"id":"proposal:0013-words","kind":"proposal","title":"Words, a dictionary of the project's own words as a layer","state":"approved-unbuilt","open":true,"waiting":false,"number":287,"slug":"0013-words","updated":"2026-11-26T09:18:40Z","author":null},{"id":"proposal:0011-cornfield-in-another-app","kind":"proposal","title":"cornfield in another app: the interface as web components","state":"approved-unbuilt","open":true,"waiting":false,"number":null,"slug":"0011-cornfield-in-another-app","updated":"2026-11-13T10:04:54Z","author":null,"partly":true},{"id":"pull:294","kind":"pull","title":"Replay, the map grows on a timeline (spec 0014 step 4)","state":"merged","open":false,"waiting":false,"number":294,"updated":"2026-11-26T22:48:36Z","author":null},{"id":"pull:293","kind":"pull","title":"The History layer, halos and a spec's bar on the map (spec 0014 step 3)","state":"merged","open":false,"waiting":false,"number":293,"updated":"2026-11-26T22:31:23Z","author":null},{"id":"pull:292","kind":"pull","title":"A node's history in the node panel (spec 0014 step 2)","state":"merged","open":false,"waiting":false,"number":292,"updated":"2026-11-26T22:19:32Z","author":null},{"id":"pull:291","kind":"pull","title":"Read the map's git history, GET /api/history (spec 0014 step 1)","state":"merged","open":false,"waiting":false,"number":291,"updated":"2026-11-26T22:09:18Z","author":null},{"id":"pull:290","kind":"pull","title":"Spec 0014, History: replay, a node's trail, and a layer","state":"merged","open":false,"waiting":false,"number":290,"updated":"2026-11-26T21:50:16Z","author":null},{"id":"pull:287","kind":"pull","title":"Spec 0013, Words, a dictionary of the project's own words as a layer","state":"merged","open":false,"waiting":false,"number":287,"updated":"2026-11-26T09:18:40Z","author":null},{"id":"pull:289","kind":"pull","title":"A proposal may carry its own links","state":"merged","open":false,"waiting":false,"number":289,"updated":"2026-11-26T08:55:41Z","author":null}]}</script>
+<script>
+(() => {
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const SETS = { rig: JSON.parse($('#data-rig').textContent), today: JSON.parse($('#data-today').textContent) };
+SETS.today.edges.push({ from: 'pull:287', to: 'proposal:0013-words', rel: 'implements' });
+
+let D, NOW, byId, done, sel, closed = new Set(['motion', 'done', 'drafts']), mode = 'inbox', query = '', lastUndo = null;
+
+/* ---------- words ---------- */
+const ago = (iso) => {
+  const m = Math.max(0, (NOW - Date.parse(iso)) / 60000);
+  if (m < 60) return `${Math.round(m)} min`;
+  const h = m / 60; if (h < 24) return `${Math.round(h)} h`;
+  return `${Math.round(h / 24)} d`;
+};
+const KIND = { thread: 'Thread', issue: 'Issue', proposal: 'Spec', run: 'Run', pull: 'Pull request', deploy: 'Deploy', code: 'Code' };
+const refOf = (it) => it.kind === 'proposal' ? `Spec ${it.slug.slice(0, 4)}` : it.kind === 'run' ? it.short : it.kind === 'pull' ? `PR #${it.number}` : it.kind === 'issue' ? `Issue #${it.number}` : it.kind === 'thread' ? `Thread #${it.number}` : it.kind === 'deploy' ? 'Deploy' : '';
+const titleOf = (it) => {
+  if (it.kind === 'run') return it.brief || it.title;
+  if (it.kind === 'proposal' && it.title.length > 70) return it.title.replace(/\.example\.test/g, '');
+  return it.title;
+};
+function glyph(kind, size = 18, extra = '') {
+  const c = `var(--k-${kind})`, h = size / 2;
+  const shapes = {
+    thread: `<circle cx="${h}" cy="${h}" r="${h - 2}" fill="${c}"/>`,
+    issue: `<circle cx="${h}" cy="${h}" r="${h - 2}" fill="${c}"/><rect x="${h - 1.2}" y="${h * .45}" width="2.4" height="${h * .7}" rx="1" fill="#111"/><circle cx="${h}" cy="${h * 1.45}" r="1.3" fill="#111"/>`,
+    proposal: `<rect x="${h * .3}" y="${h * .3}" width="${h * 1.4}" height="${h * 1.4}" transform="rotate(45 ${h} ${h})" fill="${c}"/>`,
+    run: `<polygon points="${[0, 60, 120, 180, 240, 300].map((a) => { const r = (a - 90) * Math.PI / 180; return `${h + (h - 1.5) * Math.cos(r)},${h + (h - 1.5) * Math.sin(r)}`; }).join(' ')}" fill="${c}"/>`,
+    pull: `<rect x="2" y="2" width="${size - 4}" height="${size - 4}" rx="${size * .25}" fill="${c}"/>`,
+    deploy: `<rect x="2.5" y="2.5" width="${size - 5}" height="${size - 5}" rx="1.5" fill="${c}"/>`,
+    code: `<circle cx="${h}" cy="${h}" r="${h - 4}" fill="none" stroke="${c}" stroke-width="2"/>`,
+  };
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true" ${extra}>${shapes[kind] || ''}</svg>`;
+}
+
+/* ---------- the inbox rules: every row is derived from state, nothing is filed by hand ---------- */
+function relsOf(id) { return D.edges.filter((e) => e.from === id || e.to === id); }
+function triage(it) {
+  // A thread that belongs to a spec folds into the spec (direction A)
+  if (it.kind === 'thread' && D.edges.some((e) => e.from === it.id && e.rel === 'discusses')) return null;
+  if (done.has(it.id)) return { group: 'done', why: done.get(it.id), act: null };
+  const P = (label, verb) => ({ label, verb });
+  switch (it.kind) {
+    case 'run':
+      if (it.waiting) return { group: 'waiting', why: `“${it.note}”`, act: P('Answer', 'answered'), counted: true };
+      if (it.state === 'failed') return { group: 'move', why: `Failed: ${it.note}`, bad: true, act: P('Start again', 'started again') };
+      if (it.state === 'done' && it.pull) return { group: 'move', why: `Done: PR #${it.pull} is ready. ${it.note}`, act: P(`Land PR #${it.pull}`, 'landed') };
+      if (it.open) return { group: 'motion', why: it.note ? `${cap(it.state)}: ${it.note}` : `${cap(it.state)}, ${it.profile ? `profile ${it.profile}, ` : ''}no report yet`, act: P('Stop', 'stopped') };
+      return { group: 'done', why: it.note || cap(it.state), act: null };
+    case 'proposal':
+      if (it.state === 'to-decide') return { group: 'waiting', why: `Ready for your decision${it.checks ? `, ${checkWords(it.checks)}` : ''}`, act: P('Review', 'approved'), counted: true };
+      if (it.state === 'changed') return { group: 'waiting', why: 'Changed since you approved it: review the difference', act: P('Review the change', 'approved again'), counted: true };
+      if (it.state === 'approved') return { group: 'move', why: 'Approved. Landing it merges the spec and opens its build issue', act: P('Land it', 'landed') };
+      if (it.state === 'approved-unbuilt') return it.partly ? { group: 'move', why: 'Steps 1 to 5 built; the rest waits on your call on a second embed key', act: P('Open the spec', 'opened') } : { group: 'move', why: 'Approved and merged; nothing is building it yet', act: P('Start the build', 'build started') };
+      if (it.state === 'sent-back') return { group: 'motion', why: 'You sent it back; with the agent until it pushes', act: null };
+      if (it.state === 'draft-pr') return { group: 'motion', why: 'Draft pull request; the agent is still writing it', act: null };
+      return { group: 'motion', why: cap(it.state), act: null };
+    case 'pull':
+      if (it.state === 'merged') return { group: 'done', why: 'Merged', act: null };
+      if (it.checks && it.checks.some((c) => c.state === 'failure')) return { group: 'move', why: checkWords(it.checks), bad: true, act: P('Re-run failed', 're-run') };
+      return { group: 'motion', why: it.checks ? checkWords(it.checks) : 'Open', act: null };
+    case 'issue': {
+      const agents = D.edges.filter((e) => e.from === it.id && e.rel === 'agent-on').map((e) => byId[e.to]).filter(Boolean);
+      const live = agents.filter((r) => r.open);
+      if (live.length) return { group: 'motion', why: `${live.length} agent run${live.length > 1 ? 's' : ''} on it`, act: null };
+      return { group: 'unclaimed', why: `Nobody is on it${it.labels && it.labels.length ? ` · ${it.labels.join(', ')}` : ''}`, act: P('Start an agent', 'agent started') };
+    }
+    case 'thread': return { group: 'unclaimed', why: `${it.comments || 0} comment${it.comments === 1 ? '' : 's'}, no spec yet`, act: P('Reply', 'replied') };
+    case 'deploy': return it.state === 'running' ? { group: 'motion', why: `Running for ${ago(it.updated)}`, act: P('Logs', 'opened') } : { group: 'done', why: cap(it.state), act: null };
+  }
+  return { group: 'motion', why: '', act: null };
+}
+const cap = (s) => String(s || '').replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+function checkWords(cs) {
+  const f = cs.filter((c) => c.state === 'failure').map((c) => c.name), r = cs.filter((c) => c.state === 'running').map((c) => c.name), ok = cs.filter((c) => c.state === 'success').length;
+  return [f.length ? `${f.join(', ')} failed` : '', r.length ? `${r.join(', ')} running` : '', ok ? `${ok} passed` : ''].filter(Boolean).join(' · ');
+}
+
+const GROUPS = [
+  { key: 'waiting', title: 'Waiting on you', hint: 'counted in the badge' },
+  { key: 'move', title: 'Your move', hint: 'nobody asked, one click finishes it' },
+  { key: 'unclaimed', title: 'Nobody on it' },
+  { key: 'motion', title: 'In motion' },
+  { key: 'done', title: 'Done lately' },
+];
+
+function build() {
+  const rows = [];
+  for (const it of D.items) {
+    const t = triage(it); if (!t) continue;
+    rows.push({ it, ...t });
+  }
+  // One row per subject: a run waiting on a spec that also waits on you rides in the spec's row
+  for (const r of rows) {
+    if (r.it.kind === 'run' && r.group === 'waiting' && r.it.refs && r.it.refs.proposal) {
+      const host = rows.find((x) => x.it.slug === r.it.refs.proposal && x.group === 'waiting');
+      if (host) { host.also = r; r.folded = true; }
+    }
+  }
+  const order = (a, b) => (a.group === 'done' ? Date.parse(b.it.updated) - Date.parse(a.it.updated) : Date.parse(a.it.updated) - Date.parse(b.it.updated));
+  const out = {};
+  for (const g of GROUPS) out[g.key] = rows.filter((r) => r.group === g.key && !r.folded).sort(order);
+  return { rows, groups: out, count: rows.filter((r) => r.counted && r.group === 'waiting').length };
+}
+
+/* ---------- paint the queue ---------- */
+let model;
+function matches(r) { if (!query) return true; const q = query.toLowerCase(); return (refOf(r.it) + ' ' + titleOf(r.it) + ' ' + r.why).toLowerCase().includes(q); }
+function paintQueue() {
+  model = build();
+  $('#badge').textContent = model.count || '';
+  $('#badge').hidden = !model.count;
+  document.title = `${model.count ? `(${model.count}) ` : ''}Work inbox mock`;
+  const w = model.groups.waiting.length;
+  let h = `<div class="qhead"><h1>Inbox</h1><span class="sub">${model.count ? `${model.count} waiting on you${model.count !== w ? ` in ${w} row${w > 1 ? 's' : ''}` : ''}` : 'nothing waiting on you'}</span></div>`;
+  if (!model.count) h += `<div class="empty"><b>Nothing waits on you.</b><span>The field is quiet. What is still yours to pick up sits below.</span></div>`;
+  for (const g of GROUPS) {
+    const list = model.groups[g.key].filter(matches);
+    if (!list.length) continue;
+    const isClosed = closed.has(g.key) && !query;
+    h += `<div class="group ${g.key}${isClosed ? ' closed' : ''}"><button class="gh" data-g="${g.key}" aria-expanded="${!isClosed}"><span>${g.title}</span><span class="n">${list.length}</span>${g.hint ? `<span class="hint">· ${g.hint}</span>` : ''}<span class="chev">▾</span></button><ul class="rows">`;
+    for (const r of list) {
+      const it = r.it;
+      h += `<li class="item${sel === it.id ? ' sel' : ''}${done.has(it.id) ? ' gone' : ''}" data-id="${esc(it.id)}" tabindex="-1" aria-selected="${sel === it.id}">
+        <span class="glyph">${glyph(it.kind)}</span>
+        <span class="t"><span class="ref">${esc(refOf(it))}</span>${esc(titleOf(it))}</span>
+        <span class="age">${ago(it.updated)}</span>
+        <span class="why${r.bad ? ' bad' : ''}">${esc(r.why)}</span>
+        ${r.act ? `<button class="btn go${r.group === 'waiting' ? ' primary' : ''}" data-act="${esc(it.id)}">${esc(r.act.label)}</button>` : ''}
+        ${r.also ? `<span class="also">${glyph('run', 12)} and ${esc(r.also.it.short)} waits on your answer</span>` : ''}
+      </li>`;
+    }
+    h += '</ul></div>';
+  }
+  if (D.drafts) h += `<div class="group drafts closed"><button class="gh" data-g="drafts" aria-expanded="false"><span>Drafts in the checkout</span><span class="n">${D.drafts}</span><span class="hint">· nobody asked to decide them</span></button></div>`;
+  $('#queue').innerHTML = h;
+}
+
+/* ---------- the detail ---------- */
+function neighbours(id) {
+  const work = [], code = [];
+  for (const e of relsOf(id)) {
+    const other = e.from === id ? e.to : e.from;
+    const w = byId[other];
+    if (w) { if (!(w.kind === 'thread' && e.rel === 'discusses' && byId[id].kind === 'proposal')) work.push({ it: w, rel: e.rel, out: e.from === id }); else work.push({ it: w, rel: 'thread', out: false }); }
+    else { const c = D.code.find((c) => c.id === other); if (c) code.push({ c, rel: e.rel }); }
+  }
+  return { work, code };
+}
+const REL = { 'agent-on': ['agent on it', 'agent on'], opened: ['opened', 'opened by'], discusses: ['discussed in', 'discusses'], implements: ['spec PR', 'implements'], thread: ['discussed in', 'discussed in'], changes: ['changes'], adds: ['adds'] };
+
+function aroundSvg(it, nb) {
+  const rowH = 30;
+  const left = nb.work.slice(0, 6);
+  const groups = {};
+  for (const x of nb.code) (groups[x.c.planned ? 'planned' : x.c.group] ||= []).push(x);
+  const right = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+  const shown = right.slice(0, 7);
+  const n = Math.max(left.length, shown.length + (right.length > 7 ? 1 : 0), 1);
+  const H = Math.max(120, n * rowH + 40);
+  const cx = left.length ? 330 : 60, cy = H / 2;
+  const W2 = shown.length ? cx + 120 + 210 : (nb.work.length || nb.code.length ? cx + 60 : cx + 340);
+  let s = `<svg viewBox="${left.length ? 0 : 0} 0 ${W2} ${H}" style="max-width:${W2 * 1.15}px" role="img" aria-label="What ${esc(refOf(it))} is connected to">`;
+  const yl = (i, k) => cy + (i - (k - 1) / 2) * rowH;
+  left.forEach((x, i) => {
+    const y = yl(i, left.length);
+    s += `<path d="M${cx - 16} ${cy} C ${cx - 90} ${cy}, 250 ${y}, 214 ${y}" fill="none" stroke="var(--text-3)" stroke-opacity=".55" stroke-width="1.3"/>`;
+    s += `<g class="lk" data-id="${esc(x.it.id)}" style="cursor:pointer"><g transform="translate(192 ${y - 8})">${glyph(x.it.kind, 16)}</g><text x="184" y="${y + 4}" text-anchor="end" font-size="12" fill="var(--text-2)">${esc(trim(refOf(x.it) + ' · ' + titleOf(x.it), 26))}</text></g>`;
+    s += `<text x="${222}" y="${y - 6}" font-size="10" fill="var(--text-3)">${esc((REL[x.rel] || [x.rel])[0])}</text>`;
+  });
+  const rx = cx + 120;
+  shown.forEach(([g, xs], i) => {
+    const y = yl(i, shown.length + (right.length > 7 ? 1 : 0));
+    const adds = xs.every((x) => x.rel === 'adds');
+    s += `<path d="M${cx + 16} ${cy} C ${cx + 70} ${cy}, ${rx - 50} ${y}, ${rx} ${y}" fill="none" stroke="${adds ? 'var(--ok)' : 'var(--accent-text)'}" stroke-width="1.4" ${adds ? 'stroke-dasharray="5 4"' : ''}/>`;
+    const label = g === 'planned' ? 'new, planned' : g;
+    s += `<rect x="${rx}" y="${y - 11}" width="200" height="22" rx="11" fill="var(--surface-2)" stroke="${adds ? 'var(--ok)' : 'var(--line)'}" ${adds ? 'stroke-dasharray="4 3"' : ''}/><text x="${rx + 12}" y="${y + 4}" font-size="12" fill="var(--text)">${esc(trim(label, 22))}</text><text x="${rx + 188}" y="${y + 4}" text-anchor="end" font-size="12" fill="var(--text-3)">${xs.length}</text>`;
+  });
+  if (right.length > 7) { const y = yl(7, 8); s += `<text x="${rx + 12}" y="${y + 4}" font-size="11" fill="var(--text-3)">+ ${right.length - 7} more places</text>`; }
+  s += `<g transform="translate(${cx - 16} ${cy - 16})">${glyph(it.kind, 32)}</g><text x="${cx}" y="${cy + 32}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">${esc(refOf(it))}</text>`;
+  if (!nb.work.length && !nb.code.length) s += `<text x="${cx + 40}" y="${cy + 4}" font-size="12" fill="var(--text-3)">Not linked to other work or to the map yet.</text>`;
+  return s + '</svg>';
+}
+const trim = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+function askBlock(r, primary = true) {
+  const it = r.it;
+  if (!r.act) return '';
+  const run = it.kind === 'run' && r.group === 'waiting';
+  const then = {
+    Review: 'Opens Before · Diff · After over the map. Approve or Send back from there.',
+    'Review the change': 'Opens the Diff against the version you approved.',
+    'Land it': 'Merges the spec PR; its build issue opens with the proposal attached.',
+    Answer: 'Your words go to the agent; Continue lets it build the plan, Stop ends the run.',
+    'Re-run failed': 'Runs only the failed checks again on the same commit.',
+    'Start again': 'A new run with the same brief; the failed one stays in its history.',
+    'Start an agent': 'Asks a runner to write a spec for it. You decide that spec here when it is ready.',
+    'Open the spec': 'Opens the spec at the open question; your answer goes in the spec.',
+    'Start the build': 'Opens the build issue from the approved proposal and asks a runner to take it.',
+    Reply: 'Replies on the forge as you.',
+  }[r.act.label] || '';
+  const q = run ? `<div class="q"><small>${esc(it.short)} asks</small>${esc(it.note)}</div>` : `<div class="q"><small>${r.group === 'waiting' ? 'Waiting on you' : r.group === 'move' ? 'Your move' : r.group === 'unclaimed' ? 'Nobody on it' : 'Next'} · ${ago(it.updated)}</small>${esc(r.why)}</div>`;
+  const acts = run
+    ? `<textarea placeholder="Answer the agent (optional)" aria-label="Answer"></textarea><div class="acts"><button class="btn primary big" data-act="${esc(it.id)}">Continue</button><button class="btn big danger" data-act="${esc(it.id)}" data-verb="stopped">Stop</button><span class="then">${esc(then)}</span></div>`
+    : `<div class="acts"><button class="btn ${primary ? 'primary big' : 'big'}" data-act="${esc(it.id)}">${esc(r.act.label)}</button>${it.kind === 'proposal' && r.group === 'waiting' ? `<button class="btn big" data-act="${esc(it.id)}" data-verb="sent back">Send back</button>` : ''}<span class="then">${esc(then)}</span></div>`;
+  return `<div class="ask${r.group === 'waiting' ? ' waiting' : ''}">${q}${acts}</div>`;
+}
+
+function facts(it) {
+  const f = [];
+  if (it.author) f.push(['By', it.author]);
+  if (it.kind === 'proposal' && it.number) f.push(['Pull request', `#${it.number}`]);
+  if (it.kind === 'run') { f.push(['Asked for', `${it.runKind} on ${it.refs.proposal ? `spec ${it.refs.proposal.slice(0, 4)}` : `issue #${it.refs.issue}`}${it.profile ? `, profile ${it.profile}` : ''}`]); if (it.tokens) f.push(['Spent', `${(it.tokens / 1000).toFixed(0)}k tokens · $${it.cost.toFixed(2)}`]); if (it.branch) f.push(['Branch', `<span class="mono">${esc(it.branch)}</span>`]); }
+  if (it.checks) f.push(['Checks', `<span class="checks">${it.checks.map((c) => `<span class="pill ${c.state === 'failure' ? 'bad' : c.state === 'success' ? 'ok' : ''}">${esc(c.name)} · ${c.state === 'failure' ? 'failed' : c.state === 'success' ? 'passed' : c.state}</span>`).join('')}</span>`]);
+  if (it.files) f.push(['Files', `${it.files} changed`]);
+  if (it.comments != null) f.push(['Comments', String(it.comments)]);
+  f.push(['Updated', `${ago(it.updated)} ago`]);
+  return `<dl class="kv">${f.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${/</.test(v) ? v : esc(v)}</dd>`).join('')}</dl>`;
+}
+
+function paintDetail() {
+  const el = $('#detail');
+  const r = model.rows.find((x) => x.it.id === sel);
+  if (!r) { el.innerHTML = `<div class="inner"><p class="faint">${mode === 'graph' ? 'Pick a node to see what it needs.' : 'Pick a row.'}</p></div>`; return; }
+  const it = r.it, nb = neighbours(it.id);
+  const pills = [];
+  if (r.counted || (r.also)) pills.push('<span class="pill waiting">Waiting on you</span>');
+  const st = it.state === 'to-decide' ? 'To decide' : it.state === 'approved-unbuilt' ? 'Approved' : cap(it.state);
+  pills.push(`<span class="pill${r.bad ? ' bad' : ''}">${esc(st)}</span>`);
+  const host = r.folded ? model.rows.find((x) => x.also === r) : null;
+  let h = `<div class="inner">
+    <button class="btn back" id="back">‹ Inbox</button>
+    <div><div class="kindline">${glyph(it.kind, 14)} ${esc(refOf(it))}${it.kind === 'proposal' && it.number ? ` · PR #${it.number}` : ''}${it.kind === 'run' ? ` · ${esc(it.runKind)} run` : ''}</div><h2>${esc(titleOf(it))}</h2></div>
+    <div class="pills">${pills.join('')}<span>${esc(it.author || '')}${it.author ? ' · ' : ''}${ago(it.updated)} ago</span></div>`;
+  if (host) h += `<p class="faint">This run is about <a href="#" data-sel="${esc(host.it.id)}">${esc(refOf(host.it))}</a>; the inbox shows them as one row.</p>`;
+  h += askBlock(r);
+  if (r.also) h += askBlock(r.also, false);
+  if (mode !== 'graph') h += `<div class="sec"><h3>Around it <span class="n">${nb.work.length} work · ${nb.code.length} places on the map</span></h3><div class="around">${aroundSvg(it, nb)}<div class="cap"><span>— changes</span><span>- - adds</span>${mode === 'graph' ? '' : '<button class="btn" id="toGraph">Show in Graph</button>'}<button class="btn" disabled title="Switches to the Map view with these nodes lit">Show on the map</button></div></div></div>`;
+  if (nb.work.length) h += `<div class="sec"><h3>Connected work</h3><div class="chips">${nb.work.map((x) => `<button class="chip" data-sel="${esc(x.it.id)}">${glyph(x.it.kind, 12)}${esc((REL[x.rel] || [x.rel])[x.out ? 0 : 1] || x.rel)}: ${esc(refOf(x.it))}</button>`).join('')}</div></div>`;
+  if (nb.code.length) h += `<div class="sec"><h3>On the map <span class="n">${nb.code.length}</span></h3><div class="chips">${nb.code.slice(0, 14).map((x) => `<span class="chip plain${x.rel === 'adds' ? ' planned' : ''}">${glyph('code', 12)}${esc(x.c.label)}</span>`).join('')}${nb.code.length > 14 ? `<span class="chip plain">+ ${nb.code.length - 14} more</span>` : ''}</div></div>`;
+  h += `<div class="sec"><h3>Facts</h3>${facts(it)}</div></div>`;
+  el.innerHTML = h;
+}
+
+/* ---------- graph (A assumed: threads folded, code grouped, edges only for the selection) ---------- */
+const LANES = [['talk', 'TALK'], ['decide', 'DECIDE'], ['build', 'BUILD'], ['ship', 'SHIP']];
+const stageOf = (it) => ({ thread: 'talk', issue: 'talk', proposal: 'decide', run: 'build', pull: 'build', deploy: 'ship' })[it.kind];
+function paintGraph() {
+  const vis = model.rows.filter((r) => !(r.it.kind === 'pull' && r.it.state === 'merged') || D === SETS.today);
+  const nb = sel ? neighbours(sel) : null;
+  const lit = new Set(nb ? [sel, ...nb.work.map((x) => x.it.id)] : []);
+  let h = '<div class="lanes-in" id="lanesIn">';
+  for (const [k, t] of LANES) {
+    const list = vis.filter((r) => stageOf(r.it) === k).sort((a, b) => (b.counted || !!b.also) - (a.counted || !!a.also) || Date.parse(b.it.updated) - Date.parse(a.it.updated));
+    h += `<div class="lane"><h4>${t} ${list.length}</h4>`;
+    for (const r of list) {
+      const wait = r.counted || !!r.also;
+      const dim = sel ? !lit.has(r.it.id) : !wait;
+      const th = r.it.kind === 'proposal' ? D.edges.filter((e) => e.to === r.it.id && e.rel === 'discusses').length : 0;
+      h += `<button class="gnode${dim ? ' dim' : ''}${sel === r.it.id ? ' sel' : ''}" data-id="${esc(r.it.id)}">${glyph(r.it.kind, 26)}<span>${esc(refOf(r.it))} · ${esc(trim(titleOf(r.it), 30))}</span>${th ? `<span class="cnt">${th} thread</span>` : ''}</button>`;
+    }
+    h += '</div>';
+  }
+  const groups = {};
+  for (const c of D.code) (groups[c.planned ? 'new, planned' : c.group] ||= []).push(c);
+  const litG = new Set(nb ? nb.code.map((x) => (x.c.planned ? 'new, planned' : x.c.group)) : []);
+  h += `<div class="lane code"><h4>CODE ${D.code.length} in ${Object.keys(groups).length} places</h4>`;
+  for (const [g, cs] of Object.entries(groups).sort((a, b) => b[1].length - a[1].length)) h += `<span class="cgroup${litG.has(g) ? ' lit' : sel ? ' dim' : ''}" data-g="${esc(g)}"><span>${esc(g)}</span><span>${cs.length}</span></span>`;
+  if (!D.code.length) h += '<span class="faint" style="text-align:center">No open work touches the map.</span>';
+  h += '</div><svg class="wires" id="wires"></svg></div>';
+  $('#lanes').innerHTML = h;
+  requestAnimationFrame(wires);
+}
+function wires() {
+  const svg = $('#wires'); if (!svg || !sel) return;
+  const box = $('#lanesIn').getBoundingClientRect();
+  const at = (el, side) => { const b = el.getBoundingClientRect(); return [side === 'r' ? b.right - box.left : b.left - box.left, b.top - box.top + Math.min(b.height / 2, 16)]; };
+  const me = document.querySelector(`.gnode[data-id="${CSS.escape(sel)}"]`); if (!me) return;
+  const nb = neighbours(sel); let s = '';
+  const curve = (a, b, st) => `<path d="M${a[0]} ${a[1]} C ${(a[0] + b[0]) / 2} ${a[1]}, ${(a[0] + b[0]) / 2} ${b[1]}, ${b[0]} ${b[1]}" fill="none" ${st}/>`;
+  for (const x of nb.work) { const o = document.querySelector(`.gnode[data-id="${CSS.escape(x.it.id)}"]`); if (!o) continue; const lr = o.getBoundingClientRect().left > me.getBoundingClientRect().left; s += curve(at(me, lr ? 'r' : 'l'), at(o, lr ? 'l' : 'r'), 'stroke="var(--accent-text)" stroke-width="1.5"'); }
+  const seen = new Set();
+  for (const x of nb.code) { const g = x.c.planned ? 'new, planned' : x.c.group; if (seen.has(g)) continue; seen.add(g); const o = document.querySelector(`.cgroup[data-g="${CSS.escape(g)}"]`); if (o) s += curve(at(me, 'r'), at(o, 'l'), x.rel === 'adds' ? 'stroke="var(--ok)" stroke-dasharray="5 4" stroke-width="1.4"' : 'stroke="var(--accent-text)" stroke-opacity=".7" stroke-width="1.3"'); }
+  svg.innerHTML = s;
+}
+
+/* ---------- actions (mocked) ---------- */
+let toastT;
+function act(id, verb) {
+  const r = model.rows.find((x) => x.it.id === id); if (!r || !r.act) return;
+  const v = verb || r.act.verb;
+  const prev = new Map(done);
+  done.set(id, `You ${v} it just now`);
+  if (r.also && !verb) done.set(r.also.it.id, `Answered with ${refOf(r.it)}`);
+  if (r.it.kind === 'run' && r.folded) { /* the host keeps its own ask */ }
+  lastUndo = prev;
+  // the selection moves to the next thing waiting, as an inbox does
+  const flat = flatRows();
+  const i = flat.indexOf(id);
+  paintQueue();
+  const next = flatRows().filter((x) => !done.has(x))[Math.max(0, Math.min(i, flatRows().length - 1))];
+  sel = next || id;
+  paint();
+  $('#toastText').textContent = `${refOf(r.it)}: ${v}. Mock: nothing was sent.`;
+  $('#toast').hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { $('#toast').hidden = true; }, 5000);
+}
+$('#undo').onclick = () => { if (lastUndo) { done = lastUndo; lastUndo = null; paint(); } $('#toast').hidden = true; };
+
+function flatRows() { const out = []; for (const g of GROUPS) if (!closed.has(g.key) || query) for (const r of model.groups[g.key].filter(matches)) out.push(r.it.id); return out; }
+
+/* ---------- wiring ---------- */
+function paint() { paintQueue(); if (mode === 'graph') paintGraph(); paintDetail(); const li = document.querySelector('li.item.sel'); if (li && li.scrollIntoViewIfNeeded) li.scrollIntoViewIfNeeded(false); }
+function select(id, open = true) { sel = id; const r = model.rows.find((x) => x.it.id === id); if (r && closed.has(r.group)) closed.delete(r.group); if (r && r.folded) sel = model.rows.find((x) => x.also === r).it.id === id ? id : id; $('#main').classList.toggle('open', open); paint(); }
+function setMode(m) {
+  mode = m; $('#asInbox').setAttribute('aria-pressed', m === 'inbox'); $('#asGraph').setAttribute('aria-pressed', m === 'graph');
+  $('#queue').hidden = m === 'graph'; document.querySelector('.keys').hidden = m === 'graph'; $('#lanes').hidden = m !== 'graph'; $('#main').classList.toggle('graph', m === 'graph'); paint();
+}
+function fitHead() { document.documentElement.style.setProperty('--head', document.querySelector('header').offsetHeight + 'px'); }
+addEventListener('resize', fitHead);
+function load(key) {
+  fitHead();
+  D = SETS[key]; NOW = Date.parse(D.at); byId = Object.fromEntries(D.items.map((i) => [i.id, i])); done = new Map(); lastUndo = null;
+  model = build();
+  const first = model.groups.waiting[0] || model.groups.move[0] || model.groups.unclaimed[0];
+  sel = first ? first.it.id : null;
+  paint();
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-act]'); if (a) { e.stopPropagation(); act(a.dataset.act, a.dataset.verb); return; }
+  const g = e.target.closest('button.gh'); if (g) { const k = g.dataset.g; if (k === 'drafts') return; closed.has(k) ? closed.delete(k) : closed.add(k); paintQueue(); return; }
+  const li = e.target.closest('li.item'); if (li) { select(li.dataset.id); return; }
+  const s = e.target.closest('[data-sel]'); if (s) { e.preventDefault(); select(s.dataset.sel); return; }
+  const lk = e.target.closest('g.lk'); if (lk) { select(lk.dataset.id); return; }
+  const gn = e.target.closest('.gnode'); if (gn) { select(gn.dataset.id); return; }
+  if (e.target.closest('#toGraph')) { setMode('graph'); return; }
+  if (e.target.closest('#back')) { $('#main').classList.remove('open'); return; }
+});
+$('#asInbox').onclick = () => setMode('inbox');
+$('#asGraph').onclick = () => setMode('graph');
+$('#workTab').onclick = () => setMode('inbox');
+$('#dataset').onchange = (e) => load(e.target.value);
+$('#search').oninput = (e) => { query = e.target.value.trim(); paintQueue(); };
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea, select')) return;
+  const flat = flatRows(); const i = flat.indexOf(sel);
+  if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); select(flat[Math.min(flat.length - 1, i + 1)] || flat[0], false); }
+  else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); select(flat[Math.max(0, i - 1)] || flat[0], false); }
+  else if (e.key === 'Enter' && sel) { e.preventDefault(); act(sel); }
+  else if (e.key === 'g') setMode(mode === 'graph' ? 'inbox' : 'graph');
+  else if (e.key === 'Escape') $('#main').classList.remove('open');
+});
+addEventListener('resize', () => { if (mode === 'graph') wires(); });
+load('rig');
+})();
+</script>
+</body>
+</html>
