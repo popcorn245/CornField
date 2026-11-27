@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "spec": "0016",
+  "title": "The Work inbox",
+  "summary": "Work opens on an inbox of what needs you: what waits on you (spec 0010's number, unchanged), what is your move, and what nobody is on, each row placed by the work's own state with its one action beside it. The lane map stays, as Graph behind a toggle.",
+  "nodes": {
+    "add": [
+      {
+        "id": "core-explorer-inbox-model",
+        "label": "inbox-model.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/inbox-model.js",
+        "desc": "The Work inbox's rules, the pure half: which group each piece of work is in and why, in words, the order, and a waiting run folded into the spec it asks about."
+      },
+      {
+        "id": "core-explorer-pieces-inbox",
+        "label": "inbox.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/pieces/inbox.js",
+        "desc": "The Work inbox in the page: the queue, the selected item's ask and actions, what is around it, the keyboard and the phone's sheet."
+      }
+    ],
+    "change": [
+      {
+        "id": "core-explorer-work-view",
+        "set": {
+          "desc": "The Work view in cornfield's page: the Inbox it opens on and the Graph of lanes behind the Inbox · Graph toggle (specs 0012 and 0016)."
+        },
+        "why": "Work opens on the Inbox; the lanes become Graph"
+      },
+      {
+        "id": "core-server-work-graph",
+        "set": {
+          "desc": "The map of work in one answer (GET /api/forge/work-graph): the work, its links and the code it touches, with a run's question and a pull request's checks for the inbox."
+        },
+        "why": "the inbox says why each row is there without a request per row"
+      }
+    ]
+  },
+  "edges": {
+    "add": [
+      {
+        "from": "core-explorer-pieces-inbox",
+        "to": "core-explorer-inbox-model",
+        "label": "imports"
+      },
+      {
+        "from": "core-explorer-work-view",
+        "to": "core-explorer-pieces-inbox",
+        "label": "opens"
+      },
+      {
+        "from": "core-explorer-inbox-model",
+        "to": "core-explorer-work-model",
+        "label": "reads"
+      }
+    ]
+  },
+  "mockups": [
+    {
+      "node": "core-explorer-pieces-inbox",
+      "path": "0016-work-inbox/inbox.webp",
+      "title": "The Inbox on the review rig: 4 waiting on you in 3 rows, spec 0100 selected with its review and the run's question both in the detail, and what it touches drawn beside it"
+    },
+    {
+      "node": "core-explorer-work-view",
+      "path": "0016-work-inbox/graph.webp",
+      "title": "Graph: the lanes of spec 0012 with spec 0015's cleanups, spec 0100 selected and its lines drawn, the same detail in the side slot"
+    },
+    {
+      "node": "core-explorer-inbox-model",
+      "path": "0016-work-inbox/today.webp",
+      "title": "cornfield's own work on 2026-11-27: nothing waits on you, three issues nobody is on, and what was done lately"
+    },
+    {
+      "node": "core-explorer-pieces-inbox",
+      "path": "0016-work-inbox/phone.webp",
+      "title": "The Inbox on a phone at 390 px: the queue takes the width"
+    }
+  ]
+}
