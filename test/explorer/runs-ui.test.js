@@ -329,14 +329,15 @@ describe('the runs on the Agents tab', () => {
     expect(card.querySelector('img')).toBe(null);
     expect([...card.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/7#issuecomment-9', 'https://github.com/owner/name/issues/7', 'https://git.example.test/owner/name/pull/50', 'https://ci.example.org/1']);
     // a run is named by what the card shows, never by its id; the name starts with the visible label
-    expect(card.querySelector('[data-forge-stop]').getAttribute('aria-label')).toBe('Stop: code on issue #7, profile claude, asked by maintainer-one, 1 hour ago');
+    expect(card.querySelector('[data-forge-stop]')).toBe(null); // Stop is in the node panel's action bar (spec 0015 D4)
+    expect(q('#forge-detail [data-corn="actions"] [data-forge-stop]').getAttribute('aria-label')).toBe('Stop: code on issue #7, profile claude, asked by maintainer-one, 1 hour ago');
     expect(card.textContent).not.toContain(RUN.runId);
     expect(card.querySelector('[data-run-select]')).toBe(null); // nothing is lit on the map any more
     await showWork('run', QUIET.runId);
     const quiet = q('#forge-run-card > li[data-run]');
     expect(quiet.textContent).toContain('Quiet');
     expect(quiet.textContent).toMatch(/no longer counts toward the limit/);
-    expect(quiet.querySelector('[data-forge-stop]')).toBe(null);
+    expect(q('#forge-detail [data-forge-stop]')).toBe(null);
     // the section is only on the Agents tab
     click(q('[data-forge-kind="issues"]'));
     await settle();

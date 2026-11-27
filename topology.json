@@ -3269,6 +3269,36 @@
       "desc": "Replay (spec 0014 D1): the map grows on a timeline, commit by commit, like cells in a dish. (explorer/history-replay.js)"
     },
     {
+      "id": "page-doc-docs-specs-0015-a-quieter-work-view",
+      "type": "page",
+      "label": "/docs/specs/0015-a-quieter-work-view",
+      "file": "docs/specs/0015-a-quieter-work-view.md",
+      "summary": "Spec 0015: A quieter Work view (code grouped, one panel, the action first)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0015: A quieter Work view (code grouped, one panel, the action first) (docs/specs/0015-a-quieter-work-view.md)."
+    },
+    {
+      "id": "core-explorer-panel-model",
+      "label": "panel-model.js",
+      "type": "core",
+      "file": "explorer/panel-model.js",
+      "summary": "The node panel's shape (spec 0015 D4), as strings and plain data: the action bar that leads it, the one \"Next\" line under the bar, the sections that fold behind their title and count, and what the …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The node panel's shape (spec 0015 D4), as strings and plain data: the action bar that leads it, the one \"Next\" line under the bar, the sections that fold behind their title and count, and what the … (explorer/panel-model.js)"
+    },
+    {
+      "id": "core-explorer-panel-sections",
+      "label": "panel-sections.js",
+      "type": "core",
+      "file": "explorer/panel-sections.js",
+      "summary": "The node panel's sections and its ⋯ menu on an instance (spec 0015 D4): a section's title opens and closes it, and which are open is remembered per kind of node in the browser (`localStorage`, ever…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The node panel's sections and its ⋯ menu on an instance (spec 0015 D4): a section's title opens and closes it, and which are open is remembered per kind of node in the browser (`localStorage`, ever… (explorer/panel-sections.js)"
+    },
+    {
       "id": "page-doc-docs-specs-0016-work-inbox",
       "type": "page",
       "label": "/docs/specs/0016-work-inbox",
@@ -9924,12 +9954,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-pieces-work-prs",
-      "to": "core-explorer-waiting-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-pieces-work-runs",
       "to": "core-core-text",
       "dashed": true,
@@ -11326,6 +11350,130 @@
       "label": "imports"
     },
     {
+      "from": "core-explorer-history-replay",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-core-release-notes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0015-a-quieter-work-view"
+    },
+    {
+      "from": "page-doc-docs-specs-0015-a-quieter-work-view",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0015-a-quieter-work-view",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-panel-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-panel-sections"
+    },
+    {
+      "from": "core-explorer-history-model",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panel-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panel-sections",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-panel-sections",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-issues",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-issues",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-panel-sections",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-specs",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0016-work-inbox"
     },
@@ -11336,9 +11484,14 @@
     },
     {
       "from": "page-doc-docs-specs-0016-work-inbox",
+      "to": "page-doc-docs-specs-0015-a-quieter-work-view",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0016-work-inbox",
       "to": "page-doc-docs-specs-0012-work-as-a-view",
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-27T03:01:30.097Z"
+  "updatedAt": "2026-11-27T04:12:18.450Z"
 }

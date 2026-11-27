@@ -115,8 +115,8 @@ export function mapIndex(topology) {
   return { nodes, byId, order, owner };
 }
 
-/** The node's area: the ancestor just below the root (the node itself when it has no owner, or the root owns it) */
-function areaOf(node, index) {
+/** The node's area: the ancestor just below the root (the node itself when it has no owner, or the root owns it); the Work view groups the code it draws by it too (explorer/work-model.js) */
+export function areaOf(node, index) {
   let at = node;
   const seen = new Set();
   while (!seen.has(at.id)) {

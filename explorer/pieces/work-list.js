@@ -21,6 +21,8 @@ export function install(ctx) {
   const { announce, isPhone, expandSheet, collapseSheet, showSheet, nodeById, selectNode, clearResult, resultOf, showResultIn, setT, clearT } = ctx.h;
 
   const isForgeOpen = () => ui.open;
+  /** The list's tab for a kind of work */
+  const LIST_TAB = { pull: 'pulls', issue: 'issues', thread: 'threads', run: 'work', deploy: 'deploys', proposal: 'specs' };
 
   /**
    * Opens the list with the focus on its title; the first time, loads what its tab shows (the proposals, to start with).
@@ -30,6 +32,9 @@ export function install(ctx) {
   function openForge({ load = true, tab, quiet = false } = {}) {
     const panel = $('forge-panel');
     if (!panel || panel.hidden) return;
+    if (m.behind) { backToList(); return; } // it is open, behind the node it opened
+    // Opened by a toggle with a piece of work in the node panel (spec 0015 D3): on that piece's tab, its row marked and scrolled to; the selection stays
+    if (!tab && load && !ui.open && ui.item && LIST_TAB[ui.item.kind]) { tab = LIST_TAB[ui.item.kind]; m.markRow = true; }
     if (tab && tab !== (ui.kind === 'notes' ? 'pulls' : ui.kind) && TABS.includes(tab)) { // the Release notes are one level down on PRs
       ui.kind = tab;
       ui.filters = defaultFilters(tab);
@@ -50,7 +55,7 @@ export function install(ctx) {
     if (isPhone()) { showSheet('forge'); if (tab) expandSheet('forge'); } // a peek (it takes the place of the node panel's sheet: spec 0010 D7); only a link that names a tab opens it expanded
     fn.paintButton();
     const title = $('forge-title');
-    title.focus();
+    title.focus({ preventScroll: true }); // the list slides in from the right edge (spec 0015 D3): a scroll to it would shift the whole stage
     announce('Work list');
     inst.emit('work:list', { open: true });
     if (!load) return; // a deep link loads the list it wants itself
@@ -67,12 +72,16 @@ export function install(ctx) {
     return false;
   }
 
-  /** Closes the list. The node panel keeps what it shows. */
-  function closeForge({ restoreFocus = true } = {}) {
+  /**
+   * Closes the list. Called by the list's own ✕, Escape or toggle (`both`), it is the one side panel closing (spec 0015 D3): on a desktop the node it set aside is let go of
+   * too. Otherwise (the view was left, a phone's sheet gave way) the node panel keeps what it shows.
+   */
+  function closeForge({ restoreFocus = true, both = false } = {}) {
     const panel = $('forge-panel');
     if (!panel || !ui.open) return;
     const hadFocus = panel.contains(inst.active());
     ui.open = false;
+    m.behind = false;
     panel.classList.remove('forge-open');
     panel.inert = true;
     collapseSheet('forge');
@@ -80,10 +89,60 @@ export function install(ctx) {
     const back = m.openerEl && m.openerEl.isConnected ? m.openerEl : ctx.root.querySelector('[data-action="toggle-forge"]');
     if (restoreFocus && hadFocus && back) back.focus();
     inst.emit('work:list', { open: false });
+    // Closing closes both (spec 0015 D3): the selection, else the piece of work the panel shows without one (older than the map of work)
+    if (both && !isPhone()) { m.rowRef = null; if (inst.state.selectedNode) clearSelection(inst, { source: 'api' }); else inst.emit('node:close'); }
     announce('Work list closed');
   }
 
-  const toggleForge = () => (ui.open ? closeForge() : openForge());
+  const toggleForge = () => (m.behind ? backToList() : ui.open ? closeForge({ both: true }) : openForge());
+
+  // ---------------------------------------------------------------------------
+  //  One side panel at a time (spec 0015 D3): on a desktop the list and the node panel take the same place, in turns. A phone has its two sheets (spec 0010 D7)
+  // ---------------------------------------------------------------------------
+
+  /** The node panel opened while the list is open: the list waits behind it (still open: the panel's Back, Escape or the toggle bring it again) */
+  function goBehind() {
+    const panel = $('forge-panel');
+    if (!panel || !ui.open || m.behind || isPhone()) return;
+    m.behind = true;
+    panel.classList.remove('forge-open');
+    panel.inert = true;
+    fn.paintButton();
+  }
+
+  /** Back to the list from the node it opened: the node stays selected, the node panel steps aside, its row is marked and has the focus */
+  function backToList() {
+    const panel = $('forge-panel');
+    if (!panel || !m.behind) return false;
+    m.behind = false;
+    panel.classList.add('forge-open');
+    panel.inert = false;
+    inst.emit('work:list', { open: true });
+    fn.paint();
+    announce('Work list');
+    const row = markRow();
+    if (row) row.focus({ preventScroll: true }); else $('forge-title').focus({ preventScroll: true }); // (the list is still sliding in: a scroll would move the stage, not the list)
+    return true;
+  }
+
+  /** The row of what the node panel shows, scrolled into the list's view; null when the list does not show it */
+  function markRow() {
+    const panel = $('forge-panel');
+    const row = panel && [...panel.querySelectorAll('[data-work-ref][aria-pressed="true"]')].find((r) => !r.closest('[hidden]'));
+    if (!row) return null;
+    // Only the list's own body scrolls: `scrollIntoView` would also scroll the stage while the list slides in, and leave the page shifted
+    const box = row.closest('.hx-forge-body');
+    if (box) {
+      const r = row.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      if (r.top < b.top) box.scrollTop -= b.top - r.top;
+      else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+    }
+    return row;
+  }
+
+  /** What the node panel's Back does while the list is open on a desktop (`panel:back`): the list again; nothing on a phone, or with the list shut */
+  const panelBack = () => (ui.open && !isPhone() ? backToList : undefined);
 
   /** After a filter changes: the list again, and how many it holds */
   function filtersChanged(announceNow = true) {
@@ -121,7 +180,8 @@ export function install(ctx) {
     if (row) {
       const ref = row.dataset.workRef;
       // A row already shown goes into the node panel, as Enter on the map does: the focus otherwise stays on the row, so the list can be read down
-      if (m.rowRef === ref && isShown(ref)) { inst.emit('node:focus'); return; }
+      // On a desktop the node panel stepped aside for the list (spec 0015 D3): it comes back in the list's place first
+      if (m.rowRef === ref && isShown(ref)) { if (!isPhone() && !m.behind) inst.emit('panel:return'); inst.emit('node:focus'); return; }
       m.rowRef = ref; // the row the node panel's Escape gives the focus back to (`rowBack`)
       const at = ref.indexOf(':');
       fn.showRef(ref.slice(0, at), ref.slice(at + 1)).then((shown) => {
@@ -133,7 +193,7 @@ export function install(ctx) {
     }
     const action = t.closest('[data-action]');
     if (!action) return;
-    if (action.dataset.action === 'close-forge') closeForge();
+    if (action.dataset.action === 'close-forge') closeForge({ both: true });
     else if (action.dataset.action === 'refresh-forge' || action.dataset.action === 'retry-forge') fn.refreshForge();
     else if (action.dataset.action === 'clear-specs-search') {
       ui.specQuery = '';
@@ -178,6 +238,9 @@ export function install(ctx) {
       announce(`${node.label}, ${node.type}`);
       return;
     }
+    // A thread folded into the proposal shown (spec 0015 D2): the thread in the panel, the proposal still selected on the map
+    const folded = t.closest('[data-work-folded]');
+    if (folded) { fn.showFolded(Number(folded.dataset.workFolded), folded.dataset.id).catch(() => {}); return; }
     const agent = t.closest('[data-forge-agent]');
     if (agent) { fn.openAgent(agent.dataset.forgeAgent, `[data-forge-agent="${agent.dataset.forgeAgent}"]`); return; }
     const stop = t.closest('[data-forge-stop]');
@@ -270,7 +333,7 @@ export function install(ctx) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (e.target.closest && e.target.closest('select, input, textarea')) return;
     e.preventDefault();
-    closeForge();
+    closeForge({ both: true });
   }
 
   // ---------------------------------------------------------------------------
@@ -383,7 +446,7 @@ export function install(ctx) {
     const ref = m.rowRef;
     if (!ui.open || !ref || !isShown(ref)) return undefined;
     return () => {
-      const row = ui.open && [...$('forge-panel').querySelectorAll('[data-work-ref]')].find((r) => r.dataset.workRef === ref);
+      const row = ui.open && !m.behind && [...$('forge-panel').querySelectorAll('[data-work-ref]')].find((r) => r.dataset.workRef === ref);
       if (!row || row.closest('[hidden]')) return false;
       row.focus();
       return true;
@@ -404,5 +467,5 @@ export function install(ctx) {
     fn.paint();
   }
 
-  Object.assign(fn, { isForgeOpen, openForge, linkMissing, closeForge, toggleForge, filtersChanged, onClick, onDetailClick, onChange, onInput, onDetailInput, onDetailKey, onKey, refOf, isShown, sayDetail, showRef, showDetail, rowBack, dropDetail });
+  Object.assign(fn, { goBehind, backToList, markRow, panelBack, isForgeOpen, openForge, linkMissing, closeForge, toggleForge, filtersChanged, onClick, onDetailClick, onChange, onInput, onDetailInput, onDetailKey, onKey, refOf, isShown, sayDetail, showRef, showDetail, rowBack, dropDetail });
 }

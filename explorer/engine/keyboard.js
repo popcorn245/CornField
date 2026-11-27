@@ -59,11 +59,12 @@ export function centreTarget(inst, node, zoom = inst.state.camera.zoom) {
   const { width, height } = inst.state;
   const visibleHeight = Math.max(160, height - (inst.state.coveredBottom || 0));
   const covers = inst.ask('panel:covers'); // an open slide-over node panel covers the right of the map (pieces/node-panel.js); one in a box of its own covers nothing
-  const visibleWidth = width >= 768 && covers ? Math.max(160, width - (covers.right || 480)) : width;
-  // The issues and PRs panel slides in from the left (forge-panel.js)
+  // The Work list takes the node panel's place on the right while it is open (spec 0015 D3): it covers the same side
   const forge = inst.el('forge-panel');
-  const left = width >= 768 && forge && forge.classList.contains('forge-open') ? Math.min(forge.offsetWidth || 400, visibleWidth - 160) : 0;
-  return { x: left + (visibleWidth - left) / 2 - node.x * zoom, y: visibleHeight / 2 - node.y * zoom, zoom };
+  const list = width >= 768 && forge && forge.classList.contains('forge-open') ? forge.offsetWidth || 480 : 0;
+  const right = Math.max(width >= 768 && covers ? covers.right || 480 : 0, list);
+  const visibleWidth = right ? Math.max(160, width - right) : width;
+  return { x: visibleWidth / 2 - node.x * zoom, y: visibleHeight / 2 - node.y * zoom, zoom };
 }
 
 /** Moves the camera so `node` is in the middle of the part of the map not under the panels or a phone's sheets */

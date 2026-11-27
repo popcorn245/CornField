@@ -241,7 +241,8 @@ describe('a thread is read here and answered on the forge', () => {
     const reply = [...detail.querySelectorAll('a')].find((a) => a.textContent.startsWith('Reply on GitHub'));
     expect(reply.getAttribute('href')).toBe(URL_OF(41));
     expect(reply.getAttribute('target')).toBe('_blank');
-    expect(detail.textContent).toContain('Read-only here');
+    expect(reply.closest('[data-corn="actions"]')).not.toBe(null); // Reply is the thread's action, first in the bar (spec 0015 D4); the paragraph that explained it is gone
+    expect(detail.textContent).not.toContain('Read-only here');
     expect(detail.textContent).toContain('Proposal 0040-meals in pull request #40');
     expect([...detail.querySelectorAll('a')].find((a) => a.getAttribute('aria-label') === 'Open this message on GitHub (new tab)')).toBeTruthy();
     expect(await said()).toBe('Thread 41, Rework sign-in: 3 messages, 2 nodes on the map, 1 named that is not on the map. Read-only: reply on GitHub.');
@@ -259,7 +260,7 @@ describe('a thread is read here and answered on the forge', () => {
     expect(words).not.toContain('GitHub');
     expect([...detail.querySelectorAll('a')].find((a) => a.textContent.startsWith('Reply on Forgejo'))).toBeTruthy();
     expect(detail.querySelector('a[aria-label="Open this message on Forgejo (new tab)"]')).toBeTruthy();
-    expect(detail.textContent).toContain('a conversation on Forgejo');
+    expect(detail.querySelector('[data-corn="actions"] a').textContent).toBe('Reply on Forgejo ↗');
     // the mention and the login are text: nothing became an element
     expect(detail.querySelector('img, script')).toBe(null);
     expect(detail.textContent).toContain('<img src=x onerror=alert(1)>');
@@ -283,7 +284,7 @@ describe('a thread is read here and answered on the forge', () => {
     expect(chips).toContain('auth.js');
     expect(chips).toContain('hooks.js');
     expect($('forge-detail').textContent).toContain('nowhere.md is mentioned but not on the map, so it stays text.');
-    expect($('forge-detail').textContent).toContain('Mentions: 2 nodes on the map');
+    expect(q('#forge-detail [data-sec="mentions"] .hx-sec-toggle').textContent).toBe('Mentions 2');
     const first = qa('.hx-thread-msg')[0];
     expect([...first.querySelectorAll('.hx-forge-node')].map((b) => b.textContent)).toEqual(['auth.js']);
     expect(first.textContent).toContain('not on the map: nowhere.md');
@@ -375,7 +376,7 @@ describe('a node\'s panel lists the threads that mention it', () => {
     await settle();
     expect(server.urls().filter((u) => u !== '/proposals')).toEqual(['/api/forge/threads?state=open&limit=100']);
     const box = q('#drawer-threads');
-    expect(box.querySelector('h3').textContent).toBe('Threads');
+    expect(box.querySelector('h3 .hx-sec-name').textContent).toBe('Threads'); // with its count on its toggle (spec 0015 D4)
     expect([...box.querySelectorAll('[data-thread-open]')].map((b) => b.textContent)).toEqual(['Rework sign-in#41 · 2', 'Spec: Meals#40 · 1']);
     expect(box.querySelector('[data-thread-open="41"]').getAttribute('aria-label')).toContain('2 comments');
     // the panel is not asked for again for the next node
@@ -518,7 +519,10 @@ describe('Start a thread about this (a node\'s panel)', () => {
     click(q('[data-action="idea-cancel"]'));
     expect($('idea-form').hidden).toBe(true);
     expect(document.activeElement).toBe(button());
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true); // on a desktop the node's panel is back in the list's place (spec 0015 D3)
     // opened from the bar's own button, it goes back to that one
+    click($('drawer-back'));
+    await settle();
     click($('idea-open'));
     click(q('[data-action="idea-cancel"]'));
     expect(document.activeElement).toBe($('idea-open'));
@@ -557,7 +561,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(JSON.parse(server.posts()[0].init.body)).toEqual({ title: 'Move db.js to its own package', body: '[[core-db]]\n\nIt has outgrown the server.' });
     expect(posted.some((i) => i.cache === 'reload')).toBe(true); // the forge was asked again, not the minute's cache
     const box = q('#drawer-threads');
-    expect(box.querySelector('h3').textContent).toBe('Threads');
+    expect(box.querySelector('h3 .hx-sec-name').textContent).toBe('Threads'); // with its count on its toggle (spec 0015 D4)
     expect(box.querySelector('[data-thread-open="77"]').textContent).toBe('Move db.js to its own package#77 · 0');
     expect(document.activeElement).toBe(button());
     // the node's panel stays (its button had the focus); the new thread is listed there and the words say so

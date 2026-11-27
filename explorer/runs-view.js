@@ -89,6 +89,42 @@ function resultHtml(ctx, run) {
   return `<p class="hx-forge-result" data-run-result="${ctx.esc(run.runId)}" data-corn="result"${r ? ` data-corn-state="${r.ok ? 'success' : 'failure'}"` : ' hidden'}>${r ? ctx.esc(r.text) : ''}</p>`;
 }
 
+/** A waiting run's Continue (the node panel's primary action: `kind` "approve"; in a card of its own, "secondary") */
+function continueHtml(ctx, run, kind) {
+  const say = ctx.t || t;
+  const off = ctx.busy ? ' aria-disabled="true"' : '';
+  return `<button data-corn-kind="${kind}" type="button" class="hx-btn${kind === 'approve' ? ' hx-btn--approve' : ''} hx-forge-act" data-run-answer="continue" data-run-id="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('continueRun'))}: ${ctx.esc(runName(run, ctx.now))}"${off}>${ctx.esc(say('continueRun'))}</button>`;
+}
+
+/** A waiting run's Stop, an answer */
+function answerStopHtml(ctx, run) {
+  const say = ctx.t || t;
+  const off = ctx.busy ? ' aria-disabled="true"' : '';
+  return `<button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('stop'))}: ${ctx.esc(runName(run, ctx.now))}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button>`;
+}
+
+/** Start again and Stop (a run that does not wait on an answer), as the card has them */
+function againHtml(ctx, run, kind = 'secondary') {
+  const say = ctx.t || t;
+  const off = ctx.busy ? ' aria-disabled="true"' : '';
+  return canRetry(run) ? `<button data-corn-kind="${kind}" type="button" class="hx-btn${kind === 'approve' ? ' hx-btn--approve' : ''} hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('startAgain'))}: ${ctx.esc(runName(run, ctx.now))}"${off}>${ctx.esc(say('startAgain'))}</button>` : '';
+}
+function stopHtml(ctx, run) {
+  const say = ctx.t || t;
+  const off = ctx.busy ? ' aria-disabled="true"' : '';
+  return canStop(run) && !canAnswer(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('stop'))}: ${ctx.esc(runName(run, ctx.now))}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button>` : '';
+}
+
+/**
+ * A run's actions as the node panel's bar puts them (spec 0015 D4): Continue is the primary action of a run that waits on an answer, Stop beside it; a run that can start again
+ * has Start again; one at work has Stop. The card drawn with `bar: true` in its context leaves these out (its reply field and its Reply stay in it).
+ */
+export function runBarParts(ctx, run) {
+  if (canAnswer(run)) return { primary: continueHtml(ctx, run, 'approve'), others: [answerStopHtml(ctx, run)] };
+  const again = againHtml(ctx, run, 'approve');
+  return { primary: again, others: [stopHtml(ctx, run)] };
+}
+
 /** A waiting run: what was asked (the note and link are shown above) and the three answers, plain buttons and a reply field */
 function answerHtml(ctx, run) {
   const say = ctx.t || t; // the words of the instance that draws it (the Work piece hands its own), else the page's
@@ -96,9 +132,10 @@ function answerHtml(ctx, run) {
   const name = ctx.esc(runName(run, ctx.now));
   const off = ctx.busy ? ' aria-disabled="true"' : ''; // not `disabled`: the pressed button keeps the focus (a click on it is dropped: pieces/work-list.js `onDetailClick`)
   const reply = ctx.replies && ctx.replies.get(run.runId) || '';
-  return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" data-corn="run-actions" role="group" aria-label="Answer: ${name}">
-      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(say('continueRun'))}: ${name}"${off}>${ctx.esc(say('continueRun'))}</button>
-      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="${ctx.esc(say('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button></div>
+  // In the node panel Continue and Stop are its action bar's (`runBarParts`): the card keeps the reply field and its Reply
+  return `${run.answer ? answeredHtml(ctx, run) : ''}${ctx.bar ? '' : `<div class="hx-run-actions" data-corn="run-actions" role="group" aria-label="Answer: ${name}">
+      ${continueHtml(ctx, run, 'secondary')}
+      ${answerStopHtml(ctx, run)}</div>`}
     <label class="hx-forge-field" data-corn="field">Reply to ${ctx.esc(`${run.kind} on ${aboutWords(run.refs)}`)}<input data-corn="control" type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
     <div class="hx-run-actions" data-corn="run-actions"><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(say('reply'))}: ${name}"${off}>${ctx.esc(say('reply'))}</button></div>`;
 }
@@ -141,15 +178,12 @@ export function loadingLinesHtml(n = 1) {
 
 /** One run */
 export function runHtml(ctx, run, all) {
-  const say = ctx.t || t;
   const open = ctx.timelines.has(run.runId);
   const why = statusWhy(run);
-  const name = ctx.esc(runName(run, ctx.now));
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
-  const off = ctx.busy ? ' aria-disabled="true"' : ''; // not `disabled`: the pressed button keeps the focus (a click on it is dropped: pieces/work-list.js `onDetailClick`)
-  const retry = canRetry(run) ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('startAgain'))}: ${name}"${off}>${ctx.esc(say('startAgain'))}</button>` : '';
-  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button>` : '';
+  const retry = ctx.bar ? '' : againHtml(ctx, run); // in the node panel, Start again and Stop are its action bar's (`runBarParts`)
+  const stop = ctx.bar ? '' : stopHtml(ctx, run);
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
   const limits = limitRows(run);

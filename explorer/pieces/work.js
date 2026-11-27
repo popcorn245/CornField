@@ -84,7 +84,7 @@ export function mount(root, inst, options = {}) {
   const m = {
     runsTimer: 0, threadToken: 0, indexToken: 0, indexLoading: false, indexCache: null, listToken: 0, pullToken: 0, notesToken: 0,
     searchTimer: null, now: options.clock || (() => Date.now()), pageAway: false, specsTimer: 0, specsReading: false, primed: new Set(),
-    shownKey: '', shownKind: '', returnTo: null, openerEl: null, merged: { entries: null, items: [] }, redrawRuns: new Set(), agentTrap: null, confirmTrap: null,
+    shownKey: '', shownKind: '', returnTo: null, openerEl: null, merged: { entries: null, items: [] }, redrawRuns: new Set(), agentTrap: null, confirmTrap: null, behind: false, markRow: false,
   };
   const timers = new Set();
   /** Timers that end with the piece, and do nothing once it has */
@@ -187,9 +187,12 @@ export function mount(root, inst, options = {}) {
     scope.on('threads:ensure', () => { if (ui.config && ui.threadsOn) fn.ensureThreadsList(); });
     scope.on('thread:open', ({ number }) => { if (ui.threadsOn) fn.openThread(number).catch(() => {}); });
     // The node panel shows a piece of work (the Work view's node, or one the lists read): its actions are drawn into it; anything else, or closed, lets go of it
-    scope.on('node:painted', ({ node }) => { m.shown = node && node.work && node.item ? fn.showDetail(node) : (fn.dropDetail(), Promise.resolve()); });
-    scope.on('node:close', () => fn.dropDetail());
+    // On a desktop the list and the node panel take one place in turns (spec 0015 D3): a node shown while the list is open puts the list behind it, the panel's Back
+    // (`panel:back`) brings the list again, and the panel closing closes both
+    scope.on('node:painted', ({ node }) => { m.shown = node && node.work && node.item ? fn.showDetail(node) : (fn.dropDetail(), Promise.resolve()); if (node) fn.goBehind(); });
+    scope.on('node:close', () => { fn.dropDetail(); if (m.behind) fn.closeForge({ restoreFocus: false }); });
     scope.on('node:back', () => fn.rowBack()); // the node panel closing gives the focus back to the row that chose it
+    scope.on('panel:back', () => fn.panelBack());
     scope.on('thread:start', ({ node }) => { if (ui.threadsOn && node) fn.startThread(node); });
     // The map or the proposal changed the nodes: the lights follow them. The header's Proposals menu reads the same list: the Specs tab and its count follow
     scope.on('scene', fn.onNodesChange);

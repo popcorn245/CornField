@@ -12,7 +12,9 @@
 .hx-layers-chip--dim { border-color: var(--corn-line-soft); }
 .hx-layers-chip--dim, .hx-layers-chip--dim .hx-layers-count { color: var(--corn-text-3); }
 @container corn-box (max-width: 767px) {
+  /* On cornfield's page the chip sits on the map's top-left row with the view's controls (header.css `.hx-view-tools`); in a page with no such row, on the map by itself */
   .hx-header .hx-layers { position: absolute; top: calc(100% + var(--corn-space-4)); left: var(--corn-space-4); }
+  .hx-header .hx-view-tools > .hx-layers { position: static; }
   .hx-layers-chip { height: var(--hx-control-h); padding: 0 var(--corn-space-5); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
 }
 .hx-toggle-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
@@ -46,11 +48,18 @@
 @media (prefers-reduced-motion: reduce) {
   .hx-dot { transition: none; animation: none; }
 }
+/* A row's own button beside it (spec 0015 D6: the History row's Replay), pressed while what it opens is open */
+.hx-toggle-line { display: flex; align-items: stretch; gap: var(--corn-space-1); }
+.hx-toggle-line > .hx-toggle-row { flex: 1; min-width: 0; }
+.hx-row-action { flex: none; padding: 0 var(--corn-space-3); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-xs); font-weight: 600; }
+.hx-row-action:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-row-action[aria-pressed="true"] { background: var(--corn-surface-3); color: var(--corn-text); border-color: var(--corn-accent); }
+.hx-row-action:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
 @container corn-box (max-width: 767px) {
-  .hx-toggle-row { min-height: 44px; }
+  .hx-toggle-row, .hx-row-action { min-height: 44px; }
 }
 @media (pointer: coarse) {
-  .hx-toggle-row { min-height: 44px; }
+  .hx-toggle-row, .hx-row-action { min-height: 44px; }
 }
 /* ---------------------------------------------------------------------------
    Project layers and finer kinds (spec 0009): the Layers menu holds its title (with All and None) while the rows scroll, the Overlays heading,

@@ -165,8 +165,8 @@ describe('the pure functions', () => {
     expect(buildMarkerOf(null)).toBe(null);
   });
   it('says what a proposal adds and what it changes or removes, whatever the file holds', () => {
-    const t = touchesOf({ nodes: { add: [{ id: 'a', label: 'A', type: 'api' }, { id: 'b' }, { label: 'no id' }], change: [{ id: 'c' }], remove: ['d', { id: 'c' }] } });
-    expect(t).toEqual({ adds: [{ id: 'a', label: 'A', type: 'api' }, { id: 'b', label: 'b', type: null }], changes: ['c', 'd'] });
+    const t = touchesOf({ nodes: { add: [{ id: 'a', label: 'A', type: 'api', parent: 'api-billing' }, { id: 'b' }, { label: 'no id' }], change: [{ id: 'c' }], remove: ['d', { id: 'c' }] } });
+    expect(t).toEqual({ adds: [{ id: 'a', label: 'A', type: 'api', parent: 'api-billing' }, { id: 'b', label: 'b', type: null, parent: null }], changes: ['c', 'd'] }); // the parent: the page groups a planned node under its area (spec 0015 D1)
     for (const v of [null, 4, 'x', [], {}, { nodes: 3 }]) expect(touchesOf(v)).toEqual({ adds: [], changes: [] });
   });
   it('turns files into the map\'s nodes, a rename lighting the old path, at most 300 files', () => {
@@ -194,7 +194,7 @@ describe('the work graph', () => {
     expect(byId['run:run-01WAITING00000000000000000A']).toMatchObject({ kind: 'run', stage: 'build', state: 'waiting', waiting: true, runId: 'run-01WAITING00000000000000000A' });
     expect(byId['run:run-01DONE0000000000000000000A']).toMatchObject({ state: 'done', open: false, waiting: false });
     expect(byId['deploy:9001']).toMatchObject({ kind: 'deploy', stage: 'ship', state: 'success', deployId: '9001', url: 'https://forge.test/runs/9001', waiting: false });
-    expect(byId['new-thing']).toEqual({ id: 'new-thing', kind: 'code', planned: true, label: 'New thing', type: 'service' });
+    expect(byId['new-thing']).toEqual({ id: 'new-thing', kind: 'code', planned: true, label: 'New thing', type: 'service', parent: null });
     // what only waits on the maintainer is a spec to decide and a run waiting on an answer
     expect(g.nodes.filter((n) => n.waiting).map((n) => n.id).sort()).toEqual(['proposal:0100-retire', 'run:run-01WAITING00000000000000000A']);
   });

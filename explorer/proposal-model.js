@@ -225,23 +225,20 @@ export function specRowHtml(entry, { shown = null, nowMs = Date.now() } = {}) {
   const { state } = specStateOf(entry);
   const corn = SPEC_STATE_CORN[state];
   const pill = `<span class="hx-forge-state hx-forge-state--${corn}" data-corn="review-state" data-corn-state="${corn}">${stateIconHtml(corn)}${escHtml(SPEC_STATE_WORDS[state])}</span>`;
-  const c = entry.counts || {};
+  // The card keeps its title, its state and who must act (its group, and the words of its review); the summary, what it adds, changes and removes, and its
+  // scenarios are the node panel's (spec 0015 D3)
   const said = specStateWords(entry, nowMs);
   const meta = [
     entry.spec ? `<span>spec ${escHtml(entry.spec)}</span>` : '',
     `<span>${escHtml(specWhere(entry))}</span>`,
     said ? `<span class="hx-forge-reviewed">${escHtml(said)}</span>` : '',
-    c.added ? `<span class="hx-forge-add" title="${c.added} added">+${c.added}</span>` : '',
-    c.changed ? `<span class="hx-forge-chg" title="${c.changed} changed">~${c.changed}</span>` : '',
-    c.removed ? `<span class="hx-forge-del" title="${c.removed} removed">\u2212${c.removed}</span>` : '',
-    c.scenarios ? `<span>${c.scenarios} ${c.scenarios === 1 ? 'scenario' : 'scenarios'}</span>` : '',
     entry.errors ? `<span class="hx-warn">${entry.errors} ${entry.errors === 1 ? 'problem' : 'problems'}</span>` : '',
   ].filter(Boolean).join('');
   const mine = shown === `proposal:${entry.slug}`;
   const unread = state === 'unknown' ? `<p class="hx-forge-meta hx-forge-unread" data-corn="message" data-corn-state="failure">${escHtml(entry.review && entry.review.error ? entry.review.error : 'The forge could not be asked.')} <button type="button" class="hx-btn hx-forge-act" data-corn-kind="quiet" data-action="retry-forge" aria-label="Try again: ${escHtml(entry.title || entry.slug)}">Try again</button></p>` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-work-ref="proposal:${escHtml(entry.slug)}" aria-pressed="${mine}" data-corn="row">`
     + `<span class="hx-forge-line">${head}${pill}</span>`
-    + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button>${unread}</li>`;
+    + `<span class="hx-forge-meta hx-forge-facts">${meta}</span></button>${unread}</li>`;
 }
 
 // ---------------------------------------------------------------------------

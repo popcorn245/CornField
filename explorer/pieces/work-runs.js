@@ -8,7 +8,7 @@
 import { withParts } from '../engine/piece.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from '../agents-model.js';
 import { runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, stopWords, changeWords } from '../runs-model.js';
-import { runHtml, runRowsHtml, totalsHtml, loadingRowsHtml, loadingLinesHtml } from '../runs-view.js';
+import { runHtml, runBarParts, runRowsHtml, totalsHtml, loadingRowsHtml, loadingLinesHtml } from '../runs-view.js';
 import { waiting } from '../waiting-model.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { safeUrl, RUNS_POLL_MS } from './work-common.js';
@@ -148,7 +148,8 @@ export function install(ctx) {
 
   /** The run in the node panel: its card (state, what it changes, Stop, the answer field, Start again, the timeline). Drawn with `patchList`, so a reply being typed stays. */
   function paintRunCard() {
-    const box = $('forge-detail');
+    const detail = $('forge-detail');
+    const box = detail && (detail.querySelector('[data-work-place="sections"]') || detail);
     if (!box) return;
     let list = box.querySelector('#forge-run-card');
     if (!list) {
@@ -160,8 +161,18 @@ export function install(ctx) {
     }
     const run = runById(ui.runShown);
     const data = ui.runs && ui.runs.data;
-    if (run) patchList(list, runHtml(viewContext(), run, data.runs));
+    if (run) patchList(list, runHtml({ ...viewContext(), bar: true }, run, data.runs)); // its Continue, Stop and Start again are the bar's (`runParts`)
     else patchList(list, `<li class="hx-forge-empty hx-faint" data-corn="empty">${escHtml(ui.runs && ui.runs.error ? ui.runs.error : data ? 'This run is not in what the runners reported.' : 'Reading the run …')}</li>`);
+  }
+
+  /** The run's actions in the node panel's bar (spec 0015 D4): Continue first while it waits on an answer, Stop beside it; Start again, or Stop, otherwise (runs-view.js `runBarParts`) */
+  function runParts() {
+    const run = runById(ui.runShown);
+    const url = ui.item && safeUrl(ui.item.url);
+    const out = url ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : '';
+    if (!run) return { others: [out] };
+    const bar = runBarParts(viewContext(), run);
+    return { primary: bar.primary, others: [...bar.others, out] };
   }
 
   /**
@@ -301,7 +312,8 @@ export function install(ctx) {
   function focusInRun(runId, selectors) {
     const card = [...root.querySelectorAll('#forge-run-card [data-run]')].find((c) => c.dataset.run === runId);
     if (!card) return;
-    const to = selectors.map((sel) => card.querySelector(sel)).find((el) => el && !el.disabled) || card;
+    const bar = $('forge-detail') && $('forge-detail').querySelector('[data-work-place="bar"]'); // Continue, Stop and Start again are in the node panel's action bar
+    const to = selectors.map((sel) => card.querySelector(sel) || (bar && bar.querySelector(sel))).find((el) => el && !el.disabled) || card;
     if (to !== inst.active()) to.focus();
     if (to.matches('input') && typeof to.setSelectionRange === 'function') to.setSelectionRange(to.value.length, to.value.length); // typing goes on at the end of what is there
   }
@@ -373,5 +385,5 @@ export function install(ctx) {
     fn.showRef('run', runId);
   }
 
-  Object.assign(fn, { groupsShown, loadWork, loadRuns, syncRunsPoll, onPageHide, onPageShow, workHtml: (...a) => withParts(workHtml(...a)), groupsHtml: (...a) => withParts(groupsHtml(...a)), paintRuns, paintRunCard, patchList, graftAround, runnerAway, askRunnerWords, paintRunner, viewContext, runById, showRun, toggleTimeline, focusInRun, discardReply, stopRun, answerRun, answerFromBar, goToRun });
+  Object.assign(fn, { runParts, groupsShown, loadWork, loadRuns, syncRunsPoll, onPageHide, onPageShow, workHtml: (...a) => withParts(workHtml(...a)), groupsHtml: (...a) => withParts(groupsHtml(...a)), paintRuns, paintRunCard, patchList, graftAround, runnerAway, askRunnerWords, paintRunner, viewContext, runById, showRun, toggleTimeline, focusInRun, discardReply, stopRun, answerRun, answerFromBar, goToRun });
 }

@@ -88,8 +88,8 @@ export function visibleMapRect(inst) {
     const panel = inst.ask('panel:covers'); // the node panel, when it slides over the map: its width, not its box (it slides in)
     if (panel && panel.right) covers.right = panel.right;
     const forge = inst.el('forge-panel');
-    if (shown(forge) && forge.classList.contains('forge-open')) covers.left = forge.offsetWidth;
-    // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers, past the Work list's when both are open
+    if (shown(forge) && forge.classList.contains('forge-open')) covers.right = Math.max(covers.right, forge.offsetWidth); // the Work list, in the node panel's place (spec 0015 D3)
+    // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers
     const column = inst.ask('changes:covers');
     if (column) covers.left = Math.max(covers.left, Math.max(0, column.right - c.left) + 8);
     const player = inst.ask('player:covers');

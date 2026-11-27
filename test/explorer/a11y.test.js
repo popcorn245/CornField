@@ -394,6 +394,17 @@ describe('the issues and PRs panel', () => {
     await settle();
   };
 
+  it('has no violation in the header with the Work view\'s controls in it (spec 0015 D5)', async () => {
+    stub();
+    start();
+    press('#preset-work-btn');
+    await settle();
+    const group = document.querySelector('[data-corn="header"] [data-corn="view-controls"]');
+    expect(group.hidden).toBe(false);
+    expect([...group.querySelectorAll('button:not([hidden])')].map((b) => b.textContent)).toEqual(['Waiting on you', 'List']);
+    expect(await audit('[data-corn="header"]')).toEqual([]);
+  });
+
   it('has no violation closed (inert off screen)', async () => {
     stub();
     start();
@@ -679,13 +690,19 @@ describe('the issues and PRs panel', () => {
       row.focus();
       click(row);
       await settle(120);
-      // The row selects its node: the node panel shows the deploy, and the focus stays on the row
-      expect(document.activeElement.dataset.workRef).toBe('deploy:3'); // the list is drawn again, and the focus is on the same row
-      expect(document.activeElement.getAttribute('aria-pressed')).toBe('true');
+      // The row selects its node: the node panel shows the deploy in the list's place (spec 0015 D3), and the focus is in it, never on the page
+      expect($('spec-drawer').contains(document.activeElement)).toBe(true);
+      expect($('forge-panel').inert).toBe(true);
       expect(document.querySelector('#forge-detail').getAttribute('data-work-kind')).toBe('deploy');
       expect($('map-announcer').textContent).toBe('Deploy Deploy web of main, succeeded: 1 node restarted on the map, 1 named that is not on the map.');
+      // Back: the list again, its row marked and focused, the deploy still selected
+      expect($('drawer-back').hidden).toBe(false);
+      click($('drawer-back'));
+      await settle();
+      expect(document.activeElement.dataset.workRef).toBe('deploy:3');
+      expect(document.activeElement.getAttribute('aria-pressed')).toBe('true');
       key($('forge-title'), 'Escape');
-      expect(document.activeElement).toBe($('forge-btn'));
+      expect(document.activeElement).toBe(document.querySelector('[data-action="toggle-forge"]')); // the first List toggle: the header's, where the Work view has put it (spec 0015 D5)
     });
   });
 
@@ -931,12 +948,14 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
     expect(document.querySelector('[data-work-ref="thread:41"]').getAttribute('aria-pressed')).toBe('true'); // the rows are drawn again
     const detail = $('forge-detail');
     expect(detail.querySelector('ol[aria-label="Messages"]')).not.toBe(null);
-    expect(detail.textContent).toContain('Read-only here');
+    expect(detail.querySelector('[data-corn="actions"] a').textContent).toBe('Reply on GitHub ↗'); // read-only here: its one action is a link to reply on the forge (spec 0015 D4)
     expect(detail.querySelector('input, textarea')).toBe(null);
     expect([...detail.querySelectorAll('button')].every((b) => b.tabIndex >= 0 && (b.textContent.trim() !== '' || b.getAttribute('aria-label')))).toBe(true);
     await settle(40);
     expect($('map-announcer').textContent).toContain('Thread 41');
     expect($('idea-open').getAttribute('aria-controls')).toBe('idea-form');
+    click($('drawer-back')); // the thread is in the list's place (spec 0015 D3): back to the list, where New idea is
+    await settle();
     click($('idea-open'));
     for (const id of ['idea-title', 'idea-body']) {
       expect($(id).labels.length, id).toBe(1);

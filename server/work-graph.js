@@ -17,7 +17,7 @@
  * Every node: `{ id, kind, stage, title, state, open, waiting, url, updated, ...}` and its number (`number`), slug (`slug`), run id (`runId`) or
  * deploy id (`deployId`). `waiting` is spec 0010 D1's rule, worked out by the same functions the page's number uses (explorer/waiting-model.js
  * `specStateOf`, explorer/runs-model.js `canAnswer`): a spec to decide, a run waiting on an answer; nothing else asks the maintainer a question.
- * The code a proposal adds, and the map does not hold yet, comes as `{ id, kind: 'code', planned: true, label, type }`; the code that exists is
+ * The code a proposal adds, and the map does not hold yet, comes as `{ id, kind: 'code', planned: true, label, type, parent }`; the code that exists is
  * on the map the page already has, and is only named by edges.
  *
  *   Rel         From -> to                          Comes from
@@ -115,13 +115,13 @@ const list = (v) => (Array.isArray(v) ? v : []);
 const text = (v) => (typeof v === 'string' ? v : '');
 
 /**
- * What a proposal does to the map: the nodes it adds (`{ id, label, type }`), and the ids it changes or removes. Anything that is not a proposal does nothing.
+ * What a proposal does to the map: the nodes it adds (`{ id, label, type, parent }`: the page groups a planned node under the area its parent is in), and the ids it changes or removes. Anything that is not a proposal does nothing.
  * @param {any} proposal
- * @returns {{ adds: { id: string, label: string, type: string | null }[], changes: string[] }}
+ * @returns {{ adds: { id: string, label: string, type: string | null, parent: string | null }[], changes: string[] }}
  */
 export function touchesOf(proposal) {
   const nodes = proposal !== null && typeof proposal === 'object' ? proposal.nodes : null;
-  const adds = list(nodes && nodes.add).filter((n) => n && typeof n.id === 'string' && n.id !== '').map((n) => ({ id: n.id, label: text(n.label) || n.id, type: text(n.type) || null }));
+  const adds = list(nodes && nodes.add).filter((n) => n && typeof n.id === 'string' && n.id !== '').map((n) => ({ id: n.id, label: text(n.label) || n.id, type: text(n.type) || null, parent: text(n.parent) || null }));
   const changes = [...list(nodes && nodes.change), ...list(nodes && nodes.remove)].map((n) => (typeof n === 'string' ? n : n && n.id)).filter((id) => typeof id === 'string' && id !== '');
   return { adds, changes: [...new Set(changes)] };
 }
@@ -501,6 +501,6 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
     return true;
   }).sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
   const out = [...nodes.values()].sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || newest(a, b));
-  const plannedOut = [...planned.values()].filter((p) => kept.some((e) => e.to === p.id)).sort((a, b) => (a.id < b.id ? -1 : 1)).map((p) => ({ id: p.id, kind: 'code', planned: true, label: p.label, type: p.type }));
+  const plannedOut = [...planned.values()].filter((p) => kept.some((e) => e.to === p.id)).sort((a, b) => (a.id < b.id ? -1 : 1)).map((p) => ({ id: p.id, kind: 'code', planned: true, label: p.label, type: p.type, parent: p.parent ?? null }));
   return { nodes: [...out, ...plannedOut], edges: kept, problems };
 }

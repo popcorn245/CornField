@@ -18,13 +18,14 @@
  *   history:all      (none) (emit)              the section lists every commit, not only the newest
  *   history:changed  (none) (emitted)           the read ended, or a pick changed: the open panel draws its History section again
  *   history:legend   { active } (emitted)       the History layer is drawn: the Layers menu shows its legend
- *   history:replay   at? (emit)                 open Replay (history-replay.js) at a commit, or close it when it is open and no commit is named
+ *   history:replay   at? (emit)                 open Replay (history-replay.js) at a commit, or close it when it is open and no commit is named;
+ *                                               the Layers menu's Replay (on the History row, spec 0015 D6) asks it, with the History layer turned on first
  *   history:at       (none) (emitted)           the timeline's commit moved (`state.historyAt`): the halos follow it
  */
 
 import { credentialed } from './engine/connection.js';
 import { announce } from './engine/keyboard.js';
-import { onLayersChange, redrawLayers } from './engine/layers.js';
+import { onLayersChange, redrawLayers, setLayer } from './engine/layers.js';
 import { layerOn } from './layer-model.js';
 import { createReplay } from './history-replay.js';
 import { HISTORY_LAYER, MAX_HALOS, forgeLinks, haloWidth, heatOf, historyRowOf, historySectionHtml, specBarHtml, specFiles, specReach } from './history-model.js';
@@ -186,17 +187,25 @@ export function initHistory(inst, config) {
   });
 
   if (mem.status !== 'off') {
-    const btn = inst.el('replay-btn');
-    if (btn) btn.hidden = false;
     stops.push(inst.on('history:replay', (at) => {
       if (Number.isInteger(at)) { if (replay.open()) replay.stop(); replay.start(at); return; }
       if (replay.open()) replay.stop(); else replay.start(0);
     }));
     stops.push(inst.on('view', () => { if (state.view !== 'orbit' && replay.open()) replay.stop(); }));
     stops.push(inst.on('history:changed', () => { if (replay.open()) replay.repaint(); }));
-    stops.push(() => { replay.destroy(); if (btn) btn.hidden = true; });
-    // The Layers menu's row under Overlays (engine/layers.js `layerRows`), in the colour of this week's halo
-    state.historyRow = () => historyRowOf(mem.status, mem.status === 'ready' ? heatNow() : null, haloColor());
+    stops.push(() => replay.destroy());
+    // Replay on the Layers menu's History row (spec 0015 D6): pressed, it turns the History layer on and opens the timeline; pressed again, it closes it
+    // (page.js, which hears the click first, goes to the Map view from another)
+    if (inst.root && inst.root.addEventListener) {
+      stops.push(inst.listen(inst.root, 'click', (e) => {
+        const press = e.target && e.target.closest ? e.target.closest('.hx-row-action[data-action="history-replay"]') : null;
+        if (!press) return;
+        if (!replay.open()) setLayer(inst, HISTORY_LAYER, true, { viewer: true });
+        inst.emit('history:replay');
+      }));
+    }
+    // The Layers menu's row under Overlays (engine/layers.js `layerRows`), in the colour of this week's halo, with Replay on it (spec 0015 D6)
+    state.historyRow = () => historyRowOf(mem.status, mem.status === 'ready' ? heatNow() : null, haloColor(), { replaying: replay.open() });
     stops.push(onLayersChange(inst, layerChanged));
     if (inst.map) stops.push(inst.map.onPaint((scene, camera) => syncHalos(scene, camera)));
     stops.push(inst.on('history:at', () => { placed = ''; if (inst.map) inst.map.render(); redrawLayers(inst); }));

@@ -217,7 +217,7 @@ describe('the parts 0.35 added hooks to', () => {
   it('gives Send back and Edit a kind (secondary), and the run actions theirs', () => {
     expect(source).toMatch(/data-corn-kind="secondary"[^>]*data-review="notes"|data-review="notes"[^>]*data-corn-kind="secondary"/);
     expect(source).toMatch(/id="proposal-edit"[^>]*data-corn-kind="secondary"|data-corn-kind="secondary"[^>]*id="proposal-edit"/);
-    expect(fs.readFileSync(path.join(EXPLORER, 'runs-view.js'), 'utf8').match(/data-corn-kind="secondary"/g).length).toBeGreaterThanOrEqual(7);
+    expect(fs.readFileSync(path.join(EXPLORER, 'runs-view.js'), 'utf8').match(/data-corn-kind="secondary"|'secondary'/g).length).toBeGreaterThanOrEqual(7); // a run's Continue, Stop and Start again take their kind as an argument (spec 0015 D4: the node panel's bar makes one of them primary)
   });
 
   it('tells the four marks of a diff apart as states, and keeps a changed mockup waiting', () => {

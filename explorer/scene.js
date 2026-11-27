@@ -500,7 +500,11 @@ function buildEdges(state, subgraph, reduceMotion) {
     const target = byId.get(edge.to);
     if (!source || !target || !isNodeVisible(state, source) || !isNodeVisible(state, target)) return;
 
-    if (state.view === 'work') { out.push(state.workEdge(edge, source, target, subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true, !!subgraph, edgeKeyOf(edge), { PROPOSED_DASH, USAGE_DASH }, state.workEdgeColors)); return; } // the Work view's lines are work-model.js's (the page installs `workEdge`)
+    if (state.view === 'work') { // the Work view's lines are work-model.js's (the page installs `workEdge`): a line to code only for the selection and the node under the pointer (spec 0015 D1)
+      const line = state.workEdge(edge, source, target, subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true, !!subgraph, edgeKeyOf(edge), { PROPOSED_DASH, USAGE_DASH }, state.workEdgeColors, { selected: state.selectedNode ? state.selectedNode.id : null, hover: state.hoverNodeId || null });
+      if (line) out.push(line);
+      return;
+    }
     if (preset) return flow(edge, source, target);
     if (state.view === 'house') { const how = houseEdgeStyle(edge, source, target); if (how === 'flow') flow(edge, source, target); else if (how === 'link') out.push(linkEdge(edge, source, target, subgraph)); return; }
 

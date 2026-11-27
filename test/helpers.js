@@ -45,7 +45,7 @@ export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00
  * @param {{ pieces?: boolean | string[] }} [opts]
  */
 export function explorerPage({ pieces = false } = {}) {
-  // The Work list opens from any `data-action="toggle-forge"`: cornfield's page has it in the Work view's bar (explorer/work-view.js), which a test of the piece alone does not mount, so the page here has one of its own
+  // The Work list opens from any `data-action="toggle-forge"`: cornfield's page has it in the header's view controls, where explorer/work-view.js puts it (spec 0015 D5), which a test of the piece alone does not mount, so the page here has one of its own
   const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8').replace('<!--corn-piece:work/panel-->', '<button type="button" id="forge-btn" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" hidden>List</button>\n    <!--corn-piece:work/panel-->');
   if (!pieces) return page;
   const wanted = (name) => pieces === true || pieces.includes(name);

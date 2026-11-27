@@ -194,3 +194,50 @@ describe('the node panel follows the layer', () => {
     expect($('drawer-title').textContent).toBe(title);
   });
 });
+
+describe('the Work view\'s controls, in the header (spec 0015 D5)', () => {
+  const group = () => document.querySelector('[data-corn="header"] [data-corn="view-controls"]');
+  const waiting = () => group().querySelector('[data-work-toggle="waiting"]');
+  const list = () => group().querySelector('[data-action="toggle-forge"]');
+  const header = () => document.querySelector('[data-corn="header"]');
+  const press = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+  it('sit after the View switch and before the Layers chip, shown only in the Work view, with no row of toggles over the map', async () => {
+    fakeServer();
+    mount();
+    expect(group().hidden).toBe(true); // the Map has nothing of its own there: its Replay is on the Layers menu's History row (D6)
+    pageInstance().emit('work:open', { id: null });
+    await settle();
+    expect(state.view).toBe('work');
+    expect(group().hidden).toBe(false);
+    const all = [...header().querySelectorAll('*')];
+    expect(all.indexOf(header().querySelector('[data-corn="view-switch"]'))).toBeLessThan(all.indexOf(group()));
+    expect(all.indexOf(group())).toBeLessThan(all.indexOf(header().querySelector('[data-corn="layers-button"]')));
+    expect(document.querySelector('.hx-work-bar, [data-corn="work-bar"]')).toBe(null);
+    expect([...group().querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Waiting on you', 'List']); // "All work" is not a button
+    closeWork();
+    expect(group().hidden).toBe(true);
+  });
+
+  it('Waiting on you is a toggle with no count in its name, off for all the work; List keeps its wiring', async () => {
+    fakeServer();
+    mount();
+    pageInstance().emit('work:open', { id: null });
+    await settle();
+    expect(waiting().getAttribute('aria-pressed')).toBe('false');
+    expect(waiting().textContent).toBe('Waiting on you');
+    press(waiting());
+    expect(state.work.waiting).toBe(true);
+    expect(waiting().getAttribute('aria-pressed')).toBe('true');
+    expect(waiting().textContent).toBe('Waiting on you');
+    press(waiting());
+    expect(state.work.waiting).toBe(false);
+    expect(waiting().getAttribute('aria-pressed')).toBe('false');
+    expect(list().hidden).toBe(false); // a signed-in maintainer of a forge
+    expect(list().getAttribute('aria-controls')).toBe('forge-panel');
+    expect(list().getAttribute('aria-expanded')).toBe('false');
+    press(list());
+    await settle();
+    expect(list().getAttribute('aria-expanded')).toBe('true');
+  });
+});

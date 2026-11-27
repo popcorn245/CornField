@@ -10,6 +10,7 @@ import { nodesForRestarts, deployWords, deployMeta, listUrl } from '../forge-pan
 import { cornStateAttr, stateIconHtml } from '../corn-state.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { plural, safeUrl } from './work-common.js';
+import { sectionHtml } from '../panel-model.js';
 
 export function install(ctx) {
   const { ui, m, fn, state } = ctx;
@@ -71,24 +72,23 @@ export function install(ctx) {
   }
 
   /** The deploy in the node panel: what it was, its logs on the forge, and the nodes it restarted (each a button that selects it on the map) */
-  function deployDetailHtml() {
-    if (ui.detailError && !ui.deployItem) return `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>`;
+  function deployParts() {
+    if (ui.detailError && !ui.deployItem) return { notes: `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>` };
     const d = ui.deployItem;
-    if (!d) return '<p class="hx-faint">Loading what it restarted …</p>';
+    if (!d) return { notes: '<p class="hx-faint">Loading what it restarted …</p>' };
     const lit = ui.litDeploy;
     const url = safeUrl(d.url);
-    const head = `<p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, m.now()))}</p>
-      ${url ? `<div class="hx-forge-cta"><a data-corn="open-link" data-corn-kind="secondary" class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open the logs on ${escHtml(fn.forgeName())} ↗</a></div>` : ''}`;
+    // Its logs are its one action (spec 0015 D4); its state and when are the panel's head, its run's words a line under the bar
+    const logs = url ? `<a data-corn="open-link" data-corn-kind="primary" class="hx-btn hx-btn--primary hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open the logs on ${escHtml(fn.forgeName())} ↗</a>` : '';
+    const head = `<p class="hx-forge-meta">${escHtml(deployMeta(d, m.now()))}</p>`; // its state is the panel's one pill
     const stale = ui.lists.deploys && ui.lists.deploys.stale;
-    let body;
+    const notes = `${head}${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}`;
     if (!d.restarts.length) {
-      body = '<p class="hx-forge-notice" data-corn="notice">No node is mapped to this deploy. Say what it restarts under <code class="hx-code">deploys.restarts</code> in cornfield.config.js (docs/deploys.md).</p>';
-    } else {
-      const rows = lit.nodes.map((n) => `<li class="hx-forge-file" data-corn="file"><button data-corn="node-chip" type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button> <span class="hx-faint">${escHtml(n.type)}</span></li>`).join('');
-      const missing = lit.missing.length ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(lit.missing.join(', '))} ${lit.missing.length === 1 ? 'is' : 'are'} named in the config but not on the map.</p>` : '';
-      body = `<h3 class="hx-forge-sub">${escHtml(`Restarted: ${plural(lit.nodes.length, 'node')} on the map`)}</h3>${rows ? `<ul class="hx-forge-files">${rows}</ul>` : ''}${missing}`;
+      return { primary: logs, notes: `${notes}<p class="hx-forge-notice" data-corn="notice">No node is mapped to this deploy. Say what it restarts under <code class="hx-code">deploys.restarts</code> in cornfield.config.js (docs/deploys.md).</p>`, sections: [] };
     }
-    return `${head}${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}${body}`;
+    const rows = lit.nodes.map((n) => `<li class="hx-forge-file" data-corn="file"><button data-corn="node-chip" type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button> <span class="hx-faint">${escHtml(n.type)}</span></li>`).join('');
+    const missing = lit.missing.length ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(lit.missing.join(', '))} ${lit.missing.length === 1 ? 'is' : 'are'} named in the config but not on the map.</p>` : '';
+    return { primary: logs, notes, sections: [sectionHtml({ key: 'restarted', title: 'Restarted', count: lit.nodes.length, body: `${rows ? `<ul class="hx-forge-files">${rows}</ul>` : `<p class="hx-faint">${escHtml(plural(0, 'node'))} on the map.</p>`}${missing}` })] };
   }
 
   /** What a screen reader hears when a deploy is selected */
@@ -101,5 +101,5 @@ export function install(ctx) {
   }
 
   // what other parts put in the panel gets its parts (a hook is a part of the same name)
-  Object.assign(fn, { selectDeploy, showDeploy, clearDeploy, restartWords, deployHtml: (...a) => withParts(deployHtml(...a)), deployDetailHtml: (...a) => withParts(deployDetailHtml(...a)), deploySelectionWords });
+  Object.assign(fn, { selectDeploy, showDeploy, clearDeploy, restartWords, deployHtml: (...a) => withParts(deployHtml(...a)), deployParts, deploySelectionWords });
 }

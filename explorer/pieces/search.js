@@ -8,6 +8,8 @@
  *     what a layer that is off hides last, under "In layers that are off", and choosing one turns its layer on;
  *   - stepping: Enter and Shift+Enter in the field, the arrow keys in the list, N and P on the map (engine/keyboard.js asks `search:active` and
  *     `search:step`) and the field's ^ and v buttons. Each step selects the match and flies the camera to it, at zoom 1 or closer;
+ *     a choice made in the field (Enter) or the list (a click, Enter on a row) closes the list, so it does not lie over the node panel (spec 0015 D7):
+ *     typing again, the down arrow or the field taking the focus again opens it;
  *   - on the map the matches keep their halo and win a label (scene.js, labels.js), the rest dims.
  *
  * The desktop field and the phone's bar are two inputs on one search: the query, the matches and the current match are shared, each
@@ -183,7 +185,7 @@ export function mount(root, inst, options = {}) {
       if (!list) continue;
       const input = own(field.input);
       const focused = inst.active();
-      const open = !!result.query && keepOpen && (focused === input || list.contains(focused) || list.dataset.open === 'true');
+      const open = !!result.query && keepOpen && list.dataset.shut !== 'true' && (focused === input || list.contains(focused) || list.dataset.open === 'true');
       // A row that has the focus is repainted: the focus goes to the same row again, so a keyboard user keeps their place
       const held = list.contains(focused) ? focused : null;
       const heldId = held ? held.dataset.searchId || (held.hasAttribute('data-search-frame') ? '' : null) : null;
@@ -203,6 +205,14 @@ export function mount(root, inst, options = {}) {
       }
     }
   }
+
+  /** The list of a field, closed until it is asked for again (a match was chosen: Enter, or a row): typing, the down arrow or the field's focus opens it */
+  function shutList(field) {
+    const list = listOf(field);
+    if (list) list.dataset.shut = 'true';
+    closeList(field);
+  }
+  const unshut = (field) => { const list = listOf(field); if (list) delete list.dataset.shut; };
 
   /** The list of a field, closed (Escape, or the focus left it) */
   function closeList(field) {
@@ -308,10 +318,11 @@ export function mount(root, inst, options = {}) {
       if (!typed) return;
       const result = currentResult();
       if (!result.total) { announce(inst, `No node matches ${typed}`); return; }
+      shutList(field); // the choice is made: the list would lie over the node's panel
       stepMatch(e.shiftKey ? -1 : 1);
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       const list = listOf(field);
-      if (!list || list.hidden) { if (e.key === 'ArrowDown' && state.searchQuery) { e.preventDefault(); list.dataset.open = 'true'; paintSearch(); } return; }
+      if (!list || list.hidden) { if (e.key === 'ArrowDown' && state.searchQuery) { e.preventDefault(); unshut(field); list.dataset.open = 'true'; paintSearch(); } return; }
       const rows = rowsOf(list);
       if (!rows.length) return;
       e.preventDefault();
@@ -347,14 +358,15 @@ export function mount(root, inst, options = {}) {
     const result = currentResult();
     const match = result.matches.find((m) => m.node.id === row.dataset.searchId);
     if (!match) return;
-    chooseMatch(match);
-    // On a phone the list would cover the match: it shuts, and the focus goes to the next-match button, which stays
+    // The list shuts (it would lie over the node's panel) and the focus goes back to the field; on a phone, to the next-match button, which stays
     const field = fields.find((f) => listOf(f) === e.currentTarget);
-    if (field && field.input === 'mobile-node-search' && isPhone(inst)) {
-      closeList(field);
+    if (field) {
+      shutList(field);
       const next = own(field.steps) && own(field.steps).querySelector('[data-action="search-next"]');
-      if (next) next.focus();
+      const to = field.input === 'mobile-node-search' && isPhone(inst) ? next : own(field.input);
+      if (to) to.focus();
     }
+    chooseMatch(match);
   }
 
   /** The list closes when the focus leaves the field and its list (a click on the map, Tab away) */
@@ -364,6 +376,7 @@ export function mount(root, inst, options = {}) {
     if (next && box && box.contains(next)) return;
     if (!next && e.target && e.target.matches && e.target.matches('[data-corn="search-result"]')) return; // a row that left the DOM (the list repainted)
     closeList(field);
+    unshut(field); // coming back to the field opens the list again
   }
 
   /** Opens or shuts the phone's search bar (its icon in the header, Cancel); opened, it takes the query and the focus */
@@ -388,9 +401,9 @@ export function mount(root, inst, options = {}) {
     input.setAttribute('aria-autocomplete', 'none');
     input.setAttribute('aria-expanded', 'false');
     input.setAttribute('aria-controls', field.results);
-    scope.listen(input, 'input', (e) => setQuery(e.target.value));
+    scope.listen(input, 'input', (e) => { unshut(field); setQuery(e.target.value); });
     scope.listen(input, 'keydown', (e) => onFieldKey(e, field));
-    scope.listen(input, 'focus', () => { const list = listOf(field); if (list && state.searchQuery) { list.dataset.open = 'true'; paintSearch(); } });
+    scope.listen(input, 'focus', () => { const list = listOf(field); if (list && state.searchQuery && list.dataset.shut !== 'true') { list.dataset.open = 'true'; paintSearch(); } });
     const box = input.closest('[data-corn="search"], [data-corn="mobile-search"]');
     if (box) scope.listen(box, 'focusout', (e) => onFocusOut(e, field));
     const list = listOf(field);
