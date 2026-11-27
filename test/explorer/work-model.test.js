@@ -1,6 +1,6 @@
 // The Work view's pure half (spec 0012 D2 to D5, D8): the scene of an answer, the layout, the filters, the layers' rows, the panel's words, the addresses.
 import { describe, it, expect } from 'vitest';
-import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, TITLE_CHARS, workPanelHtml, drawnEdges, setOpenArea, workEdge, codePanelHtml, arrowTarget, landingWords, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
+import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, TITLE_CHARS, workPanelHtml, connectedHtml, drawnEdges, setOpenArea, workEdge, codePanelHtml, arrowTarget, landingWords, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
 import { buildScene, isNodeVisible } from '../../explorer/scene.js';
 import { WORK_KINDS, WORK_THEMES } from '../../core/schema.js';
 import { createState } from '../../explorer/instance-state.js';
@@ -333,13 +333,44 @@ describe('the node panel (D5)', () => {
     expect(p.links[0].work).toBeTruthy(); // work before code
     expect(p.says).toMatch(/Land it/);
   });
-  it('a proposal waiting on you says so; a node of code lists the work touching it', () => {
-    const p = panelOf(nodes.find((n) => n.id === 'proposal:0100-flow'), nodes, edges);
-    expect(p.pills.map((x) => x.text)).toEqual(['To decide', 'Waiting on you', 'PR #21']);
+  it('a proposal has one state pill, and its pull request and age on the one line of facts (spec 0015 D4); a node of code lists the work touching it', () => {
+    const p = panelOf(nodes.find((n) => n.id === 'proposal:0100-flow'), nodes, edges, { now: Date.parse('2026-11-13T00:00:00Z') });
+    expect(p.pills.map((x) => x.text)).toEqual(['To decide']); // "Waiting on you" is gone: who must act is the action bar's
+    expect(p.meta).toMatch(/^Spec 0100 · .*PR #21$/);
     expect(p.links.find((l) => l.id === '/flow/start').planned).toBe(true);
     const t = touchedBy(nodes.find((n) => n.id === 'api-billing'), nodes, edges);
     expect(t.map((x) => x.id).sort()).toEqual(['deploy:9', 'proposal:0100-flow', 'pull:27']);
     expect(t[0].waiting).toBe(true);
+  });
+  it('draws the head, then the action place, with Connected grouped by relation (spec 0015 D4)', () => {
+    const node = nodes.find((n) => n.id === 'pull:27');
+    const out = workPanelHtml(panelOf(node, nodes, edges), node);
+    expect(out).not.toContain('data-corn="work-actions"');
+    expect(out.indexOf('data-corn="work-pills"')).toBeLessThan(out.indexOf('data-work-place="bar"'));
+    expect(out.indexOf('data-work-place="bar"')).toBeLessThan(out.indexOf('data-sec="connected"'));
+    expect(out.indexOf('data-sec="connected"')).toBeLessThan(out.indexOf('data-work-place="sections"'));
+    const links = [
+      { rel: 'adds', id: 'a', label: 'A', work: '', code: true, planned: true, state: '', folded: false },
+      { rel: 'adds', id: 'b', label: 'B', work: '', code: true, planned: true, state: '', folded: false },
+      { rel: 'opened by', id: 'run:1', label: 'Run 000001', work: 'run', code: false, planned: false, state: 'Working', folded: false },
+    ];
+    const html = connectedHtml(links);
+    expect(html).toMatch(/data-sub-toggle aria-expanded="false"[^>]*>Adds 2 planned nodes</);
+    expect(html).toContain('data-id="run:1"'); // a group of one is its row
+    expect(html).toContain('· working');
+  });
+  it('lists a thread folded into a proposal under its Connected, with its comments (spec 0015 D4)', () => {
+    const { nodes: ns, edges: es } = workScene(graph, map);
+    const thread = ns.find((n) => n.id === 'thread:31');
+    thread.foldedInto = 'proposal:0100-flow';
+    thread.item = { ...thread.item, comments: 4 };
+    const p = panelOf(ns.find((n) => n.id === 'proposal:0100-flow'), ns, es);
+    const link = p.links.find((l) => l.id === 'thread:31');
+    expect(link).toMatchObject({ rel: 'discussed in', folded: true, number: 31, comments: 4 });
+    const html = connectedHtml([link]);
+    expect(html).toContain('data-work-folded="31"');
+    expect(html).toContain('Discussed in');
+    expect(html).toContain('4 comments');
   });
 });
 

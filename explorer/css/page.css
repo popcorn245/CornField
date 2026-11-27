@@ -44,21 +44,16 @@ body {
 /* The stage: the map and what lies over it. Not a container (above): the pieces in it ask the body, which is as wide */
 .hx-stage { position: relative; flex: 1; width: 100%; min-height: 0; overflow: hidden; }
 @media (min-width: 768px) {
-  /* The panel's width is the stage's `--hx-forge-w`, so what makes room for it reads the same number (the Runs view's compare widens it, below) */
-  .hx-stage { --hx-forge-w: min(400px, calc(100% - 24px)); }
+  /* The Work list's width is the stage's `--hx-forge-w`, so what makes room for it reads the same number: the node panel's, whose place it takes (spec 0015 D3) */
+  .hx-stage { --hx-forge-w: min(480px, calc(100% - 24px)); }
 }
 /* The scenario player is one bar under the map (spec 0006 D6). From 768px it sits at the foot of the map area, to the right of the review column;
    the stage tells it how wide the column is */
 @media (min-width: 768px) {
   .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 400px; }
-  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(400px, var(--hx-forge-w)); }
-}
-@media (min-width: 1280px) {
-  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(400px + var(--hx-forge-w)); }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
-  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(320px, var(--hx-forge-w)); }
 }
 
 /* /?bench=1: the run's numbers, bottom left (bench.js) */

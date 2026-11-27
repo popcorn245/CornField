@@ -201,3 +201,48 @@
 .hx-trail-chip { display: inline-flex; align-items: center; padding: 0 var(--corn-space-2); min-height: 22px; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); color: var(--corn-text-2); font-size: var(--corn-text-xs); text-decoration: none; white-space: nowrap; }
 a.hx-trail-chip:hover { border-color: var(--corn-accent-hover); color: var(--corn-text); }
 .hx-trail-chip[data-trail="gap"] { border-style: dashed; color: var(--corn-text-3); }
+.hx-history-counts { display: flex; flex-direction: column; align-items: flex-start; gap: var(--corn-space-1); }
+.hx-history-counts [hidden] { display: none; }
+.hx-history-count { font-size: var(--corn-text-xs); }
+.hx-history-count::before, .hx-work-gtoggle::before { content: "▸ "; }
+.hx-history-count[aria-expanded="true"]::before, .hx-work-gtoggle[aria-expanded="true"]::before { content: "▾ "; }
+
+/* ---- The panel leads with its action (spec 0015 D4) ----------------------------------------------------------------------------------------------
+   The action bar (`actions`): the node's next action as the primary button, one or two beside it, the rest under ⋯; kept in view while the panel scrolls
+   (sticky in the place of a piece of work's actions, which runs to the panel's end). Under it, one "Next" line when an action cannot be taken yet. */
+.hx-actions { position: sticky; top: calc(var(--corn-panel-pad) * -1); z-index: 2; display: flex; flex-direction: column; gap: var(--corn-space-2); margin: 0 calc(var(--corn-panel-pad) * -1); padding: var(--corn-space-3) var(--corn-panel-pad); border-bottom: var(--corn-border) solid var(--corn-line-soft); background: color-mix(in srgb, var(--corn-ground) 92%, transparent); backdrop-filter: blur(var(--corn-blur)); -webkit-backdrop-filter: blur(var(--corn-blur)); }
+.hx-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); }
+.hx-actions-row > .hx-btn, .hx-actions-row > a.hx-btn { flex: none; min-height: var(--hx-control-h); }
+.hx-actions-row > .hx-btn--approve, .hx-actions-row > .hx-btn--primary { flex: 1 1 auto; justify-content: center; }
+.hx-actions-row .hx-foot-btn { align-self: auto; }
+.hx-actions-more { position: relative; flex: none; margin-left: auto; }
+.hx-actions-more-btn { min-width: var(--hx-control-h); font-size: var(--corn-text-md); line-height: 1; }
+.hx-actions-menu { position: absolute; top: calc(100% + var(--corn-space-1)); right: 0; z-index: 3; display: flex; flex-direction: column; align-items: stretch; gap: var(--corn-space-1); min-width: 220px; padding: var(--corn-space-2); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); box-shadow: var(--corn-shadow-lg); }
+.hx-actions-menu[hidden] { display: none; }
+.hx-actions-menu .hx-btn { justify-content: flex-start; text-align: left; }
+.hx-next { margin: 0; color: var(--corn-text-2); font-size: var(--corn-text-sm); line-height: 1.45; }
+.hx-work-bar:empty, .hx-work-notes:empty, .hx-work-sections:empty { display: none; }
+.hx-work-facts { margin: 0; }
+.hx-work-sum { margin: 0; color: var(--corn-text-2); line-height: 1.5; }
+.hx-work-changes { margin: var(--corn-space-1) 0 0; font-variant-numeric: tabular-nums; }
+.hx-work-sections { display: flex; flex-direction: column; gap: var(--corn-space-3); }
+.hx-work-sub { padding-left: var(--corn-space-4); }
+.hx-work-sub[hidden] { display: none; }
+/* A section: its title and count open and close it; closed unless it holds the action, as it was left for this kind of node */
+.hx-psec { gap: var(--corn-space-2); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line-soft); }
+.hx-sec-toggle { display: flex; align-items: baseline; gap: var(--corn-space-2); width: 100%; min-height: 32px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hx-sec-toggle::before { content: "▸"; flex: none; width: 1ch; color: var(--corn-text-3); }
+.hx-sec-toggle[aria-expanded="true"]::before { content: "▾"; }
+.hx-sec-toggle:hover .hx-sec-name { color: var(--corn-text); }
+.hx-sec-toggle:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-sec-count { color: var(--corn-text-2); font-variant-numeric: tabular-nums; }
+.hx-sec-note { color: var(--corn-text-3); font-weight: 400; }
+.hx-sec-body { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-sec-body[hidden] { display: none; }
+.hx-panel-back[hidden], .hx-drawer-foot[hidden] { display: none; }
+@container corn-box (max-width: 767px) {
+  .hx-actions-row > .hx-btn, .hx-actions-more-btn, .hx-sec-toggle { min-height: 44px; }
+}
+@media (pointer: coarse) {
+  .hx-actions-row > .hx-btn, .hx-actions-more-btn, .hx-sec-toggle { min-height: 44px; }
+}

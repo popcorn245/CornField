@@ -8,20 +8,25 @@
 
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { issueUrl, listUrl, listKeyOf, specBlock } from '../forge-panel-model.js';
+import { safeUrl } from './work-common.js';
+import { withParts } from '../engine/piece.js';
 
 export function install(ctx) {
   const { ui, fn } = ctx;
   const { t } = ctx.h;
 
   /** An issue's actions in the node panel: Start a spec (step 1 of the pipeline) and Start an agent, each opening its confirm step; a closed issue has none */
-  function issueActionsHtml(item) {
+  // (spec 0015 D4: Start an agent is the primary action of an open issue, Start a spec and Open on the forge beside it; a closed one has only its link, and the Next line says why)
+  function issueParts(item) {
     const n = item.number;
-    if (!item.open) return `<p class="hx-faint">${escHtml(specBlock({ state: 'closed' }))}</p>`;
+    const url = safeUrl(item.url);
+    const out = url ? withParts(`<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>`) : '';
+    if (!item.open) return { primary: '', others: [out], next: specBlock({ state: 'closed' }) };
     const spec = specBlock({ state: 'open' }) === null
       ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${n}" aria-label="Start a spec for issue ${n}"${ui.busy ? ' aria-disabled="true"' : ''}>Start a spec …</button>`
       : '';
-    const agent = `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${n}" aria-label="${escHtml(t('startAgent'))} on issue ${n}">${escHtml(t('startAgent'))} …</button>`;
-    return `<div class="hx-forge-cta">${agent}${spec}</div>`;
+    const agent = `<button data-corn-kind="approve" type="button" class="hx-btn hx-btn--approve hx-forge-act hx-forge-startspec" data-forge-agent="issue:${n}" aria-label="${escHtml(t('startAgent'))} on issue ${n}">${escHtml(t('startAgent'))} …</button>`;
+    return { primary: agent, others: [spec, out] };
   }
 
   /**
@@ -42,5 +47,5 @@ export function install(ctx) {
     return null;
   }
 
-  Object.assign(fn, { issueActionsHtml, oldIssue });
+  Object.assign(fn, { issueParts, oldIssue });
 }

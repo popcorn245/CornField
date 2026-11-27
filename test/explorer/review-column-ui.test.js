@@ -413,9 +413,9 @@ describe('the column beside the other panels', () => {
     expect(css).toContain('#rc-changes { flex: 0 1 auto; max-height: var(--hx-changes-max, 40%); }');
     // on a phone the sheet scrolls, not a section: the rows never run under the decision
     expect(css).toMatch(/@container corn-box \(max-width: 767px\) \{[^}]*\}[\s\S]*#rc-changes, #rc-scenarios \{ flex: none; max-height: none; min-height: 0; \}/);
-    // the Work panel moves the column only where both leave a map; the node panel takes the column's width under 1024px
-    expect(explorerCss(['explorer.css'], { stripComments: true })).toMatch(/@container corn-box \(min-width: 1280px\) \{\s*\.hx-stage:has\(\.forge-open\) \.hx-review-column \{ left: calc\(var\(--hx-forge-w\) \+ 12px\); \}/);
-    expect(css).toContain('.hx-stage:has(.drawer-open) .hx-review-column { width: min(320px, calc(100% - 504px)); }');
+    // the Work list is in the node panel's place on the right (spec 0015 D3): it never moves the column, and either takes the column's width under 1024px
+    expect(explorerCss(['explorer.css'], { stripComments: true })).not.toMatch(/\.hx-stage:has\(\.forge-open\) \.hx-review-column \{ left:/);
+    expect(css).toContain('.hx-stage:has(.drawer-open) .hx-review-column, .hx-stage:has(.forge-open) .hx-review-column { width: min(320px, calc(100% - 504px)); }');
   });
 });
 

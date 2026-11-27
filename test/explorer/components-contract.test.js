@@ -136,7 +136,7 @@ describe('the documented components', () => {
     // The review's sections: the bar has no Proposals menu (the account menu's), and the card of a refused read is only the sign-in's (the map's card says the load's other states);
     // the list has no dialog (the player's `dialog-scrim` is a test of whether one is open); the hooks a piece makes with `dataset.corn` (the player's bar) are named in `extra`
     const PIECES = {
-      'corn-node-panel': { files: ['pieces/node-panel.js', 'engine/flow-ui.js', 'proposal-model.js', 'mockups-model.js', 'cloud-panel.js', 'capped.js', 'selection-words.js', 'selection-view.js', 'pieces/around.js'], not: ['backdrop', 'menu-section', 'menu-title'] },
+      'corn-node-panel': { files: ['pieces/node-panel.js', 'engine/flow-ui.js', 'proposal-model.js', 'mockups-model.js', 'cloud-panel.js', 'capped.js', 'selection-words.js', 'selection-view.js', 'pieces/around.js', 'panel-model.js'], not: ['backdrop', 'menu-section', 'menu-title'] },
       'corn-layers': { files: ['pieces/layers.js', 'engine/flow-legend.js', 'edge-key.js', 'pieces/around.js'], not: [] },
       'corn-search': { files: ['pieces/search.js', 'pieces/around.js'], not: ['dialog-scrim', 'mobile-search', 'mobile-search-button'] },
       'corn-proposal': { files: ['pieces/proposal.js', 'pieces/status.js', 'pieces/around.js'], not: ['proposals-button', 'proposals-menu', 'menu-title', 'row', 'source-origin', 'source-retry'] },

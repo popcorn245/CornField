@@ -106,7 +106,8 @@ describe('a node\'s History', () => {
     expect(q('#drawer-history').textContent).toContain('Reading the history');
     await settle();
     const box = q('#drawer-history');
-    expect(box.querySelector('h3').textContent).toBe('History');
+    expect(box.querySelector('h3 .hx-sec-name').textContent).toBe('History'); // its count on its toggle (spec 0015 D4)
+    expect(box.querySelector('h3 [data-corn="count"]').textContent).toBe('3');
     expect(q(".hx-history-stats").textContent).toBe('3 commits · 2 pull requests · 67% traced to a spec or issue');
     const commits = qa('.hx-history-commit');
     expect(commits.map((c) => c.querySelector('.hx-history-subject').textContent)).toEqual(['fix(auth): a typo', 'feat(auth): sign-in <b>now</b>', 'start']);

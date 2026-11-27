@@ -17,6 +17,7 @@
  */
 
 import { NODE_THEMES } from '../core/schema.js';
+import { groupLinks, relTitle, sectionHtml } from './panel-model.js';
 import { WORK_KINDS, WORK_THEMES, WORK_EDGE_THEMES, workType } from '../core/schema.js';
 import { relativeTime } from './review-model.js';
 import { SPEC_STATE_WORDS, specStateOf } from './waiting-model.js';
@@ -655,7 +656,8 @@ export function saysOf(item) {
 }
 
 /**
- * What the node panel says of a piece of work (the page draws it: work-view.js).
+ * What the node panel says of a piece of work (the page draws it: work-view.js). Spec 0015 D4: one state pill (the state and the action say what waits on you) and one line of facts:
+ * its tag, who, when, its spec PR or its kind of run. A thread folded into a proposal (`foldedInto`, kept out of the drawing: spec 0015 D2) is a row of the proposal's Connected.
  * @param {object} node a node of the Work view (a piece of work)
  * @param {object[]} nodes every node of the view
  * @param {object[]} edges every edge of the view
@@ -665,19 +667,25 @@ export function panelOf(node, nodes, edges, { now = Date.now() } = {}) {
   const item = node.item;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const pills = [{ text: stateWordsOf(item), state: pillStateOf(item) }];
-  if (item.waiting) pills.push({ text: 'Waiting on you', state: 'waiting' });
-  if (item.kind === 'proposal' && Number.isInteger(item.number)) pills.push({ text: `PR #${item.number}`, state: '' });
-  if (item.kind === 'run' && item.runKind) pills.push({ text: text(item.runKind), state: '' });
-  const meta = [item.author ? text(item.author) : '', relativeTime(item.updated, now)].filter(Boolean).join(' · ');
+  const facts = [tagOf(item), item.author ? text(item.author) : '', relativeTime(item.updated, now)];
+  if (item.kind === 'proposal' && Number.isInteger(item.number)) facts.push(`PR #${item.number}`);
+  if (item.kind === 'run' && item.runKind) facts.push(text(item.runKind));
+  const meta = facts.filter(Boolean).join(' · ');
   const links = [];
+  const seen = new Set();
+  const foldedLink = (rel, other) => ({ rel, id: other.id, label: tagOf(other.item), work: 'thread', code: false, planned: false, state: '', folded: true, number: other.item.number, comments: Number.isInteger(other.item.comments) ? other.item.comments : null });
   for (const e of edges) {
     const out = e.from === node.id;
     const other = byId.get(out ? e.to : e.from);
     if (!other || (!out && e.to !== node.id)) continue;
-    links.push({ rel: REL_WORDS[e.kind][out ? 0 : 1], id: other.id, label: other.label, work: other.work || '', code: !other.work, planned: other.planned === true });
+    const rel = REL_WORDS[e.kind][out ? 0 : 1];
+    if (other.item && other.foldedInto === node.id) { if (!seen.has(other.id)) links.push(foldedLink(rel, other)); seen.add(other.id); continue; }
+    links.push({ rel, id: other.id, label: other.label, work: other.work || '', code: !other.work, planned: other.planned === true, state: other.item ? stateWordsOf(other.item) : '', folded: false });
   }
+  // A folded thread no edge names here (the canvas may keep only its mark): it is discussed in this proposal all the same
+  for (const other of nodes) if (other.item && other.foldedInto === node.id && !seen.has(other.id)) links.push(foldedLink(REL_WORDS.discusses[1], other));
   // Work first (in the order of the lanes), then code; the same words together
-  const rank = (l) => (l.work ? LANES.findIndex((x) => x.key === (byId.get(l.id).stage || '')) : 9);
+  const rank = (l) => (l.work ? LANES.findIndex((x) => x.key === ((byId.get(l.id) || {}).stage || '')) : 9);
   links.sort((a, b) => rank(a) - rank(b) || a.rel.localeCompare(b.rel) || a.label.localeCompare(b.label));
   return { kind: KIND_WORDS[item.kind], tag: tagOf(item), title: node.title, color: WORK_THEMES[item.kind].color, pills, meta, links, says: saysOf(item), url: text(item.url) };
 }
@@ -688,11 +696,38 @@ export function panelOf(node, nodes, edges, { now = Date.now() } = {}) {
 const pill = (p) => `<span class="hx-forge-state${p.state ? ` hx-forge-state--${esc(p.state)}` : ''}" data-corn="state-pill"${cornState(p.state) ? ` data-corn-state="${esc(cornState(p.state))}"` : ''}>${esc(p.text)}</span>`;
 const dotOf = (kind, color) => { const c = typeof color === 'function' ? color(kind) : ''; return `<span class="hx-work-dot" data-corn="swatch" data-work-kind="${esc(kind || 'code')}" aria-hidden="true"${c ? ` data-style="background-color: ${esc(c)}"` : ''}></span>`; };
 const linkButton = (l) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-action="select-node" data-id="${esc(l.id)}">${esc(l.label)}</button>`;
+/** A folded thread's row: it shows the thread in the panel, and the proposal stays selected on the map (pieces/work-threads.js `showFolded`) */
+const commentWords = (n) => (Number.isInteger(n) ? `${n} ${n === 1 ? 'comment' : 'comments'}` : '');
+const foldedButton = (l) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-work-folded="${esc(l.number)}" data-id="${esc(l.id)}">${esc(l.label)}</button><span class="hx-faint" data-folded-count="${esc(l.number)}">${l.comments !== null ? ` · ${esc(commentWords(l.comments))}` : ''}</span>`;
+const linkRow = (l, color, rel = true) => `<li data-corn="work-link">${rel ? `<span class="hx-work-rel">${esc(relTitle(l.rel))}</span>` : ''}${dotOf(l.work, color)}${l.folded ? foldedButton(l) : linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}${l.state && !l.folded ? ` <span class="hx-faint">· ${esc(l.state.toLowerCase())}</span>` : ''}</li>`;
+
+/** "pull requests", "planned nodes": what a group of connections is, counted */
+function groupNoun(rows) {
+  const n = rows.length;
+  const kinds = new Set(rows.map((l) => l.work || (l.planned ? 'planned' : 'code')));
+  const [k] = kinds;
+  if (kinds.size !== 1 || k === 'code') return n === 1 ? 'node' : 'nodes';
+  if (k === 'planned') return n === 1 ? 'planned node' : 'planned nodes';
+  const word = (KIND_WORDS[k] || 'node').toLowerCase();
+  return n === 1 ? word : `${word}s`;
+}
 
 /**
- * The node panel's markup for a piece of work (`panelOf`'s answer): its state, what it is connected to (each a button that selects that node), the words saying what the
- * actions will do, the place the actions go (`forge-detail`: the Work piece fills it, pieces/work-paint.js `paintDetail`: Land it, the checks, a run's answer field, Start an agent ...),
- * and a link to the forge when the address is a web one and the actions do not carry it.
+ * Connected, grouped by relation (spec 0015 D4): a group of one is its row ("Agent on it Run 000003 · working"); a bigger one is its count, which opens it ("Adds 5 planned nodes").
+ * @param {ReturnType<typeof panelOf>['links']} links
+ * @param {{ color?: (kind: string) => string }} [opts]
+ */
+export function connectedHtml(links, { color = () => '' } = {}) {
+  const rows = groupLinks(links).map((g) => (g.rows.length === 1
+    ? linkRow(g.rows[0], color)
+    : `<li class="hx-work-group" data-corn="work-link"><button type="button" class="hx-textbtn hx-work-gtoggle" data-sub-toggle aria-expanded="false" data-corn-kind="quiet">${esc(`${relTitle(g.rel)} ${g.rows.length} ${groupNoun(g.rows)}`)}</button><ul class="hx-work-links hx-work-sub" hidden>${g.rows.map((l) => linkRow(l, color, false)).join('')}</ul></li>`));
+  return `<ul class="hx-work-links" data-corn="work-links">${rows.join('')}</ul>`;
+}
+
+/**
+ * The node panel's markup for a piece of work (`panelOf`'s answer), in spec 0015 D4's order: its one state pill and one line of facts, then the place of its actions (`forge-detail`:
+ * the Work piece draws the action bar and the Next line into its `bar` place, notices into `notes` and its other sections into `sections`: pieces/work-paint.js `paintDetail`),
+ * with Connected, the first section, between them. Until the actions are drawn the bar holds the link to the forge, when the kind's own actions do not carry it.
  * @param {ReturnType<typeof panelOf>} p
  * @param {object} node
  * @param {{ color?: (kind: string) => string }} [opts] `color`: a kind's colour as the map draws it
@@ -701,15 +736,15 @@ export function workPanelHtml(p, node, { color = () => '' } = {}) {
   const url = safeUrl(p.url);
   const kind = node.item.kind;
   const links = node.old
-    ? '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Its links are not drawn here: it is older than the 14 days the map of work covers, or past its limits.</div></div>'
-    : p.links.length
-      ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v"><ul class="hx-work-links" data-corn="work-links">${p.links.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dotOf(l.work, color)}${linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}</li>`).join('')}</ul></div></div>`
-      : '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Nothing it is linked to is drawn.</div></div>';
-  // A pull request's (a spec's too) and a deploy's own actions carry their link to the forge; the others get it here
+    ? sectionHtml({ key: 'connected', title: 'Connected', body: '<p class="hx-faint">Its links are not drawn here: it is older than the 14 days the map of work covers, or past its limits.</p>' })
+    : sectionHtml({ key: 'connected', title: 'Connected', count: p.links.length, body: p.links.length ? connectedHtml(p.links, { color }) : '<p class="hx-faint">Nothing it is linked to is drawn.</p>' });
+  // A pull request's (a spec's too) and a deploy's own actions carry their link to the forge; the others' bar has it (the Work piece draws it again with their actions)
   const specPull = kind === 'proposal' && Number.isInteger(node.item.number); // its pull request's actions carry the link
   const out = url && kind !== 'pull' && kind !== 'deploy' && !specPull ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : '';
-  const actions = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><section id="forge-detail" class="hx-forge-detail" data-corn="work-detail" aria-label="Actions" data-work-kind="${esc(kind)}" data-work-ref="${esc(node.id)}"></section>${out}</div>`;
-  return `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p><p class="hx-faint">${esc(p.tag)}${p.meta ? ` · ${esc(p.meta)}` : ''}</p></div>${links}${actions}`;
+  const bar = out ? `<div class="hx-actions" data-corn="actions" role="group" aria-label="Actions"><div class="hx-actions-row">${out}</div></div>` : '';
+  const actions = `<div id="forge-detail" class="hx-forge-detail hx-work-actions" data-corn="work-detail" data-work-kind="${esc(kind)}" data-work-ref="${esc(node.id)}">`
+    + `<div class="hx-work-bar" data-work-place="bar">${bar}</div><div class="hx-work-notes" data-work-place="notes"></div>${links}<div class="hx-work-sections" data-work-place="sections"></div></div>`;
+  return `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p><p class="hx-faint hx-work-facts">${esc(p.meta)}</p></div>${actions}`;
 }
 
 /** The node panel's section for a node of code in the Work view: the work that touches it, and "Show on the map" (a planned node is not on the map yet) */

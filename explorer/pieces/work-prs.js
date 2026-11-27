@@ -8,9 +8,9 @@
 import { withParts } from '../engine/piece.js';
 import { runOnPull, pullRunWords, statusWords } from '../runs-model.js';
 import { loadingRowsHtml, runPillHtml } from '../runs-view.js';
-import { pullUrl, stateWords, metaWords, checkWords, checksWords, landingUrl, cancelLandingUrl, landingWords, mergeBlock, rerunWhy, actionUrl, actionWords, buildOffers, approvalWarning } from '../forge-panel-model.js';
+import { pullUrl, stateWords, metaWords, checkWords, checksWords, landingUrl, cancelLandingUrl, landingWords, mergeBlock, rerunWhy, actionUrl, actionWords, buildOffers, approvalWarning, nextWords } from '../forge-panel-model.js';
+import { sectionHtml } from '../panel-model.js';
 import { cornStateAttr, stateIconHtml } from '../corn-state.js';
-import { waiting } from '../waiting-model.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { plural, safeUrl } from './work-common.js';
 
@@ -104,10 +104,17 @@ export function install(ctx) {
     return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-work-ref="${ref}" aria-pressed="${fn.isShown(ref)}" data-corn="row">${inner}</button>${out}</li>`;
   }
 
-  /** The pull request's detail for the node panel: Land it and Open on the forge, the checks with Re-run, what the head changes. Nothing here repeats the node panel's title and state. */
-  function detailHtml() {
-    if (ui.detailError) return `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>`;
-    if (!ui.detail) return `<p class="hx-faint">Loading its files and checks …</p><ul class="hx-forge-list" aria-hidden="true">${loadingRowsHtml(4)}</ul>`;
+  /**
+   * The pull request's part of the node panel (spec 0015 D4), as the pieces the bar and the sections are made of: Land it (the primary action of a green pull request), Review for a
+   * spec pull request older than the graph's days, Open on the forge; the one Next line when it cannot land yet; the notices (a landing that waits on its checks, with Cancel, what
+   * the last action came to); and its sections, each with its count: the build issue (open while it is offered), the checks (open while a failed one can be run again: its Re-run is
+   * there), the files. Nothing here repeats the node panel's title and state. `self`: the panel is a proposal's, whose own Review is the proposal's part.
+   * @returns {{ land: string, review: string[], open: string, next: string, notes: string, sections: string[], build: string, green: boolean }}
+   */
+  function detailParts({ self = false } = {}) {
+    const none = { land: '', review: [], open: '', next: '', sections: [], build: '', green: false };
+    if (ui.detailError) return { ...none, notes: `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>` };
+    if (!ui.detail) return { ...none, notes: `<p class="hx-faint">Loading its files and checks …</p><ul class="hx-forge-list" aria-hidden="true">${loadingRowsHtml(4)}</ul>` };
     const { pull, checks, stale } = ui.detail;
     const lit = ui.lit;
     const mapped = lit.files.filter((f) => f.nodes.length).length;
@@ -138,51 +145,56 @@ export function install(ctx) {
       return `<li class="hx-forge-file" data-corn="file"><span class="hx-forge-fstatus">${escHtml(f.status)}</span> <code class="hx-code">${escHtml(f.path)}</code>${renamed} <span class="hx-good">+${f.additions}</span> <span class="hx-forge-del">−${f.deletions}</span><span class="hx-forge-nodes">${nodes}</span></li>`;
     }).join('');
 
-    // Land it is the one primary action, with Open on the forge beside it; a pull request that cannot land says why in one line
+    // Land it, with Open on the forge beside it; one that cannot land is a dashed Land it, and the Next line says what comes first (`mergeBlock` is its title)
     const block = mergeBlock(ui.detail);
-    const land = block
-      ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve">${escHtml(t('landIt'))}</button>`
-      : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' aria-disabled="true"' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
+    const land = pull.state !== 'open' ? ''
+      : block
+        ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve" title="${escHtml(block)}">${escHtml(t('landIt'))}</button>`
+        : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' aria-disabled="true"' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
     // A spec pull request older than the graph's 14 days is a plain pull request here, with no Review of its own: its proposals that are not approved get one, found by their slug in the
-    // proposals list (the node panel of one the graph holds has it already: pieces/work-specs.js). A proposal the list does not hold is named in the warning instead.
+    // proposals list (the node panel of one the graph holds has it already: pieces/work-specs.js). A proposal the list does not hold is named in a notice instead.
     // Only this pull request's own copy: another pull request may hold a file of the same slug (anyone can open one), and approving that copy would approve, and with
     // `approveLands` land, the other pull request
     const ownCopy = (slug) => { const e = fn.specEntry({ slug, number: pull.number }); return e && e.pull && e.pull.number === pull.number ? e : null; };
     const reviewable = ui.item && ui.item.kind === 'pull' && pull.state === 'open'
       ? (ui.detail.specs || []).filter((x) => !x.approved).map((x) => ({ slug: x.slug, entry: ownCopy(x.slug) }))
       : [];
-    const review = reviewable.filter((x) => x.entry).map((x) => `<button type="button" class="hx-btn hx-forge-act" data-corn-kind="secondary" data-work-action="review" data-slug="${escHtml(x.slug)}" data-source="${escHtml(x.entry.source || '')}" aria-label="Review proposal ${escHtml(x.slug)}">Review ${escHtml(x.slug)} …</button>`).join('');
-    const warning = approvalWarning(ui.detail, { review: !reviewable.length ? 'node' : reviewable.every((x) => x.entry) ? 'here' : 'list' });
-    const act = `<div class="hx-forge-cta">${land}${review}${url ? `<a data-corn="open-link" data-corn-kind="secondary" class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(fn.forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}${warning ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(warning)}</p>` : ''}`;
+    const review = reviewable.filter((x) => x.entry).map((x) => `<button type="button" class="hx-btn hx-forge-act" data-corn-kind="secondary" data-work-action="review" data-slug="${escHtml(x.slug)}" data-source="${escHtml(x.entry.source || '')}" aria-label="Review proposal ${escHtml(x.slug)}">Review ${escHtml(x.slug)} …</button>`);
+    const missing = reviewable.length && !reviewable.every((x) => x.entry) ? approvalWarning(ui.detail, { review: 'list' }) : '';
+    const open = url ? `<a data-corn="open-link" data-corn-kind="secondary" class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(fn.forgeName())} ↗</a>` : '';
     // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
     const waiting = ui.landing && pull.state === 'open'
       ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, m.now()))}</p><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' aria-disabled="true"' : ''}>Cancel</button></div>`
       : '';
     const note = ui.note ? `<p class="hx-forge-notice${ui.note.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${ui.note.ok ? ' data-corn-state="success"' : ''}>${escHtml(ui.note.text)}</p>` : '';
+    const notes = `${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}${note}${waiting}${missing ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(missing)}</p>` : ''}`;
+
     // Step 2 of the pipeline: a spec pull request with an approved proposal opens its build issue
     const offers = buildOffers(ui.detail);
-    const build = offers.length
-      ? `<h3 class="hx-forge-subact">Build issue</h3>${offers.map((o) => (o.offer
-        ? `<div class="hx-forge-step"><button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-build="${escHtml(o.slug)}" aria-label="Open the build issue for ${escHtml(o.slug)}"${ui.busy ? ' aria-disabled="true"' : ''} data-corn-kind="approve">Open the build issue …</button><p class="hx-forge-why hx-faint"><code class="hx-code">${escHtml(o.slug)}</code> is approved. Opens a confirm step that shows the issue. Nothing is built.</p></div>`
-        : `<p class="hx-forge-why hx-faint"><code class="hx-code">${escHtml(o.slug)}</code>: ${escHtml(o.why)}</p>`)).join('')}`
-      : '';
-
+    const sections = [];
+    let build = '';
+    if (offers.length) {
+      build = sectionHtml({
+        key: 'build', title: 'Build issue', count: offers.length, open: offers.some((o) => o.offer),
+        body: offers.map((o) => (o.offer
+          ? `<div class="hx-forge-step"><button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-build="${escHtml(o.slug)}" aria-label="Open the build issue for ${escHtml(o.slug)}"${ui.busy ? ' aria-disabled="true"' : ''} data-corn-kind="approve">Open the build issue …</button><p class="hx-forge-why hx-faint"><code class="hx-code">${escHtml(o.slug)}</code> is approved. Opens a confirm step that shows the issue. Nothing is built.</p></div>`
+          : `<p class="hx-forge-why hx-faint"><code class="hx-code">${escHtml(o.slug)}</code>: ${escHtml(o.why)}</p>`)).join(''),
+      });
+    }
+    const rerunnable = checks.some((c) => c.state === 'failure' && c.canRerun);
+    sections.push(sectionHtml({ key: 'checks', title: 'Checks', count: checks.length, note: checksWords(checks), open: rerunnable, body: checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : '<p class="hx-faint">No checks have run on this head.</p>' }));
+    sections.push(sectionHtml({ key: 'files', title: 'Files', count: lit.files.length, note: `${mapped} on the map`, body: lit.files.length ? `<ul class="hx-forge-files">${fileRows}</ul>` : '<p class="hx-faint">It changes no file.</p>' }));
     // Its run: who is running it, their state, the time and the cost (the runs are read for the Runs tab, and once for the first PR selected)
     const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
     const made = runOnPull(runs, pull.number);
-    const runSection = made
-      ? `<h3 class="hx-forge-sub">Run</h3><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${runPillHtml({ esc: escHtml }, made, statusWords(made))} ${escHtml(pullRunWords(made, m.now(), { state: false }))}</p>`
-      : '';
-    return `${act}
-      ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
-      ${note}
-      ${waiting}
-      ${build}
-      <h3 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h3>
-      ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
-      <h3 class="hx-forge-sub">${escHtml(plural(lit.files.length, 'file'))} changed, ${mapped} on the map</h3>
-      <ul class="hx-forge-files">${fileRows}</ul>
-      ${runSection}`;
+    if (made) sections.push(`<div class="hx-sec-block" data-corn="section"><h3 class="hx-sec-title">Run</h3><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${runPillHtml({ esc: escHtml }, made, statusWords(made))} ${escHtml(pullRunWords(made, m.now(), { state: false }))}</p></div>`);
+    return { land, review, open, next: nextWords(ui.detail, { self }), notes, sections, build, green: !block };
+  }
+
+  /** A pull request's actions as the node panel's bar puts them: Land it first, then its Reviews, then Open on the forge */
+  function pullParts() {
+    const d = detailParts();
+    return { primary: d.land, others: [...d.review, d.open], next: d.next, notes: d.notes, sections: [...d.sections, d.build] };
   }
 
   /** A node button, as in a pull request's files: it selects the node on the map */
@@ -218,5 +230,5 @@ export function install(ctx) {
   }
 
   // what other parts put in the panel gets its parts (a hook is a part of the same name)
-  Object.assign(fn, { selectPull, loadLanding, cancelLanding, clearPull, selectionWords, itemHtml: (...a) => withParts(itemHtml(...a)), detailHtml: (...a) => withParts(detailHtml(...a)), nodeButton: (n) => withParts(nodeButton(n)), finishAction, rerunCheck });
+  Object.assign(fn, { selectPull, loadLanding, cancelLanding, clearPull, selectionWords, itemHtml: (...a) => withParts(itemHtml(...a)), detailParts, pullParts, nodeButton: (n) => withParts(nodeButton(n)), finishAction, rerunCheck });
 }

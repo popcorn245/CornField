@@ -239,7 +239,7 @@ describe('a size rule is a container query on the piece\'s own box', () => {
   it('keeps the stage-wide properties the panels read in page.css, where a width rule may still be a media query', () => {
     const page = rules(strip(readPiece('page.css')));
     const decl = page.filter((r) => /--hx-(forge-w|col-w)\s*:/.test(r.body));
-    expect(decl.length).toBeGreaterThan(5);
+    expect(decl.length).toBeGreaterThanOrEqual(3); // the Work list in the node panel's place leaves the column's width alone (spec 0015 D3)
     for (const f of pieces.filter((x) => x !== 'review.css')) expect(strip(readPiece(f)), f).not.toMatch(/--hx-(forge-w|col-w)\s*:/);
     // the review's stage is its own box's: the column's width as container queries (it has no Work panel, so no --hx-forge-w)
     expect(strip(readPiece('review.css'))).not.toMatch(/--hx-forge-w\s*:/);

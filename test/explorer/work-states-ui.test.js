@@ -621,9 +621,9 @@ describe('a run is named by what the card shows (F43)', () => {
     const buttons = [];
     for (const r of SEVEN) {
       await showWork('run', r.runId);
-      buttons.push(...qa('#forge-run-card button').filter((b) => b.getAttribute('aria-label')));
+      buttons.push(...qa('#forge-run-card button, #forge-detail [data-corn="actions"] button:not([data-more-toggle])').filter((b) => b.getAttribute('aria-label'))); // a run's Continue, Stop and Start again are in the action bar (spec 0015 D4)
       expect(q('#forge-run-card').textContent).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
-      expect(qa('#forge-run-card [aria-label]').map((e) => e.getAttribute('aria-label')).join(' ')).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
+      expect(qa('#forge-run-card [aria-label], #forge-detail [data-corn="actions"] [aria-label]').map((e) => e.getAttribute('aria-label')).join(' ')).not.toContain('run-01JC8Z3Q5M7VXK2RT9N4B6HD');
     }
     expect(buttons.length).toBeGreaterThan(5);
     for (const b of buttons) {
