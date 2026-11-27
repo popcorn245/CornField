@@ -12,7 +12,7 @@
  *   specReach(history, spec)          the nodes a spec's commits touched, and how many commits named it
  *   heatOf(history, at)               the History layer (spec 0014 D3): per node, how often it changed and how lately, as of a commit
  *   haloWidth(count, max)             a halo's width on screen (px) for how often its node changed
- *   historyRowOf(status, heat)        the Layers menu's row under Overlays
+ *   historyRowOf(status, heat, color, { replaying })   the Layers menu's row under Overlays, with Replay on it (spec 0015 D6)
  *   specBarHtml(pick, ctx)            the bar on the map while a spec is picked: `Spec 0012 · Work as a view: 6 commits, 72 nodes`
  *   commitKind(subject)               feat, fix, docs or other: a timeline mark's colour
  *   replayFrame(history, edges, at)   Replay (spec 0014 D1): what the map holds at a commit, what was born at it and what it changed
@@ -230,10 +230,12 @@ export const haloWidth = (count, max) => (max > 0 && count > 0 ? Math.round((1.5
  * @param {{ nodes: Map<string, unknown> } | null} heat
  * @param {string} color the dot's colour
  */
-export function historyRowOf(status, heat, color) {
+export function historyRowOf(status, heat, color, { replaying = false } = {}) {
   const n = heat ? heat.nodes.size : 0;
   const countText = status === 'ready' ? `${n} ${n === 1 ? 'node' : 'nodes'}` : status === 'loading' ? 'reading…' : status === 'error' ? 'not read' : 'not read yet';
-  return { key: HISTORY_LAYER, label: 'History', color, overlay: true, countText, desc: 'A halo round each node the history changed: the wider, the more often; pink this week, violet this month, grey before. Picking a spec in a node\'s History lights what it reached.' };
+  // Replay is the History layer's (spec 0015 D6): a button on its row, pressed while the timeline is open (page.js turns the layer on and opens it)
+  const action = { name: 'history-replay', label: 'Replay', pressed: replaying === true, title: 'Replay the map\'s history, commit by commit' };
+  return { key: HISTORY_LAYER, label: 'History', color, overlay: true, countText, action, desc: 'A halo round each node the history changed: the wider, the more often; pink this week, violet this month, grey before. Picking a spec in a node\'s History lights what it reached.' };
 }
 
 /**

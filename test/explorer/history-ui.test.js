@@ -223,14 +223,46 @@ describe('the History layer', () => {
 describe('Replay', () => {
   const visible = (id) => !!sceneNode(id);
   const strip = () => q('.hx-timeline');
+  /** Replay's button: on the History row of the Layers menu (spec 0015 D6), not in the header */
+  const replayBtn = () => q('.hx-row-action[data-action="history-replay"]');
 
-  it('shows its button only when history is on', () => {
+  it('has its button on the History row of the Layers menu, only when history is on, and none in the header', () => {
     fakeServer();
     mount({ history: false, forge: FORGE });
-    expect($('replay-btn').hidden).toBe(true);
+    setProjectLayers(undefined); // the menu drawn
+    expect(replayBtn()).toBe(null);
     stop();
     mount();
-    expect($('replay-btn').hidden).toBe(false);
+    setProjectLayers(undefined);
+    const btn = replayBtn();
+    expect(btn.textContent).toBe('Replay');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    expect(btn.closest('.hx-toggle-line').querySelector('[data-corn="row"]').dataset.layer).toBe('history-halos');
+    expect(btn.closest('[data-corn="row"]')).toBe(null); // beside the row's toggle, not in it
+    expect($('replay-btn')).toBe(null);
+    expect(q('[data-corn="header"] [data-action="history-replay"]:not(.hx-row-action)')).toBe(null);
+  });
+
+  it('pressed, turns the History layer on, opens the timeline and closes the menu; pressed again, closes the timeline', async () => {
+    fakeServer();
+    mount();
+    pageInstance().reducedMotion = true;
+    setProjectLayers(undefined);
+    expect(layerRows(pageInstance()).overlays.find((r) => r.key === 'history-halos')).toBeTruthy();
+    expect(state.activeLayers['history-halos']).not.toBe(true);
+    click(q('[data-action="toggle-layers-menu"]'));
+    expect(q('[data-corn="layers-menu"]').hidden).toBe(false);
+    click(replayBtn());
+    await settle();
+    expect(q('[data-corn="layers-menu"]').hidden).toBe(true);
+    expect(state.activeLayers['history-halos']).toBe(true);
+    expect(state.replay.at).toBe(0);
+    expect(strip()).not.toBe(null);
+    expect(replayBtn().getAttribute('aria-pressed')).toBe('true');
+    click(replayBtn());
+    expect(state.replay).toBe(null);
+    expect(replayBtn().getAttribute('aria-pressed')).toBe('false');
+    expect(state.activeLayers['history-halos']).toBe(true); // closing the timeline leaves the layer as it is
   });
 
   it('reads the history, then shows the map at its first commit and steps through it, the keyboard\'s playhead saying where it is', async () => {
@@ -244,7 +276,7 @@ describe('Replay', () => {
     await settle();
     render.renderNow();
     expect(server.calls).toEqual(['/api/history']);
-    expect($('replay-btn').getAttribute('aria-pressed')).toBe('true');
+    expect(replayBtn().getAttribute('aria-pressed')).toBe('true');
     expect(state.replay.at).toBe(0);
     expect(visible('core-auth')).toBe(true);
     expect(visible('core-db')).toBe(false); // born at the second commit
@@ -270,7 +302,7 @@ describe('Replay', () => {
     expect(state.replay).toBe(null);
     expect(state.historyAt).toBe(null);
     expect(strip()).toBe(null);
-    expect($('replay-btn').getAttribute('aria-pressed')).toBe('false');
+    expect(replayBtn().getAttribute('aria-pressed')).toBe('false');
     expect(visible('core-db')).toBe(true);
     offSaid();
   });

@@ -97,6 +97,9 @@ describe('the History layer\'s heat', () => {
     expect(historyRowOf('idle', null, '#fff')).toMatchObject({ key: 'history-halos', label: 'History', overlay: true, countText: 'not read yet' });
     expect(historyRowOf('ready', heatOf(H), '#fff').countText).toBe('4 nodes');
     expect(historyRowOf('error', null, '#fff').countText).toBe('not read');
+    // Replay is on the row (spec 0015 D6), pressed while the timeline is open
+    expect(historyRowOf('idle', null, '#fff').action).toMatchObject({ name: 'history-replay', label: 'Replay', pressed: false });
+    expect(historyRowOf('ready', heatOf(H), '#fff', { replaying: true }).action.pressed).toBe(true);
   });
 
   it('names a picked spec on its bar, its title as text', () => {

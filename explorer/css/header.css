@@ -70,6 +70,21 @@
   .hx-view-btn { min-width: var(--hx-control-h); height: var(--hx-seg-inner); padding: 0 var(--corn-space-2); }
   .hx-view-fit { position: absolute; top: calc(100% + var(--corn-space-4)); right: var(--corn-space-4); width: var(--hx-control-h); height: var(--hx-control-h); margin: 0; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); color: var(--corn-text-2); box-shadow: var(--corn-shadow); }
 }
+/* The view's own controls (spec 0015 D5), after the View switch and before the Layers chip: in the Work view Waiting on you (a toggle) and List (work-view.js fills the group).
+   From 768px the two are items of the header's row (`display: contents`); on a phone they sit on the map's top-left row, the Layers chip first, and wrap before Fit */
+.hx-view-tools { display: contents; }
+.hx-view-controls { display: flex; align-items: center; flex: none; gap: var(--corn-space-2); }
+.hx-view-controls[hidden] { display: none; }
+.hx-view-control { display: inline-flex; align-items: center; height: var(--hx-control-h); padding: 0 var(--corn-space-4); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); white-space: nowrap; }
+.hx-view-control:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-view-control[aria-pressed="true"], .hx-view-control[aria-expanded="true"] { background: var(--corn-surface-3); color: var(--corn-text); border-color: var(--corn-accent); font-weight: 600; }
+.hx-view-control[hidden] { display: none; }
+@container corn-box (max-width: 767px) {
+  .hx-header .hx-view-tools { position: absolute; top: calc(100% + var(--corn-space-4)); left: var(--corn-space-4); display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); max-width: calc(100% - var(--corn-space-4) * 2 - var(--hx-control-h) - var(--corn-space-3)); pointer-events: none; }
+  .hx-header .hx-view-tools > * { pointer-events: auto; }
+  .hx-view-tools > .hx-layers { order: -1; }
+  .hx-view-control { padding: 0 var(--corn-space-5); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
+}
 /* A brand wordmark that does not fit leaves the logo (header-fit.js measures); a row that still scrolls shows it at its edge */
 .hx-header-left[data-brand-short] .hx-title { display: none; }
 .hx-header-left[data-overflow] { -webkit-mask: linear-gradient(to right, var(--corn-text) calc(100% - var(--corn-space-6)), transparent); mask: linear-gradient(to right, var(--corn-text) calc(100% - var(--corn-space-6)), transparent); }
