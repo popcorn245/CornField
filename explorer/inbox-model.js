@@ -6,13 +6,14 @@
  * a waiting run folded into the spec it asks about. The page draws it (explorer/pieces/inbox.js).
  *
  *   inboxOf(graph, { now })  -> { groups: { waiting, move, unclaimed, motion, done }, rows, drafts, count, rowsWaiting }
+ *   aroundOf(id, scene)      -> what the selected work links to and the code it touches, grouped by app (D5's Around it)
  *
  * A row: `{ id, item, group, why, bad, action, counted, also }`. `action` is `{ key, label }`, the key one of ACTIONS (what the node panel already does);
  * `counted` is spec 0010 D1's rule (`item.waiting`), so `count` is the number the Work button shows; `also` is the row of a waiting run folded into it (D4).
  * Nothing here files, archives or hides a row by hand (D7): a row moves only when the graph says its state moved.
  */
 
-import { tagOf } from './work-model.js';
+import { tagOf, REL_WORDS } from './work-model.js';
 
 /** The groups, in the queue's order (D2), with their words, and whether each starts open */
 export const GROUPS = Object.freeze([
@@ -85,7 +86,7 @@ export function placeOf(item, { edges, byId }) {
     case 'run': {
       if (item.waiting) return { group: 'waiting', why: text(item.note) || 'Waiting on your answer', action: act('answer') };
       if (item.state === 'failed') return { group: 'move', why: `Failed${item.note ? `: ${item.note}` : ''}`, bad: true, action: act('retry') };
-      if (item.state === 'done' && item.pull && item.pull.state === 'open') return { group: 'move', why: `Done: PR #${item.pull.number} is open${item.note ? `. ${item.note}` : ''}`, action: act('land', `Land PR #${item.pull.number}`) };
+      if (item.state === 'done' && item.pull && item.pull.state === 'open') return { group: 'move', why: `Done: PR #${item.pull.number} is open${item.note ? `. ${item.note}` : ''}`, action: byId.has(`pull:${item.pull.number}`) ? act('land', `Land PR #${item.pull.number}`) : null }; // landing is the pull request's: offered when the graph holds it
       if (item.open) return { group: 'motion', why: `${cap(item.state)}${item.note ? `: ${item.note}` : ''}`, action: null };
       return { group: 'done', why: text(item.note) || cap(item.state), action: null };
     }
@@ -177,4 +178,52 @@ export function nextAfter(order, id) {
 /** A row read out: its tag, title, why and how long ago (D6) */
 export function rowWords(row, ago) {
   return `${row.tag}, ${text(row.item.title)}. ${row.why}${row.also ? `, and ${row.also.tag} waits on your answer` : ''}. ${ago}.`;
+}
+
+/** The most of each side Around it lists before "and n more" */
+export const AROUND_CAP = 6;
+
+/**
+ * Around it (D5): what a piece of work is linked to, and the code it touches grouped by app, from the Work view's scene (work-model.js `workScene`:
+ * work and code nodes, the code's `areaId`, edges with their `tone`). A thread folded into a spec is the spec's, so its links are too.
+ * @param {string} id the selected piece of work
+ * @param {{ nodes?: any[], edges?: any[] }} scene
+ * @returns {{ item: any, work: { id: string, tag: string, title: string, kind: string, word: string }[], areas: { id: string, label: string, adds: boolean, items: { id: string, label: string, rel: string, mapped: boolean }[], more: number }[], code: number, moreWork: number, moreAreas: number } | null}
+ */
+export function aroundOf(id, scene) {
+  const nodes = scene && Array.isArray(scene.nodes) ? scene.nodes : [];
+  const edges = scene && Array.isArray(scene.edges) ? scene.edges : [];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  let item = byId.get(id);
+  if (item && item.foldedInto && byId.has(item.foldedInto)) item = byId.get(item.foldedInto);
+  if (!item || !item.work) return null;
+  const mine = new Set([item.id, ...nodes.filter((n) => n.foldedInto === item.id).map((n) => n.id)]);
+  const work = [];
+  const seen = new Set(mine);
+  for (const e of edges) {
+    if (e.tone !== 'work') continue;
+    const out = mine.has(e.from);
+    const other = out ? e.to : mine.has(e.to) ? e.from : null;
+    if (!other || seen.has(other) || !byId.has(other)) continue;
+    seen.add(other);
+    const n = byId.get(other);
+    const words = REL_WORDS[e.kind] || [e.kind, e.kind];
+    work.push({ id: n.id, tag: n.item ? tagOf(n.item) : text(n.label), title: text(n.title) || text(n.label), kind: text(n.work || n.kind), word: out ? words[0] : words[1] });
+  }
+  const areas = new Map();
+  const touched = new Set();
+  for (const e of edges) {
+    if (e.tone !== 'code' || !mine.has(e.from) || touched.has(e.to) || !byId.has(e.to)) continue;
+    touched.add(e.to);
+    const n = byId.get(e.to);
+    const areaId = n.areaId || n.id;
+    const area = byId.get(areaId);
+    if (!areas.has(areaId)) areas.set(areaId, { id: areaId, label: text(area && area.label) || areaId, adds: true, items: [] });
+    const a = areas.get(areaId);
+    if (e.kind !== 'adds') a.adds = false;
+    a.items.push({ id: n.id, label: text(n.label) || n.id, rel: e.kind, mapped: !n.planned });
+  }
+  const groups = [...areas.values()].sort((a, b) => b.items.length - a.items.length || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+  for (const g of groups) { g.more = Math.max(0, g.items.length - AROUND_CAP); g.items = g.items.slice(0, AROUND_CAP); }
+  return { item, work: work.slice(0, AROUND_CAP), moreWork: Math.max(0, work.length - AROUND_CAP), areas: groups.slice(0, AROUND_CAP), moreAreas: Math.max(0, groups.length - AROUND_CAP), code: touched.size };
 }

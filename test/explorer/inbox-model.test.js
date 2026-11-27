@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { inboxOf, placeOf, checkWords, headingOf, openedWords, orderOf, nextAfter, rowWords, isFoldedThread, GROUPS } from '../../explorer/inbox-model.js';
+import { inboxOf, placeOf, checkWords, headingOf, openedWords, orderOf, nextAfter, rowWords, isFoldedThread, GROUPS, aroundOf, AROUND_CAP } from '../../explorer/inbox-model.js';
 
 const at = (h) => new Date(Date.parse('2026-11-27T00:36:00Z') - h * 3_600_000).toISOString();
 const P = (slug, state, over = {}) => ({ id: `proposal:${slug}`, kind: 'proposal', stage: 'decide', title: slug, state, open: true, waiting: state === 'to-decide' || state === 'changed', slug, number: 20, updated: at(1), ...over });
@@ -69,7 +69,7 @@ describe('the groups (spec 0016 D2)', () => {
     const [pr, failed, done, approved] = inbox.groups.move;
     expect(pr).toMatchObject({ why: 'lint failed · test running', bad: true, action: { key: 'rerun' }, counted: false });
     expect(failed).toMatchObject({ why: 'Failed: The tests fail on the new version.', bad: true, action: { key: 'retry' } });
-    expect(done).toMatchObject({ action: { key: 'land', label: 'Land PR #14' } });
+    expect(done.action).toBe(null); // PR #14 is not in this graph, so there is nothing here to land it with
     expect(done.why).toMatch(/^Done: PR #14 is open\. Merged-ready/);
     expect(approved.action.key).toBe('land');
   });
@@ -178,7 +178,58 @@ describe('placeOf, one at a time', () => {
   it('a finished run whose pull request merged is done', () => {
     expect(placeOf(R(1, 'done', { pull: { number: 2, state: 'merged' } }), ctx).group).toBe('done');
   });
+  it('a finished run with its pull request open offers to land it when the graph holds the pull request', () => {
+    const run = R(4, 'done', { pull: { number: 14, state: 'open' } });
+    expect(placeOf(run, { edges: [], byId: new Map([['pull:14', { id: 'pull:14', kind: 'pull' }]]) })).toMatchObject({ group: 'move', action: { key: 'land', label: 'Land PR #14' } });
+    expect(placeOf(run, ctx)).toMatchObject({ group: 'move', action: null });
+  });
   it('a thread with no lines is not folded', () => {
     expect(isFoldedThread('thread:1', [], new Map())).toBe(false);
+  });
+});
+
+describe('aroundOf (D5): what the picked work links to, and the code it touches by app', () => {
+  const W = (id, kind, over = {}) => ({ id, work: kind, label: id, title: `${id} title`, item: { id, kind, number: 7, slug: '0100-flow', runId: 'run-01RIGRUN000000000000000003' }, ...over });
+  const C = (id, areaId, over = {}) => ({ id, label: id, areaId, ...over });
+  const scene = {
+    nodes: [
+      W('proposal:0100-flow', 'proposal'), W('run:3', 'run'), W('issue:7', 'issue'), W('thread:9', 'thread', { foldedInto: 'proposal:0100-flow' }), W('pull:2', 'pull'),
+      { id: 'api', label: 'api', area: true }, C('api/a', 'api'), C('api/b', 'api'), { id: 'web', label: 'web', area: true }, C('web/new', 'web', { planned: true }),
+    ],
+    edges: [
+      { from: 'run:3', to: 'proposal:0100-flow', kind: 'agent-on', tone: 'work' },
+      { from: 'thread:9', to: 'issue:7', kind: 'mentions', tone: 'work' },
+      { from: 'proposal:0100-flow', to: 'api/a', kind: 'changes', tone: 'code' },
+      { from: 'proposal:0100-flow', to: 'api/b', kind: 'changes', tone: 'code' },
+      { from: 'proposal:0100-flow', to: 'web/new', kind: 'adds', tone: 'code' },
+      { from: 'pull:2', to: 'api/a', kind: 'changes', tone: 'code' },
+    ],
+  };
+  it('lists the linked work with its words (a folded thread\'s links are the spec\'s), and the code by app, most touched first', () => {
+    const a = aroundOf('proposal:0100-flow', scene);
+    expect(a.item.id).toBe('proposal:0100-flow');
+    expect(a.work).toEqual([
+      { id: 'run:3', tag: 'Run 000003', title: 'run:3 title', kind: 'run', word: 'works on' },
+      { id: 'issue:7', tag: 'Issue #7', title: 'issue:7 title', kind: 'issue', word: 'mentions' },
+    ]);
+    expect(a.areas.map((g) => [g.label, g.adds, g.items.map((i) => `${i.rel} ${i.id}${i.mapped ? '' : ' (planned)'}`)])).toEqual([
+      ['api', false, ['changes api/a', 'changes api/b']],
+      ['web', true, ['adds web/new (planned)']],
+    ]);
+    expect(a.code).toBe(3);
+    expect(a.moreWork).toBe(0);
+  });
+  it('a folded thread opens its spec\'s; code is not work; a node that is not work has none', () => {
+    expect(aroundOf('thread:9', scene).item.id).toBe('proposal:0100-flow');
+    expect(aroundOf('pull:2', scene)).toMatchObject({ work: [], code: 1 });
+    expect(aroundOf('api/a', scene)).toBe(null);
+    expect(aroundOf('nothing', scene)).toBe(null);
+    expect(aroundOf('pull:2', null)).toBe(null);
+  });
+  it('lists at most AROUND_CAP of each, and says how many more', () => {
+    const many = { nodes: [W('pull:1', 'pull'), ...Array.from({ length: 9 }, (_, i) => W(`issue:${i}`, 'issue'))], edges: Array.from({ length: 9 }, (_, i) => ({ from: 'pull:1', to: `issue:${i}`, kind: 'closes', tone: 'work' })) };
+    const a = aroundOf('pull:1', many);
+    expect(a.work.length).toBe(AROUND_CAP);
+    expect(a.moreWork).toBe(9 - AROUND_CAP);
   });
 });

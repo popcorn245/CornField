@@ -24,6 +24,8 @@ import { closeDrawer, selectNode } from '../../explorer/panels.js';
 import { setLayer } from '../../explorer/engine/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { resetConnectionForTests } from '../../explorer/connection.js';
+// @ts-expect-error plain JS modules, no declarations
+import { setStrings } from '../../explorer/strings.js';
 import { explorerPage } from '../helpers.js';
 
 const page = explorerPage({ pieces: ['map'] });
@@ -297,6 +299,36 @@ describe('the Work inbox (spec 0016)', () => {
     press(as('inbox'));
     expect(inbox().hidden).toBe(false);
     expect(localStorage.getItem('cornfield.work.as')).toBe('inbox');
+  });
+
+  it('a picked row shows Around it beside the queue: the code it touches, by app (D5)', async () => {
+    fakeServer();
+    mount();
+    pageInstance().emit('work:open', { id: null });
+    await settle();
+    expect(inbox().querySelector('[data-group="around"]')).toBe(null);
+    press(inbox().querySelector('[data-id="issue:3"] [data-inbox-open]'));
+    await settle();
+    const around = inbox().querySelector('[data-group="around"]');
+    expect(around).not.toBe(null);
+    expect(inbox().classList.contains('is-picked')).toBe(true);
+    expect([...around.querySelectorAll('[data-inbox-map]')].map((b) => b.dataset.inboxMap)).toEqual(['auth']);
+    expect(around.querySelector('[data-inbox-graph]').textContent).toBe('Show in Graph');
+  });
+
+  it('speaks in the config\'s words (core/strings.js)', async () => {
+    setStrings({ inbox: 'Queue', graph: 'Lanes', inboxUnclaimed: 'Unowned', startAgent: 'Assign a bot' });
+    try {
+      fakeServer();
+      mount();
+      pageInstance().emit('work:open', { id: null });
+      await settle();
+      expect(as('inbox').textContent).toBe('Queue');
+      expect(as('graph').textContent).toBe('Lanes');
+      expect(inbox().getAttribute('aria-label')).toBe('Queue');
+      expect(inbox().querySelector('[data-group="unclaimed"] .hx-inbox-group-title').textContent).toBe('Unowned');
+      expect(inbox().querySelector('[data-id="issue:3"] [data-inbox-act]').textContent).toBe('Assign a bot');
+    } finally { setStrings({}); }
   });
 
   it('`?view=work&as=graph` opens the lanes', async () => {

@@ -184,9 +184,12 @@ function mount() {
   if (inbox) inbox.destroy();
   inbox = mountInbox(stage, {
     pick: (id) => pick(id, { frame: false, source: 'link' }),
-    act: (id) => actOn(id),
+    act: (id, key) => actOn(id, key),
     announce: (words) => announce(inst(), words),
     colorOf: (kind) => badgeColor(kind),
+    say: (key) => t(inst(), key),
+    showOnMap: (id) => showOnMap(id),
+    toGraph: () => setAs('graph'),
     refresh: () => paintInbox(),
   });
   paintList(!!inst().ask('work:on')); // the List toggle is there while the Work piece is on: a signed-in maintainer of a forge
@@ -278,7 +281,10 @@ function paintBar() {
   els.bar.hidden = !on();
   els.waiting.setAttribute('aria-pressed', String(!!w.waiting)); // the Work button's badge says how many; the toggle says only that it is on
   els.waiting.hidden = inInbox(); // the Inbox is what waits on you, in a queue: dimming is the Graph's
-  for (const b of els.as.querySelectorAll('[data-work-as]')) b.setAttribute('aria-pressed', String(b.dataset.workAs === asOf()));
+  for (const b of els.as.querySelectorAll('[data-work-as]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.workAs === asOf()));
+    b.textContent = b.dataset.workAs === 'inbox' ? t(inst(), 'inbox') : t(inst(), 'graph'); // the page's words (core/strings.js)
+  }
   if (els.stage) els.stage.classList.toggle('is-inbox', inInbox());
   els.busy.hidden = !(on() && w.status === 'ok' && w.updating);
   els.loading.hidden = !(on() && w.status === 'loading');
@@ -292,7 +298,7 @@ function paintBar() {
 function paintInbox() {
   if (!inbox) return;
   const w = work();
-  inbox.paint(w.graph, { on: inInbox() && w.status === 'ok', selected: state.selectedNode ? state.selectedNode.id : null });
+  inbox.paint(w.graph, { on: inInbox() && w.status === 'ok', selected: state.selectedNode ? state.selectedNode.id : null, scene: { nodes: w.nodes, edges: w.edges } });
 }
 
 /** Inbox or Graph (spec 0016 D1), remembered; the Graph is fitted again as it comes back */
@@ -307,16 +313,54 @@ function setAs(as) {
   announce(inst(), as === 'inbox' ? 'Inbox.' : 'Graph: the lanes of work.');
 }
 
-/** A row's action (spec 0016 D5, D6): its piece of work is selected and the node panel's own primary action is pressed, with the confirm step it has there */
-function actOn(id) {
-  if (!pick(id, { frame: false, source: 'link' })) return;
+/** Where each of a row's actions is in the node panel (inbox-model.js ACTIONS): the control the row names, never just the first one there */
+const ACTION_AT = Object.freeze({
+  review: '[data-work-action="review"]',
+  'review-change': '[data-work-action="review"]',
+  land: '[data-forge-merge]',
+  rerun: '[data-forge-rerun]',
+  retry: '[data-forge-retry]',
+  agent: '[data-forge-agent]',
+  answer: 'textarea',
+  reply: 'textarea, a[href*="/issues/"], a[href*="/pull/"]',
+  logs: 'a[href*="/actions/"], a[href*="log"]',
+});
+
+/** …and the words such a control starts with, for one that carries no marker (a Land it that is off) */
+const ACTION_WORDS = Object.freeze({ review: 'review', 'review-change': 'review', land: 'land it', rerun: 're-run', retry: 'start again', agent: 'start an agent' });
+
+/**
+ * A row's action (spec 0016 D5, D6): its piece of work is selected and the node panel's own control for that action is pressed, with the confirm step it has there.
+ * A run that is done lands its pull request, so that is what is selected. A field (an answer) or a link (a reply, logs) takes the focus and is not followed; a control
+ * that is off says why (its title) and is not pressed; one that is not there leaves the focus on the panel's actions.
+ */
+function actOn(id, key) {
+  let target = id;
+  if (key === 'land' && id.startsWith('run:')) {
+    const run = work().nodes.find((n) => n.id === id);
+    const pull = run && run.item && run.item.pull;
+    if (pull && Number.isInteger(pull.number)) target = `pull:${pull.number}`;
+  }
+  if (!pick(target, { frame: false, source: 'link' })) return;
   const t0 = Date.now();
   const press = () => {
-    const bar = document.querySelector('[data-corn="node-panel"] [data-corn="actions"]');
-    const btn = bar ? bar.querySelector('button:not([disabled]), a[href]') : null;
-    if (btn) { btn.click(); return; }
-    if (Date.now() - t0 < 2000) setTimeout(press, 60); // the Work piece draws a piece of work's actions once what it needs is read
-    else announce(inst(), 'Its actions are in the panel.');
+    const panel = document.querySelector('[data-corn="node-panel"]');
+    const bar = panel ? panel.querySelector('[data-corn="actions"]') : null;
+    const at = ACTION_AT[key];
+    const word = ACTION_WORDS[key];
+    const found = panel && at ? [...panel.querySelectorAll(at)] : [];
+    if (panel && word) for (const el of panel.querySelectorAll('[data-corn="actions"] button, [data-corn="section"] button')) if (!found.includes(el) && el.textContent.trim().replace(/\s*…$/, '').toLowerCase().startsWith(word)) found.push(el); // a control that is off may carry no marker: its words say which
+    const live = found.find((el) => !el.disabled);
+    if (live) {
+      if (live.tagName === 'BUTTON') live.click();
+      else live.focus(); // a field to write in, or a link: the viewer goes on from there
+      return;
+    }
+    if (found.length) { found[0].focus(); announce(inst(), found[0].title || 'It cannot be done yet: the panel says why.'); return; }
+    if (Date.now() - t0 < 2000) { setTimeout(press, 60); return; } // the Work piece draws a piece of work's actions once what it needs is read
+    const first = bar && bar.querySelector('button:not([disabled]), a[href]');
+    if (first) first.focus();
+    announce(inst(), 'Its actions are in the panel.');
   };
   setTimeout(press, 0);
 }
