@@ -97,7 +97,7 @@ Each step is its own pull request and release; cornfield's page keeps working af
 
 ## Where it stands
 
-Steps 1 to 3 are built. Step 3 differs from D5 in one place, on purpose: the selected row's detail is the node panel beside the queue, not a new pane, because spec 0015 already made that panel lead with the ask (its action bar first, one line on what comes next). Still to come: **Around it** (D5's small map of what the selected work touches), the Inbox's words in the page's `strings`, and the browser proof on the rig (`test/fixtures/big/inbox-proof.mjs`). One theme hook is added (`inbox`); its groups, rows, counts and tags are the page's own `section`, `row`, `count` and `tag`, so the documented list grows by one, to 201.
+Built in full. One difference from D5, on purpose: the selected row's detail is the node panel, not a new pane, because spec 0015 already made that panel lead with the ask (its action bar first, one line on what comes next). **Around it** sits between the queue and the panel (on a screen narrower than 1200 px the panel's Connected says the same, and Around it steps aside). A row's action presses the panel's own control for that action, found by what it does, never the first control there; a control that is off is not pressed and its reason is said; a finished run offers **Land PR #n** only when the graph holds that pull request. The Inbox's labels are `strings` (`inbox`, `graph`, the groups', the actions', `aroundIt`). One theme hook is added (`inbox`); its groups, rows, counts and tags are the page's own `section`, `row`, `count` and `tag`, and Around it's lists are `work-links` and `work-link`. The browser proof is `test/fixtures/big/inbox-proof.mjs`.
 
 ## What is not in this spec
 

@@ -81,6 +81,16 @@ export const STRINGS = Object.freeze({
   answer: 'Answer',
   newIdea: 'New idea',
   landIt: 'Land it',
+  // The Work inbox (spec 0016): Inbox and Graph, its groups (In motion and Drafts are the lists'), the rows' actions, Around it
+  inbox: 'Inbox',
+  graph: 'Graph',
+  inboxWaiting: 'Waiting on you',
+  inboxMove: 'Your move',
+  inboxUnclaimed: 'Nobody on it',
+  inboxDone: 'Done lately',
+  review: 'Review',
+  rerunFailed: 'Re-run failed',
+  aroundIt: 'Around it',
   // Agent runs
   startAgent: 'Start an agent',
   askRunner: 'Ask the runner',

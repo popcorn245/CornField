@@ -11548,7 +11548,13 @@
       "to": "core-explorer-pieces-inbox",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-inbox",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-27T04:50:01.037Z"
+  "updatedAt": "2026-11-27T06:01:01.384Z"
 }

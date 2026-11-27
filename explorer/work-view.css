@@ -59,7 +59,7 @@ body:has(.hx-stage.is-work) .hx-layers :is([data-corn="legend-key"], [data-corn=
 .hx-inbox { position: absolute; inset: 0; z-index: 4; display: grid; grid-template-columns: minmax(20rem, 28rem) 1fr; background: var(--corn-ground); color: var(--corn-text); }
 .hx-inbox[hidden] { display: none; }
 .hx-stage.is-inbox .hx-work-badges, .hx-stage.is-inbox .hx-work-lanes { display: none; }
-.hx-inbox-queue { overflow-y: auto; min-height: 0; padding: var(--corn-space-2) 0 var(--corn-space-8); border-right: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-1); }
+.hx-inbox-queue { overflow-y: auto; min-height: 0; padding: var(--corn-space-2) 0 var(--corn-space-6); border-right: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-1); }
 .hx-inbox-head { display: flex; align-items: baseline; gap: var(--corn-space-2); padding: var(--corn-space-3) var(--corn-space-4) var(--corn-space-1); }
 .hx-inbox-title { margin: 0; font-size: var(--corn-text-md); font-weight: 600; }
 .hx-inbox-sub { color: var(--corn-text-3); font-size: var(--corn-text-sm); }
@@ -94,6 +94,42 @@ body:has(.hx-stage.is-work) .hx-layers :is([data-corn="legend-key"], [data-corn=
 @media (hover: none) { .hx-inbox-act { opacity: 1; } }
 .hx-inbox-also { grid-column: 2 / 4; display: flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-warn, var(--corn-text-2)); font-size: var(--corn-text-xs); }
 .hx-inbox-also .hx-inbox-glyph { grid-row: auto; margin: 0; width: 12px; height: 12px; }
+.hx-inbox-side { display: grid; min-width: 0; min-height: 0; overflow-y: auto; }
+/* Picked: the third column is the node panel's, which lies over the stage (node-panel.css), so Around it takes the room between the queue and it */
+.hx-inbox.is-picked { grid-template-columns: minmax(20rem, 28rem) minmax(0, 1fr) 30rem; }
+.hx-inbox-around { align-self: start; display: grid; gap: var(--corn-space-3); max-width: 40rem; margin: 0 auto; padding: var(--corn-space-5) var(--corn-space-5) var(--corn-space-6); width: 100%; box-sizing: border-box; }
+.hx-inbox-around-title { margin: 0; color: var(--corn-text-3); font-size: var(--corn-text-xs); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+.hx-inbox-around-what { display: flex; align-items: center; gap: var(--corn-space-2); margin: 0; min-width: 0; font-size: var(--corn-text-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-inbox-around-what .hx-inbox-glyph { flex: none; margin: 0; }
+.hx-inbox-around-map { width: 100%; height: auto; max-height: 10rem; }
+.hx-inbox-around-line { stroke: var(--corn-text-3); stroke-width: 1.5; }
+.hx-inbox-around-line.is-adds, .hx-inbox-around-app.is-adds { stroke-dasharray: 4 3; }
+.hx-inbox-around-app { fill: var(--corn-surface-2); stroke: var(--corn-text-2); stroke-width: 1.5; }
+.hx-inbox-around-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--corn-space-5); }
+.hx-inbox-around-head { display: flex; align-items: baseline; gap: var(--corn-space-1); margin: 0 0 var(--corn-space-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 600; }
+.hx-inbox-around-list { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--corn-space-1) / 2); }
+.hx-inbox-around-item { display: flex; align-items: center; gap: var(--corn-space-2); min-width: 0; font-size: var(--corn-text-sm); }
+.hx-inbox-around-item.is-plain { padding: var(--corn-space-1) var(--corn-space-2); }
+.hx-inbox-around-what .hx-inbox-tag { flex: none; margin: 0; color: var(--corn-text-3); font-weight: 400; }
+.hx-inbox-around-btn { display: flex; align-items: center; gap: var(--corn-space-2); width: 100%; min-width: 0; margin: 0; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text); font: inherit; text-align: left; cursor: pointer; }
+.hx-inbox-around-btn:hover { background: var(--corn-surface-2); }
+.hx-inbox-around-btn .hx-inbox-glyph { flex: none; grid-row: auto; margin: 0; width: 12px; height: 12px; }
+.hx-inbox-around-btn .hx-inbox-tag { flex: none; margin: 0; white-space: nowrap; }
+.hx-inbox-around-word { flex: none; color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-inbox-around-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-inbox-around-planned { color: var(--corn-text-3); font-size: var(--corn-text-xs); font-style: italic; }
+.hx-inbox-area { margin-bottom: var(--corn-space-3); padding-left: var(--corn-space-2); border-left: var(--corn-border-strong) solid var(--corn-line); }
+.hx-inbox-area.is-adds { border-left-style: dashed; }
+.hx-inbox-area-name { margin: 0 0 var(--corn-space-1); color: var(--corn-text-2); font-size: var(--corn-text-xs); font-weight: 600; }
+.hx-inbox-around-more, .hx-inbox-around-none { margin: var(--corn-space-1) 0 0; color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-inbox-around-foot { display: flex; gap: var(--corn-space-2); }
+.hx-inbox-around-graph { height: var(--corn-control-height); padding: 0 var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); cursor: pointer; }
+.hx-inbox-around-graph:hover { border-color: var(--corn-accent); }
+/* Not room for it beside the node panel: the panel says what it is linked to (Connected) */
+@container corn-box (max-width: 1199px) {
+  .hx-inbox.is-picked { grid-template-columns: minmax(20rem, 28rem) 1fr; }
+  .hx-inbox-around { display: none; }
+}
 .hx-inbox-pick { align-self: center; justify-self: center; max-width: 24rem; margin: 0; color: var(--corn-text-3); font-size: var(--corn-text-sm); text-align: center; }
 .hx-inbox-pick[hidden] { display: none; }
 @container corn-box (max-width: 767px) {
