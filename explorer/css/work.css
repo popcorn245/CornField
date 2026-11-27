@@ -1,14 +1,14 @@
 /*
  * work.css: the Work list
- * The Work list (forge-panel.js, runs-view.js) and its tabs (Specs, PRs, Issues, Threads, Runs, Deploys): the slide-over from the left from
- * 768px, a bottom sheet below; the Work toggle in the header; the states, results and skeletons. Read by corn-work (D4); its tabs follow as
- * pieces of their own.
+ * The Work list (forge-panel.js, runs-view.js) and its tabs (Specs, PRs, Issues, Threads, Runs, Deploys): from 768px in the node panel's place on the
+ * right (the two take turns: spec 0015 D3), a bottom sheet below; the Work toggle in the header; the states, results and skeletons. Read by corn-work (D4);
+ * its tabs follow as pieces of their own.
  * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
  * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
  */
-/* ---- the Work list (pieces/work-list.js; spec 0012 D6; first CF-07's issues and PRs panel) -------------------------------------------
-   A slide-over from the left from 768px (the node panel is the one from the right), a bottom sheet in #sheet-dock below.
-   Closed, it is inert, and off screen or not displayed. Only the tokens above are used, so it follows the theme. */
+/* ---- the Work list (pieces/work-list.js; spec 0012 D6, spec 0015 D3; first CF-07's issues and PRs panel) ---------------------------
+   A slide-over from the right from 768px, in the node panel's place (one side panel at a time: a row opens its node there, with Back to the list), a bottom
+   sheet in #sheet-dock below. Closed, it is inert, and off screen or not displayed. Only the tokens above are used, so it follows the theme. */
 .hx-forge { --hx-forge-status-w: 56px; }
 .hx-forge { display: flex; flex-direction: column; z-index: 40; border-color: var(--corn-line); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
 .hx-forge * { touch-action: pan-y; }
@@ -17,7 +17,7 @@
 .hx-forge.forge-open { pointer-events: auto; }
 .hx-forge:not(.forge-open) { box-shadow: none; }
 @container corn-box (min-width: 768px) {
-  .hx-forge { position: absolute; top: 0; left: 0; bottom: 0; width: var(--hx-forge-w); border-left: 0; transform: translateX(-100%); box-shadow: var(--corn-shadow-lg); }
+  .hx-forge { position: absolute; top: 0; right: 0; bottom: 0; width: var(--hx-forge-w); border-right: 0; transform: translateX(100%); box-shadow: var(--corn-shadow-lg); }
   .hx-forge.forge-open { transform: translateX(0); }
 }
 @container corn-box (max-width: 767px) {

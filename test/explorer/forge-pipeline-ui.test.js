@@ -311,16 +311,17 @@ describe('step 1: Start a spec, on an issue', () => {
 describe('an old spec pull request (older than the map of work\'s days) is a plain pull request here', () => {
   const entry = (slug, extra = {}) => ({ slug, title: slug, source: `pr:${slug}`, pull: { number: 40, draft: false }, ...extra });
 
-  it('has a Review button for each proposal it holds that is not approved, found by its slug, and the warning says where it is', async () => {
+  it('has a Review button for each proposal it holds that is not approved, found by its slug, and the Next line says to approve it first', async () => {
     fakeServer({ specs: [{ slug: '0041-other', path: 'p/0041-other.json', approved: false }], proposals: [entry('0041-other')] });
     mount();
     await openSpec({ proposals: true });
     const review = qa('#forge-detail [data-work-action="review"]');
     expect(review.map((b) => [b.dataset.slug, b.dataset.source])).toEqual([['0041-other', 'pr:0041-other']]);
     expect(review[0].getAttribute('aria-label')).toBe('Review proposal 0041-other');
-    expect(q('#forge-detail [data-corn="notice"]').textContent).toContain('(Review above, then Approve)');
-    // the Review buttons come before the warning that points at them
-    expect(review[0].compareDocumentPosition(q('#forge-detail [data-corn="notice"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // spec 0015 D4: Review is in the action bar, and its one Next line says what comes before Land it (the paragraph that explained it is gone)
+    expect(review[0].closest('[data-corn="actions"]')).not.toBe(null);
+    expect(q('#forge-detail [data-corn="actions"] .hx-next').textContent).toMatch(/^Then: approve 0041-other, .*Land it/);
+    expect(q('#forge-detail [data-work-place="notes"]').textContent).not.toContain('not approved yet');
   });
 
   it('never offers another pull request\'s copy of the same slug: approving that one would approve (and with approveLands land) the other pull request', async () => {

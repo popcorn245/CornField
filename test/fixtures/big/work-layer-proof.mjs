@@ -527,7 +527,7 @@ async function main() {
     await pt.goto(`${BASE}/`);
     await pt.waitForSelector('#preset-work-btn:not([hidden])', { timeout: 30_000 });
     await pt.click('#preset-work-btn'); await sleep(2500);
-    await pt.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1200);
+    await pt.click('[data-corn="view-controls"] [data-action="toggle-forge"]'); await sleep(1200);
     const strip = () => pt.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); const tabs = [...t.children].filter((c) => !c.hidden); const box = t.getBoundingClientRect(); const room = parseFloat(getComputedStyle(t).scrollPaddingInlineStart) || 0; const vis = (c) => { const r = c.getBoundingClientRect(); return Math.max(0, Math.min(r.right, box.right) - Math.max(r.left, box.left)) / r.width; }; return { cw: t.clientWidth, sw: t.scrollWidth, left: Math.round(t.scrollLeft), tabs: tabs.map((c) => ({ k: c.dataset.forgeKind, seen: Math.round(vis(c) * 100), on: c.getAttribute('aria-pressed') === 'true' })), room, more: document.querySelector('.hx-forge-top').dataset.more || '' }; });
     const s0 = await strip();
     const deploys0 = s0.tabs.find((x) => x.k === 'deploys');
@@ -560,7 +560,7 @@ async function main() {
     await pt2.goto(`${BASE}/?view=work&pr=13`);
     await pt2.waitForSelector('#preset-work-btn:not([hidden])', { timeout: 30_000 });
     await sleep(2500);
-    await pt2.tap('.hx-work-bar [data-action="toggle-forge"]'); await sleep(900);
+    await pt2.tap('[data-corn="view-controls"] [data-action="toggle-forge"]'); await sleep(900);
     await pt2.evaluate(() => { document.querySelector('[data-sheet="forge"] [data-corn="sheet-handle"], #forge-panel [data-corn="sheet-handle"]')?.click(); });
     await sleep(600);
     const expanded = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); return t.clientWidth > 0; });

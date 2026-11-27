@@ -382,6 +382,30 @@ export function mergeBlock(detail) {
 }
 
 /**
+ * The one "Next" line under the node panel's action bar (spec 0015 D4) for a pull request that cannot land yet, or whose proposal waits on an approval: what comes before
+ * Land it, in one sentence ("Then: approve, and Land it once docs finishes (1 check running)."). '' when nothing stands in the way, and for one that has landed or is closed
+ * (its state says so). A failed check's Re-run is in Checks: the line names it, the button stays there. Only words: what Land does is `mergeBlock`'s and the server's.
+ * @param {{ pull: { state: string, draft?: boolean }, checks: { name: string, state: string, canRerun?: boolean }[], specs?: { slug: string, approved: boolean }[], stale?: string }} detail
+ * @param {{ self?: boolean }} [opts] `self`: the panel is the proposal's own, so "approve" needs no name
+ */
+export function nextWords(detail, { self = false } = {}) {
+  if (!detail || !detail.pull || detail.pull.state !== 'open') return '';
+  const { pull, checks = [] } = detail;
+  const open = (detail.specs || []).filter((s) => !s.approved).map((s) => s.slug);
+  const steps = open.length ? [self ? 'approve' : `approve ${open.join(' and ')}`] : [];
+  const then = (tail) => `Then: ${steps.length ? `${steps.join(', ')}, and ` : ''}${tail}.`;
+  if (pull.draft) { steps.push('mark it ready for review on the forge'); return then('Land it'); }
+  if (!checks.length) return then('Land it once the forge has run its checks (none yet)');
+  const failed = checks.filter((c) => c.state === 'failure' || c.state === 'cancelled');
+  const waiting = checks.filter((c) => !GREEN.includes(c.state) && !failed.includes(c));
+  if (failed.length) steps.push(`re-run ${failed.map((c) => `${c.name}${c.canRerun ? '' : ' on the forge'}`).join(' and ')}`);
+  if (waiting.length) return then(`Land it once ${waiting.map((c) => c.name).join(' and ')} ${waiting.length === 1 ? 'finishes' : 'finish'} (${waiting.length} ${waiting.length === 1 ? 'check' : 'checks'} running)`);
+  if (failed.length) return then('Land it');
+  if (detail.stale) { steps.push('press Refresh (this is an older answer)'); return then('Land it'); }
+  return steps.length ? then('Land it') : '';
+}
+
+/**
  * A line of warning for a spec pull request whose proposal is not approved yet ('' when it is, or the pull request is not a spec's). Only words:
  * what Land does is not changed by it.
  * @param {{ pull: { state: string }, specs?: { slug: string, approved: boolean }[] }} detail

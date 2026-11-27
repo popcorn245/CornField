@@ -10,13 +10,15 @@
  *   followWorkAddress()         `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=` (work-model.js `workAddress`): the node, or for work older than the graph's
  *                               14 days the Work list and the node panel (pieces/work-list.js `showRef`)
  *
- * What it puts on the page: the view switch's Work button, with "waiting on you" as its badge, the toggles at the top left of the stage ("All work", "Waiting on you" and
- * **List**, which opens the Work list (pieces/work-list.js) where the side panel sat), the lanes' titles in screen space (the map draws the lanes' panels), the words
+ * What it puts on the page: the view switch's Work button, with "waiting on you" as its badge, the view's controls in the header after the View switch (spec 0015 D5:
+ * **Waiting on you**, a toggle, off for all the work, and **List**, which opens the Work list (pieces/work-list.js)), the lanes' titles in screen space (the map draws the lanes' panels), the words
  * and the empty lanes shown at once while the first answer is on its way (the page stays usable: the views, the Layers menu, search), "Updating…" while a refresh
  * is (the last answer stays on the map, and a refresh that fails keeps it and says so), the map's own card when the answer is refused (signed out, not a maintainer,
  * offline: pieces/status.js), and a quiet line naming what the server could not read (`problems`). It answers the node panel's `work:panel` ask with what a node says in
  * the Work view (the Work piece draws the actions into it), the Work list's `work:pick` ask by selecting that row's node, and holds the keys of the view: N and P step through
- * the lanes, an arrow goes to the nearest node that way. Every request goes through `credentialed`;
+ * the lanes, an arrow goes to the nearest node that way. The code column holds one node per area (spec 0015 D1): selecting an area opens it in place, a tap on it again
+ * or clearing the selection (Escape) closes it, and selecting a node of code (a search, an address, the keyboard) opens its area; a thread folded into its proposal
+ * (spec 0015 D2) selects the proposal. Every request goes through `credentialed`;
  * every word that comes from the forge is escaped or set as text, every link goes through `safeUrl` (work-model.js).
  *
  * The **Work layer** of the Map view (spec 0012 D4, work-badge-model.js and work-badges.js) shares this file's one read of the graph: turning the layer on asks for it only when the
@@ -45,7 +47,7 @@ import { stepFrom } from './keyboard-model.js';
 import { RUNS_POLL_MS } from './pieces/work-common.js';
 import { showWorkRef, openForge, closeForge } from './forge-panel.js';
 import {
-  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, addressOf, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
+  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, addressOf, applyFilters, areaFor, arrowTarget, drawnEdges, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setOpenArea, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
 
 const GRAPH_URL = '/api/forge/work-graph';
@@ -53,7 +55,7 @@ const $ = (id) => document.getElementById(id);
 
 let wired = false;
 let offered = false;
-let els = null; // { stage, bar, all, waiting, busy, note, lanes, loading }
+let els = null; // { stage, bar (the header's group of the view's controls), waiting, list, busy, note, lanes, loading }
 let laneEls = []; // the lanes' titles on the stage, in screen space: [{ el, name, count }]
 let laneKey = null; // the lanes they were made for
 let offPaint = null;
@@ -90,6 +92,8 @@ export function initWorkView(opts = {}) {
     i.on('work:available', ({ on: available }) => { paintList(available); i.emit('layers:redraw'); syncBadges(); });
     i.on('work:panel', (node) => panelFor(node));
     i.on('work:pick', (ref) => pickRef(ref));
+    i.on('selection', onSelection);
+    i.on('select', onTap);
     mapStyleOf(i).onChange(() => { paintEdgeColors(); if (on()) { state.workRows = layerRowsOf(work().nodes).map(themed); i.emit('layers:redraw'); i.touchScene(); render(); } });
   }
   state.workRow = () => (offered && inst().ask('work:on') ? badgeRowOf(work(), badgeColor('pull')) : null); // the Layers menu's row under Overlays (engine/layers.js `layerRows`)
@@ -125,18 +129,27 @@ function paintBadge(total) {
 // ---------------------------------------------------------------------------
 //  The page's parts
 // ---------------------------------------------------------------------------
+/** The header's group for the view's own controls (index.html, spec 0015 D5); a page without it gets one after the View switch, else over the map */
+function controlsSlot(stage) {
+  const slot = document.querySelector('[data-corn="view-controls"]');
+  if (slot) return slot;
+  const made = document.createElement('div');
+  made.className = 'hx-view-controls';
+  made.dataset.corn = 'view-controls';
+  made.setAttribute('role', 'group');
+  made.setAttribute('aria-label', 'Work view');
+  const view = document.querySelector('[data-corn="view-switch"]');
+  if (view) view.after(made); else stage.append(made);
+  return made;
+}
+
 function mount() {
   const stage = state.canvas ? state.canvas.parentElement : null;
-  if (!stage || (els && els.stage === stage && stage.contains(els.bar))) return;
-  const bar = document.createElement('div');
-  bar.className = 'hx-work-bar';
-  bar.dataset.corn = 'work-bar';
-  bar.setAttribute('role', 'group');
-  bar.setAttribute('aria-label', 'Show');
+  if (!stage || (els && els.stage === stage && els.bar.isConnected && stage.contains(els.lanes))) return;
+  const bar = controlsSlot(stage);
   bar.hidden = true;
-  bar.innerHTML = '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="all" aria-pressed="true">All work</button>'
-    + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="waiting" aria-pressed="false">Waiting on you</button>'
-    + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work list" title="The lists of issues, pull requests, proposals, threads, runs and deploys" hidden>List</button>'
+  bar.innerHTML = '<button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-work-toggle="waiting" aria-pressed="false" title="Show only what waits on you; the rest is dimmed">Waiting on you</button>'
+    + '<button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work list" title="The lists of issues, pull requests, proposals, threads, runs and deploys" hidden>List</button>'
     + '<span class="hx-work-busy" hidden>Updating…</span>';
   const note = document.createElement('p');
   note.className = 'hx-work-note';
@@ -155,8 +168,8 @@ function mount() {
   loading.hidden = true;
   loading.innerHTML = `<div class="hx-work-skeleton" aria-hidden="true">${['Talk', 'Decide', 'Build', 'Ship', 'Code it touches'].map((name) => `<div class="hx-work-skel-lane"><span class="hx-work-lane-title">${name}</span><i></i><i></i><i></i><i></i></div>`).join('')}</div>`
     + '<p class="hx-work-loading-text" role="status">Reading the work from the forge. A big repository can take several seconds the first time; the page works meanwhile.</p>';
-  stage.append(lanes, loading, bar, note);
-  els = { stage, bar, all: bar.children[0], waiting: bar.children[1], list: bar.children[2], busy: bar.children[3], note, lanes, loading };
+  stage.append(lanes, loading, note);
+  els = { stage, bar, waiting: bar.children[0], list: bar.children[1], busy: bar.children[2], note, lanes, loading };
   paintList(!!inst().ask('work:on')); // the List toggle is there while the Work piece is on: a signed-in maintainer of a forge
   if (offPaint) offPaint();
   if (badges) badges.destroy();
@@ -188,7 +201,7 @@ function watchSize(stage) {
   }).observe(stage);
 }
 
-/** The lanes' titles, over the map in screen space: centred over their lane and held under the toggles while the lane is in view (a phone's: at the lane's top left) */
+/** The lanes' titles, over the map in screen space: centred over their lane and held at the map's top while the lane is in view (a phone's: at the lane's top left, under the controls on the map) */
 function paintLanes(scene, camera) {
   if (!els) return;
   const w = work();
@@ -212,13 +225,13 @@ function paintLanes(scene, camera) {
     });
   }
   const phone = isPhone();
-  const top = phone ? STICKY_TOP_PHONE : STICKY_TOP;
+  const top = phone ? phoneTop() : STICKY_TOP;
   for (const { el, lane } of laneEls) {
     const left = camera.x + lane.x * camera.zoom;
     const right = left + lane.w * camera.zoom;
     const topPx = camera.y + lane.y * camera.zoom;
     const bottomPx = topPx + lane.h * camera.zoom;
-    // a phone's title stays at its lane's top and goes when that is under the toggles; a desktop's is held under them while the lane is in view
+    // a phone's title stays at its lane's top and goes when that is under the controls on the map; a desktop's is held at the map's top while the lane is in view
     const seen = right > 0 && left < els.stage.clientWidth && bottomPx > 40 && topPx < els.stage.clientHeight && !(phone && topPx + 8 < top);
     el.style.visibility = seen ? 'visible' : 'hidden';
     if (!seen) continue;
@@ -229,18 +242,22 @@ function paintLanes(scene, camera) {
     if (phone) { el.style.left = `${Math.round(Math.max(left, 0) + 10)}px`; el.style.transform = 'none'; } else { el.style.left = `${Math.round((left + right) / 2)}px`; el.style.transform = 'translateX(-50%)'; }
   }
 }
-/** The line the lanes' titles hold under, in px from the top of the stage: below the toggles (a phone's are on a second row, under the Layers chip) */
-const STICKY_TOP = 58;
-const STICKY_TOP_PHONE = 108;
+/** The line the lanes' titles hold under, in px from the top of the stage: the map's top, now that the view's controls are in the header (spec 0015 D5) */
+const STICKY_TOP = 12;
+/** A phone's: under the row the Layers chip and the view's controls sit on, on the map (measured: the controls wrap to a second row when the words are long) */
+const STICKY_TOP_PHONE = 72;
+function phoneTop() {
+  const tools = document.querySelector('.hx-view-tools');
+  if (!tools || !els) return STICKY_TOP_PHONE;
+  const bottom = tools.getBoundingClientRect().bottom - els.stage.getBoundingClientRect().top;
+  return bottom > 0 ? Math.round(bottom + 12) : STICKY_TOP_PHONE;
+}
 
 function paintBar() {
   if (!els) return;
   const w = work();
-  const n = w.counts.waiting;
   els.bar.hidden = !on();
-  els.all.setAttribute('aria-pressed', String(!w.waiting));
-  els.waiting.setAttribute('aria-pressed', String(w.waiting));
-  els.waiting.textContent = `Waiting on you · ${n}`;
+  els.waiting.setAttribute('aria-pressed', String(!!w.waiting)); // the Work button's badge says how many; the toggle says only that it is on
   els.busy.hidden = !(on() && w.status === 'ok' && w.updating);
   els.loading.hidden = !(on() && w.status === 'loading');
   const lines = [...(w.stale ? [w.stale] : []), ...(w.lastError ? [w.lastError] : []), ...w.problems.map((p) => p.text)];
@@ -432,8 +449,9 @@ function arrive(body, { select, ask, quiet }) {
   const first = w.status !== 'ok';
   const before = state.selectedNode ? state.selectedNode.id : null;
   const base = state.baseNodes && state.baseNodes.length ? state.baseNodes : (w.saved ? w.saved.nodes : state.nodes);
+  const baseEdges = state.baseNodes && state.baseNodes.length ? state.baseEdges : (w.saved ? w.saved.edges : state.edges); // its ownership edges say which area a node is in
   const had = w.badges ? w.badges.size : -1;
-  setWorkGraph(state, body, base);
+  setWorkGraph(state, body, base, baseEdges);
   w.badges = badgeIndex(w.nodes, w.edges);
   w.status = 'ok';
   w.updating = false;
@@ -495,7 +513,8 @@ function themed(row) {
 function refilter() {
   if (!on()) return;
   const w = work();
-  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting });
+  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting, open: w.open });
+  state.edges = drawnEdges(w.nodes, w.edges, w.open); // an open area's ties to the nodes it shows
   const sel = state.selectedNode;
   applyWorkLayout(state, { phone: isPhone() });
   state.workRows = layerRowsOf(w.nodes).map(themed);
@@ -507,19 +526,74 @@ function refilter() {
 
 /** Selects a node of the view by id: the panel opens, the camera follows (as a search's choice does) */
 export function pick(id, { frame = true, source = 'link' } = {}) {
-  const node = state.nodes.find((n) => n.id === id);
+  let node = state.nodes.find((n) => n.id === id);
+  if (node && node.foldedInto) node = state.nodes.find((n) => n.id === node.foldedInto); // a spec pull request's thread: its proposal (spec 0015 D2)
   if (!node) return false;
-  if (node.hidden) { work().layers[node.draft ? DRAFT_LAYER : node.work ? `work-${node.work}` : CODE_LAYER] = true; refilter(); }
+  const layer = node.draft ? DRAFT_LAYER : node.work ? `work-${node.work}` : CODE_LAYER;
+  if (node.hidden && work().layers[layer] === false) { work().layers[layer] = true; refilter(); }
+  openAreaOf(node); // a node of code: its area opens in place (spec 0015 D1)
   selectNode(inst(), node, { frame, source });
   return true;
 }
 
-/** "Waiting on you" on or off: everything that does not wait is dimmed (spec 0012 D3) */
+// ---------------------------------------------------------------------------
+//  The code column's areas (spec 0015 D1): one open at a time, in place
+// ---------------------------------------------------------------------------
+
+/** Opens an area (null: closes the open one) and lays the view out again where it is: the camera stays, and what is open is said */
+function openArea(id, { say = true } = {}) {
+  if (!on() || work().status !== 'ok' || !setOpenArea(state, id)) return false;
+  applyWorkLayout(state, { phone: isPhone() });
+  state.workRows = layerRowsOf(work().nodes).map(themed);
+  inst().touchScene();
+  render();
+  if (say) {
+    const area = id ? work().nodes.find((n) => n.id === id) : null;
+    if (area) announce(inst(), `${area.label} open: ${area.drawn} ${area.drawn === 1 ? 'node' : 'nodes'} of code.`);
+  }
+  return true;
+}
+
+/** The area of a node of code, opened (a search's choice, an address, a step of the keyboard to it); nothing for a piece of work */
+function openAreaOf(node) {
+  const id = areaFor(node);
+  if (id && id !== work().open) openArea(id, { say: false });
+}
+
+/** Moments ago, the selection opened this area: the tap that chose it is not a second press (`onTap`) */
+let opened = null;
+
+/**
+ * The selection changed. A node of code opens its area; nothing selected (Escape, a click on the background) closes it; a thread folded into its proposal
+ * selects the proposal (spec 0015 D2: it is not drawn, the proposal stands for it).
+ */
+function onSelection({ node: picked }) {
+  if (!on() || work().status !== 'ok') return;
+  if (!picked) { openArea(null); return; }
+  const node = work().nodes.find((n) => n.id === picked.id); // the view's own node (a tap names the scene's)
+  if (!node) return;
+  if (node.foldedInto) { const into = state.nodes.find((n) => n.id === node.foldedInto); if (into) selectNode(inst(), into, { frame: true, source: 'link' }); return; }
+  const id = areaFor(node);
+  if (!id || id === work().open) return;
+  openArea(id, { say: false });
+  if (node.area) { opened = id; queueMicrotask(() => { opened = null; }); }
+}
+
+/** A tap on the map's node: on the area that is selected already, it opens or closes it (the first tap selected it, and the selection opened it) */
+function onTap(picked) {
+  const node = picked && on() ? work().nodes.find((n) => n.id === picked.id) : null;
+  if (!node || !node.area) return;
+  if (opened === node.id) { opened = null; return; }
+  if (!state.selectedNode || state.selectedNode.id !== node.id) return; // the selection opens it
+  if (openArea(work().open === node.id ? null : node.id)) inst().emit('node:show', { node: state.selectedNode, frame: false }); // the panel's lines say what is drawn now
+}
+
+/** "Waiting on you" on or off (off is all the work): everything that does not wait is dimmed (spec 0012 D3, 0015 D5) */
 function setWaiting(on_) {
   const w = work();
   if (w.waiting === on_) return;
   w.waiting = on_;
-  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting });
+  applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting, open: w.open });
   inst().touchScene();
   paintBar();
   render();
@@ -588,8 +662,7 @@ function onClick(e) {
   if (!t_) return;
   if (t_.closest('[data-action="preset-work"]')) { if (on()) closeWork(); else openWork(); return; }
   if (t_.closest('[data-action="refresh-forge"]') && on()) { load({ again: true }); return; }
-  const show = t_.closest('[data-work-show]');
-  if (show && on()) { setWaiting(show.dataset.workShow === 'waiting'); return; }
+  if (t_.closest('[data-work-toggle="waiting"]') && on()) { setWaiting(!work().waiting); return; }
   const act = t_.closest('[data-work-action]');
   if (!act) return;
   if (act.dataset.workAction === 'open-item') { // a node panel's "Open work" link: the Work view opens on that piece of work (a new tab, by the link's own address, is left alone)

@@ -13,6 +13,8 @@ import { cornStateAttr } from '../corn-state.js';
 import { relativeTime } from '../review-model.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { plural, safeUrl, threadOf, MENTIONABLE } from './work-common.js';
+import { sectionHtml } from '../panel-model.js';
+import { oldItem, workNode } from '../work-model.js';
 
 export function install(ctx) {
   const { inst, ui, m, fn, state, root, $ } = ctx;
@@ -110,7 +112,14 @@ export function install(ctx) {
 
   /** Puts the focus back on what opened the form: the node panel's button while it is still there, else the New idea button */
   function focusIdeaOpener() {
-    const from = ui.idea.opener ? [...root.querySelectorAll('[data-thread-start]')].find((b) => b.dataset.threadStart === ui.idea.opener) : null;
+    let from = ui.idea.opener ? [...root.querySelectorAll('[data-thread-start]')].find((b) => b.dataset.threadStart === ui.idea.opener) : null;
+    // On a desktop the list took the node panel's place to show the form (spec 0015 D3): the node's panel comes back in its place, and its button has the focus again
+    const node = state.selectedNode;
+    if (from && from.closest('[inert]') && ui.open && !m.behind && node && node.id === ui.idea.opener) {
+      fn.goBehind();
+      if (m.behind) inst.emit('node:show', { node, frame: false }); // (on a phone the sheets take turns on their own: nothing goes behind)
+      from = [...root.querySelectorAll('[data-thread-start]')].find((b) => b.dataset.threadStart === ui.idea.opener) || null;
+    }
     (from && !from.closest('[inert]') ? from : $('idea-open')).focus();
   }
 
@@ -252,12 +261,13 @@ export function install(ctx) {
   }
 
   /** The thread in the node panel: read-only, its messages as written, a way to reply on the forge, and the nodes its text names */
-  function threadDetailHtml() {
-    if (ui.threadError) return `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>`;
-    if (!ui.threadDetail) return '<p class="hx-faint">Loading its messages …</p>';
+  function threadParts() {
+    if (ui.threadError) return { notes: `<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>` };
+    if (!ui.threadDetail) return { notes: '<p class="hx-faint">Loading its messages …</p>' };
     const { thread: t, stale } = ui.threadDetail;
     const lit = ui.litThread;
     const url = safeUrl(t.url);
+    // Reply is the thread's one action (spec 0015 D4): a thread is a conversation on the forge, so it is a link there
     const reply = url ? `<a data-corn="open-link" data-corn-kind="primary" class="hx-btn hx-btn--primary hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Reply on ${escHtml(fn.forgeName())} ↗</a>` : '';
     const named = [
       ...(t.proposals || []).map((p) => `Proposal <code class="hx-code">${escHtml(p.slug)}</code> in pull request #${p.pull}`),
@@ -272,18 +282,52 @@ export function install(ctx) {
         : '';
       return `<li class="hx-thread-msg" data-corn="thread-message"><p class="hx-forge-meta"><strong class="hx-strong">${escHtml(msg.author ? msg.author.login : 'someone')}</strong>${msg.opening ? ' opened this' : ''} · ${escHtml(relativeTime(msg.createdAt, m.now()))}${link}</p><p class="hx-thread-body">${escHtml(msg.body.trim() === '' ? '(no text)' : msg.body)}${msg.cut ? '\n… (cut here; the rest is on the forge)' : ''}</p>${chips}</li>`;
     }).join('');
-    return `<p class="hx-forge-meta">${escHtml(threadKindWords(t))} · ${escHtml(threadMeta({ ...t, comments: t.messages.length - (t.kind === 'idea' ? 1 : 0) + (t.hidden || 0) }, m.now()))}</p>
-      <p class="hx-forge-why hx-faint">Read-only here: a thread is a conversation on ${escHtml(fn.forgeName())}, so you reply there.</p>
-      ${reply ? `<div class="hx-forge-cta">${reply}</div>` : ''}
+    const notes = `<p class="hx-forge-meta">${escHtml(threadKindWords(t))} · ${escHtml(threadMeta({ ...t, comments: t.messages.length - (t.kind === 'idea' ? 1 : 0) + (t.hidden || 0) }, m.now()))}</p>
       ${named.length ? `<p class="hx-forge-meta">${named.join(' · ')}</p>` : ''}
-      ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
-      <h3 class="hx-forge-sub">${escHtml(`Mentions: ${plural(lit.nodes.length, 'node')} on the map`)}</h3>
-      ${lit.nodes.length ? `<span class="hx-forge-nodes hx-thread-nodes">${lit.nodes.map(fn.nodeButton).join('')}</span>` : '<p class="hx-faint">No message mentions a node. Write [[node-id]] or [[repo/path]] in a message to point at the map.</p>'}
-      ${lit.unresolved.length ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(lit.unresolved.join(', '))} ${lit.unresolved.length === 1 ? 'is' : 'are'} mentioned but not on the map, so ${lit.unresolved.length === 1 ? 'it stays' : 'they stay'} text.</p>` : ''}
-      <h3 class="hx-forge-sub">${escHtml(plural(t.messages.length, 'message'))}</h3>
-      ${t.hidden ? `<p class="hx-forge-why hx-faint">${escHtml(plural(t.hidden, 'earlier message'))} not shown; they are on ${escHtml(fn.forgeName())}.</p>` : ''}
-      <ol class="hx-thread-msgs" aria-label="Messages">${msgs}</ol>`;
+      ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}`;
+    const mentions = sectionHtml({
+      key: 'mentions', title: 'Mentions', count: lit.nodes.length,
+      body: `${lit.nodes.length ? `<span class="hx-forge-nodes hx-thread-nodes">${lit.nodes.map(fn.nodeButton).join('')}</span>` : '<p class="hx-faint">No message mentions a node. Write [[node-id]] or [[repo/path]] in a message to point at the map.</p>'}
+      ${lit.unresolved.length ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(lit.unresolved.join(', '))} ${lit.unresolved.length === 1 ? 'is' : 'are'} mentioned but not on the map, so ${lit.unresolved.length === 1 ? 'it stays' : 'they stay'} text.</p>` : ''}`,
+    });
+    // The messages are what a thread is: open until it is closed by hand
+    const messages = sectionHtml({
+      key: 'messages', title: 'Messages', count: t.messages.length, open: true,
+      body: `${t.hidden ? `<p class="hx-forge-why hx-faint">${escHtml(plural(t.hidden, 'earlier message'))} not shown; they are on ${escHtml(fn.forgeName())}.</p>` : ''}<ol class="hx-thread-msgs" aria-label="Messages">${msgs}</ol>`,
+    });
+    return { primary: reply, notes, sections: [mentions, messages] };
   }
 
-  Object.assign(fn, { dropThread, selectThread, clearThread, threadSelectionWords, openThread, ensureThreadsList, threadsFor, toggleIdea, focusIdeaOpener, startThread, sendIdea, afterIdea, paintIdea, threadHtml: (...a) => withParts(threadHtml(...a)), threadDetailHtml: (...a) => withParts(threadDetailHtml(...a)) });
+  /**
+   * A thread folded into its proposal (spec 0015 D2): its row in the proposal's Connected shows it in the node panel, Reply and Open on the forge with it, while the proposal stays
+   * selected on the map (the panel's Back goes to it). The thread is read from the threads list when it is there, else from its own route (`m.preload`: the panel's read is this one).
+   */
+  async function showFolded(n, id) {
+    const into = inst.state.selectedNode;
+    const listed = Object.entries(ui.lists).filter(([k]) => k.startsWith('threads|')).flatMap(([, l]) => l.items).find((x) => x.number === n);
+    let item = listed ? oldItem('thread', listed) : null;
+    if (!item) {
+      const res = await fn.request(threadUrl(n), false);
+      const thread = res.ok && res.body.thread;
+      if (!thread || ctx.dead) { if (!ctx.dead) announce(res.ok ? `Thread ${n} could not be read.` : fn.failWords(res, `thread ${n}`)); return; }
+      m.preload = { kind: 'thread', n, res };
+      item = oldItem('thread', thread);
+    }
+    if (!item || ctx.dead) return;
+    const node = { ...workNode({ ...item, id: id || item.id }), foldedInto: into && into.id ? into.id : null };
+    inst.emit('node:show', { node, frame: false });
+  }
+
+  /** The comments of the threads folded into a proposal, once the threads list has them: "Discussed in Thread #21 · 4 comments" */
+  function paintFoldedCounts(box) {
+    const items = Object.entries(ui.lists).filter(([k]) => k.startsWith('threads|')).flatMap(([, l]) => l.items);
+    for (const el of box.querySelectorAll('[data-folded-count]')) {
+      if (el.textContent) continue;
+      const hit = items.find((x) => String(x.number) === el.dataset.foldedCount);
+      const c = hit && Number(hit.comments);
+      if (Number.isInteger(c)) el.textContent = ` · ${c} ${c === 1 ? 'comment' : 'comments'}`;
+    }
+  }
+
+  Object.assign(fn, { dropThread, selectThread, clearThread, threadSelectionWords, openThread, ensureThreadsList, threadsFor, toggleIdea, focusIdeaOpener, startThread, sendIdea, afterIdea, paintIdea, threadHtml: (...a) => withParts(threadHtml(...a)), threadParts, showFolded, paintFoldedCounts });
 }

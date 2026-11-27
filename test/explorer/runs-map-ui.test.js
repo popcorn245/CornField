@@ -420,7 +420,7 @@ describe('the proposal bar beside the Work list (explorer.css)', () => {
   it('makes room by the list\'s own width, never a fixed offset', () => {
     const cssText = explorerCss();
     expect(cssText).not.toMatch(/proposal-bar \{ left: \d+px/);
-    expect(cssText).toContain('.hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px);');
+    expect(cssText).toContain('.hx-stage:has(.forge-open) .hx-proposal-bar { width: min(960px, calc(100% - var(--hx-forge-w) - 24px)); }'); // on the right, in the node panel's place (spec 0015 D3)
     expect(cssText).toContain('width: var(--hx-forge-w);');
     expect(cssText).not.toContain('.hx-run-compare');
   });

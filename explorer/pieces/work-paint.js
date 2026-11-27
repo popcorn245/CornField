@@ -14,6 +14,8 @@ import { specGroups, waitingWords, runWaitingOn } from '../waiting-model.js';
 import { specGroupsHtml } from '../waiting-view.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { plural, safeUrl, option } from './work-common.js';
+import { actionBarHtml } from '../panel-model.js';
+import { applySections, menuOpen, reopenMenu } from '../panel-sections.js';
 
 export function install(ctx) {
   const { inst, ui, m, fn, state, root, $ } = ctx;
@@ -36,6 +38,9 @@ export function install(ctx) {
     if (el.dataset.runReply) return `[data-run-reply="${el.dataset.runReply}"]`;
     if (el.dataset.runAnswer) return `[data-run-answer="${el.dataset.runAnswer}"][data-run-id="${el.dataset.runId}"]`;
     if (el.dataset.runTimeline) return `[data-run-timeline="${el.dataset.runTimeline}"]`;
+    if (el.dataset.secToggle) return `[data-sec-toggle="${el.dataset.secToggle}"]`;
+    if (el.dataset.workFolded) return `[data-work-folded="${el.dataset.workFolded}"]`;
+    if (el.hasAttribute && el.hasAttribute('data-more-toggle')) return '[data-more-toggle]';
     return null;
   }
 
@@ -55,6 +60,7 @@ export function install(ctx) {
     if (back && back !== inst.active() && !back.closest('[hidden]')) back.focus();
     // Retry was pressed and its notice is gone (the list is being read again): the focus goes to the list's title, never to the page
     if (had && had.dataset && had.dataset.action === 'retry-forge' && !panel.contains(inst.active())) $('forge-title').focus();
+    if (m.markRow && ui.open && !m.behind && fn.markRow()) m.markRow = false; // opened with a node selected: its row, once the list has it (spec 0015 D3)
     paintDetail();
   }
 
@@ -72,16 +78,32 @@ export function install(ctx) {
     if (kind !== ui.item.kind) return; // the node panel shows another piece of work than the one read: its own draw comes with `node:painted`
     const had = box.contains(inst.active()) ? inst.active() : null;
     const again = had ? findAgain(had) : null;
-    if (kind === 'run') fn.paintRunCard();
-    else {
-      const body = kind === 'pull' ? fn.detailHtml() : kind === 'thread' ? fn.threadDetailHtml() : kind === 'deploy' ? fn.deployDetailHtml() : kind === 'issue' ? fn.issueActionsHtml(ui.item) : kind === 'proposal' ? `${fn.proposalActionsHtml(ui.item)}${Number.isInteger(ui.item.number) ? fn.detailHtml() : ''}` : '';
-      const html = `${noteHtml(kind)}${body}`;
-      if (drawn.get(box) !== html) {
-        box.innerHTML = html;
-        drawn.set(box, html);
-        addParts(box);
-      }
+    const inMenu = !!(had && had.closest('[data-more-menu]'));
+    // Spec 0015 D4's order: the action bar (the primary action, one or two beside it, the rest under ⋯) with its Next line, the notices, (Connected, the panel's), the sections
+    const parts = partsOf(kind) || {};
+    // A place the box was given without its three places (a host's own box, or one drawn before spec 0015): they are made, in their order
+    for (const place of ['bar', 'notes', 'sections']) {
+      if (box.querySelector(`[data-work-place="${place}"]`)) continue;
+      const el = inst.doc.createElement('div');
+      el.className = `hx-work-${place}`;
+      el.dataset.workPlace = place;
+      box.append(el);
     }
+    const put = (place, html) => {
+      const el = box.querySelector(`[data-work-place="${place}"]`);
+      if (!el || drawn.get(el) === html) return false;
+      el.innerHTML = html;
+      drawn.set(el, html);
+      addParts(el);
+      return true;
+    };
+    put('bar', actionBarHtml(parts));
+    put('notes', `${noteHtml(kind)}${parts.notes || ''}`);
+    if (kind === 'run') fn.paintRunCard();
+    else put('sections', (parts.sections || []).filter(Boolean).join(''));
+    applySections(inst, box, kind); // the sections as they were left for this kind of node
+    fn.paintFoldedCounts(box);
+    if (inMenu && !menuOpen(box)) reopenMenu(box);
     const back = again && box.querySelector(again);
     if (back && back !== inst.active() && !back.closest('[hidden]') && !back.disabled) back.focus();
     // The control that had the focus is gone (Land it, once the pull request has landed; a Stop that was asked for) and the page has it: it goes to the actions' own place, which a keyboard
@@ -95,6 +117,19 @@ export function install(ctx) {
     if (hadRun && !box.contains(inst.active())) {
       const card = [...box.querySelectorAll('[data-run]')].find((c) => c.dataset.run === hadRun.dataset.run);
       if (card) card.focus();
+    }
+  }
+
+  /** A kind's part of the node panel: `{ primary, others, next, notes, sections }` (each its part's own markup: pieces/work-prs.js, work-specs.js, work-issues.js ...) */
+  function partsOf(kind) {
+    switch (kind) {
+      case 'pull': return fn.pullParts();
+      case 'proposal': return fn.proposalParts(ui.item);
+      case 'issue': return fn.issueParts(ui.item);
+      case 'thread': return fn.threadParts();
+      case 'deploy': return fn.deployParts();
+      case 'run': return fn.runParts();
+      default: return null;
     }
   }
 
@@ -270,7 +305,7 @@ export function install(ctx) {
 
   /** The toggles that open the list (`data-action="toggle-forge"`: the Work view's List) say whether it is open */
   function paintButton() {
-    for (const toggle of root.querySelectorAll('[data-action="toggle-forge"]')) toggle.setAttribute('aria-expanded', String(ui.open));
+    for (const toggle of root.querySelectorAll('[data-action="toggle-forge"]')) toggle.setAttribute('aria-expanded', String(ui.open && !m.behind)); // behind the node it opened, it is not shown
   }
 
   /** Whether the Filter chip applies to the view: the proposals and the release notes have nothing to filter */

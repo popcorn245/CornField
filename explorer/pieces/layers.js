@@ -2,7 +2,9 @@
  * @module explorer/pieces/layers
  *
  * The Layers menu as a piece (spec 0011 D3): one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend
- * of what the lines mean. The data-flow preset ignores the toggles. What the layers are, which are on and what a review shows is the instance's
+ * of what the lines mean. The data-flow preset ignores the toggles. A row may carry a button of its own beside it (`action` on the row: the History
+ * row's Replay, spec 0015 D6), which this piece draws and closes the menu for; what it does is the page's (page.js hears its `data-action`). A legend
+ * (the Key, Agent runs, History, Cloud, Data Flow) shows only while its layer is on; the proposal marks' while a proposal is open. What the layers are, which are on and what a review shows is the instance's
  * (engine/layers.js); this is the chip, the menu and its rows.
  *
  *   mount(root, inst, options) -> { update, destroy, ... }
@@ -43,7 +45,7 @@ export const markup = () => ({
   <button type="button" id="legend-toggle-btn" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" aria-controls="legend-dropdown" data-corn="layers-button"><span data-corn-string="layers">Layers</span><span id="layers-count" class="hx-layers-count" data-corn="count"></span></button>
   <div id="legend-dropdown" class="hx-menu glass" hidden data-corn="layers-menu">
     <div class="hx-menu-title hx-menu-head" data-corn="menu-title">
-      <span>Section Toggles</span>
+      <span>Layers</span>
       <span class="hx-menu-links">
         <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn="layers-all" data-corn-kind="quiet" data-corn-string="layersAll">All</button>
         <span class="hx-faint">•</span>
@@ -81,6 +83,9 @@ export const markup = () => ({
 });
 
 /** "1 link", "3 in flight", else the number */
+/** The runs' layer (runs-map.js `RUNS_LAYER`): named here, so the menu does not load the runs' marks */
+const RUNS_LAYER = 'runs';
+
 const UNIT = Object.assign(Object.create(null), { flow: (n) => `${n} ${n === 1 ? 'link' : 'links'}`, runs: (n) => `${n} in flight` });
 
 /** Mounts the Layers menu; see the top of this file */
@@ -219,11 +224,12 @@ export function mount(root, inst, options = {}) {
 
     const row = (layer) => {
       const on = isOn(inst, layer.key);
+      const act = layer.action && typeof layer.action.name === 'string' ? layer.action : null;
       const shown = byProposal[layer.key] ? `<span class="hx-faint hx-layer-note" data-corn="layer-note">+${byProposal[layer.key]} shown by the proposal</span>` : '';
       // A row the review hid says so under its name (there is no room beside it): it can still be turned on, for the review
       const hid = !shown && counts[layer.key] && reviewHides(state, layer.key) ? `<span class="hx-faint hx-layer-note" data-corn="layer-note">${escHtml(t(inst, 'hiddenWhileReviewing'))}</span>` : '';
       const name = `<span class="hx-toggle-name">${escHtml(layer.label)}</span>`;
-      return `
+      const toggle = `
       <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${escHtml(layer.key)}" aria-pressed="${on}" title="${escHtml(layer.desc)}" data-corn="row">
         <span class="hx-toggle-label">
           ${dot(swatch(layer.color), on, surface)}
@@ -233,7 +239,10 @@ export function mount(root, inst, options = {}) {
           <span class="hx-count" data-corn="count">${layer.countText || (UNIT[layer.key] || String)(counts[layer.key] || 0)}</span>
           <span class="hx-tick">${on ? '✓' : '—'}</span>
         </span>
-      </button>${kindsHtml(layer, kinds.get(layer.key), surface)}`;
+      </button>`;
+      // A row's own button (the History row's Replay) sits beside it, never in it: a button in a button is not one
+      const line = act ? `<div class="hx-toggle-line">${toggle}<button type="button" class="hx-row-action" data-action="${escHtml(act.name)}" data-corn-kind="secondary" aria-pressed="${act.pressed === true}" title="${escHtml(act.title || '')}">${escHtml(act.label)}</button></div>` : toggle;
+      return `${line}${kindsHtml(layer, kinds.get(layer.key), surface)}`;
     };
 
     // The focus stays where it was across the redraw: the same row or disclosure, found again by what it names
@@ -249,8 +258,18 @@ export function mount(root, inst, options = {}) {
     }
     renderFlowLegend(inst, own('flow-legend'));
     renderEdgeKey();
+    paintLegends(layers);
     renderCloudLegend();
     addParts(own('flow-legend'));
+  }
+
+  /** The legends that follow a layer (spec 0015 D6): the Key while any layer is on (with none, no line is drawn), Agent runs while runs are on the map and their layer is on */
+  let runsActive = false;
+  function paintLegends(layers = layerRows(inst).layers) {
+    const key = own('edge-key');
+    if (key) key.hidden = !layers.some((l) => isOn(inst, l.key));
+    const runs = own('runs-legend');
+    if (runs) runs.hidden = !(runsActive && isOn(inst, RUNS_LAYER));
   }
 
   /** The Key (spec 0008 D7): each kind of line as the map draws it (edge-key.js) */
@@ -296,6 +315,8 @@ export function mount(root, inst, options = {}) {
   scope.listen(wrap, 'click', (e) => {
     const target = e.target.closest && e.target.closest('[data-action]');
     if (!target) return;
+    // A row's own button (Replay): the menu closes, the focus on its chip, and the page does the rest (it hears the click on the document)
+    if (target.classList.contains('hx-row-action')) { closeMenu(); btn.focus(); return; }
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   });
@@ -323,8 +344,8 @@ export function mount(root, inst, options = {}) {
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);
-  scope.on('runs:map', ({ active }) => { const legend = own('runs-legend'); if (legend) legend.hidden = !active; });
-  scope.on('history:legend', ({ active }) => { const legend = own('history-legend'); if (legend) legend.hidden = !active; }); // the History layer is drawn (history.js): what a halo's width and colour say // runs are on the map (the Work list): the legend says what each mark is
+  scope.on('runs:map', ({ active }) => { runsActive = !!active; paintLegends(); }); // runs are on the map (the Work list): the legend says what each mark is, while their layer is on
+  scope.on('history:legend', ({ active }) => { const legend = own('history-legend'); if (legend) legend.hidden = !active; }); // the History layer is drawn (history.js): what a halo's width and colour say
   // The marks legend is there while a proposal is open (the proposal's bar says so: engine/proposal.js)
   const showLegend = (open) => { const legend = own('proposal-legend'); if (legend) legend.hidden = !open; };
   scope.on('proposal:draw', ({ open }) => showLegend(open));

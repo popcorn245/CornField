@@ -342,7 +342,7 @@ describe('a pull request in the node panel', () => {
     await show('pull', n);
   }
 
-  it('from a row into the node panel and back, by the keyboard: Enter on the row shown goes in, and Escape or ✕ gives the row the focus again', async () => {
+  it('from a row into the node panel and back, by the keyboard: the row opens its node in the list\'s place (spec 0015 D3), Escape or Back gives the row the focus again, ✕ closes both', async () => {
     fakeServer();
     mount();
     openForge({ tab: 'pulls' });
@@ -351,30 +351,35 @@ describe('a pull request in the node panel', () => {
     row().focus();
     click(row());
     await settle();
-    expect(document.activeElement).toBe(row()); // the first Enter selects: the list can be read down
-    click(row());
-    await settle();
-    expect(document.activeElement).toBe($('drawer-title')); // the second goes into the node panel, as Enter on the map does
+    // one place on the right: the node panel takes the list's, and has the focus (the list is inert behind it)
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    expect($('forge-panel').inert).toBe(true);
+    expect($('spec-drawer').contains(document.activeElement)).toBe(true);
+    expect($('drawer-back').hidden).toBe(false);
+    expect($('drawer-back').textContent).toBe('Back to the list');
     expect(key($('drawer-title'), 'Escape').defaultPrevented).toBe(true);
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
-    expect(document.activeElement).toBe(row()); // back on the row it came from, with the list open
-    expect(await said()).toBe('Panel closed');
-    key(row(), 'Escape'); // and the list's own Escape closes the list
+    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
+    expect(document.activeElement).toBe(row()); // back on the row it came from, marked as the one shown
+    expect(row().getAttribute('aria-pressed')).toBe('true');
+    key(row(), 'Escape'); // and the list's own Escape closes the list, and the selection with it
     expect($('forge-panel').classList.contains('forge-open')).toBe(false);
     openForge({ tab: 'pulls' });
     await settle();
     click(row());
     await settle();
-    click(q('#spec-drawer [data-action="close-drawer"]'));
-    await new Promise((r) => setTimeout(r, 10));
+    click($('drawer-back')); // Back does what Escape does
+    await settle();
     expect(document.activeElement).toBe(row());
-    // a node chosen elsewhere (the map) is not the row's: Escape goes to the map
     click(row());
     await settle();
-    click(q('[data-forge-node="core-server"]'));
-    await settle();
-    key($('drawer-title'), 'Escape');
-    expect(document.activeElement).toBe(state.canvas);
+    expect([$('spec-drawer').classList.contains('drawer-open'), $('forge-panel').classList.contains('forge-open')]).toEqual([true, false]); // the marked row brings its node back in the list's place
+    click(q('#spec-drawer [data-action="close-drawer"]')); // ✕ closes both
+    await new Promise((r) => setTimeout(r, 10));
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    expect(state.selectedNode).toBe(null);
   });
 
   it('asks for its files and checks and shows them in the node panel, with what the files are on the map', async () => {
@@ -387,8 +392,9 @@ describe('a pull request in the node panel', () => {
     await settle();
     expect(server.urls()).toContain('/api/forge/pulls/12');
     expect(q('[data-work-ref="pull:12"]').getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q('[data-work-ref="pull:12"]')); // the focus stays on the row: the list can be read down
-    expect($('forge-list').hidden).toBe(false); // the list does not give way to a detail of its own
+    expect($('spec-drawer').contains(document.activeElement)).toBe(true); // the node panel takes the list's place (spec 0015 D3), and the focus with it
+    expect($('forge-list').hidden).toBe(false); // the list does not give way to a detail of its own: it waits behind, for Back
+    expect($('forge-panel').inert).toBe(true);
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
     expect($('drawer-title').textContent).toBe('Meals page');
     expect($('drawer-badge').textContent).toBe('Pull request');
@@ -408,8 +414,8 @@ describe('a pull request in the node panel', () => {
     expect(files[0].querySelector('button').textContent).toBe('server.js');
     expect(files[2].textContent).toContain('not on the map');
     expect(files[2].querySelector('button')).toBe(null);
-    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Checks: 1 check passed');
-    expect(qa('#forge-detail .hx-forge-sub')[1].textContent).toBe('3 files changed, 2 on the map');
+    expect(q('#forge-detail [data-sec="checks"] .hx-sec-toggle').textContent).toBe('Checks 1 · 1 check passed'); // a section with its count (spec 0015 D4)
+    expect(q('#forge-detail [data-sec="files"] .hx-sec-toggle').textContent).toBe('Files 3 · 2 on the map');
     expect(q('#forge-detail .hx-forge-check').textContent).toContain('passed');
     expect(q('#forge-detail .hx-forge-check a').getAttribute('href')).toBe('https://git.example.test/runs/41');
     expect(q('#forge-detail a.hx-forge-open[href="https://git.example.test/owner/name/pull/12"]').textContent).toBe('Open on GitHub ↗');
@@ -443,7 +449,8 @@ describe('a pull request in the node panel', () => {
     expect(checks[0].querySelector('.hx-forge-lights').textContent).toBe('Names test/server/auth.test.js');
     expect(checks[1].querySelector('.hx-forge-lights').textContent).toBe('Names no test file');
     expect(checks[2].querySelector('.hx-forge-lights')).toBe(null);
-    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Checks: 2 failed, 1 still running');
+    expect(q('#forge-detail [data-sec="checks"] .hx-sec-toggle').textContent).toBe('Checks 3 · 2 failed, 1 still running');
+    expect(q('#forge-detail [data-sec="checks"] .hx-sec-toggle').getAttribute('aria-expanded')).toBe('true'); // it holds the action: Re-run
     expect(await said()).toMatch(/1 file, 1 on the map\. 2 failed, 1 still running\.$/);
   });
 
@@ -487,7 +494,7 @@ describe('a pull request in the node panel', () => {
     await select(14);
     expect(sceneNode('root').alpha).toBe(1);
     expect(q('#forge-detail .hx-forge-file').textContent).toContain('not on the map');
-    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Checks: No checks');
+    expect(q('#forge-detail [data-sec="checks"] .hx-sec-toggle').textContent).toBe('Checks 0 · No checks');
   });
 });
 
@@ -811,18 +818,24 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await settle();
   };
 
-  it('a green, open, ready pull request has Land it; the others say why not, in words', async () => {
+  it('a green, open, ready pull request has Land it; the others say what comes first, in one Next line (spec 0015 D4)', async () => {
     fakeServer();
     mount();
     await select(12);
     expect(q('[data-forge-merge]').textContent).toBe('Land it …');
-    expect(q('#forge-detail .hx-forge-cta [data-forge-merge]')).not.toBe(null); // the primary action, with Open on the forge beside it
-    expect(q('#forge-detail .hx-forge-cta .hx-forge-open')).not.toBe(null);
-    expect(q('#forge-detail .hx-forge-why')).toBe(null); // nothing to explain
+    const bar = () => q('#forge-detail [data-corn="actions"]');
+    expect(bar().querySelector('.hx-actions-row > [data-forge-merge]')).toBe(bar().querySelector('.hx-actions-row > *')); // the primary action, first, with Open on the forge beside it
+    expect(bar().querySelector('.hx-forge-open')).not.toBe(null);
+    expect(bar().querySelector('.hx-next')).toBe(null); // nothing comes first
+    expect(q('#forge-detail .hx-forge-why')).toBe(null); // and nothing to explain
     await select(13);
     expect(q('[data-forge-merge]')).toBe(null);
-    expect(q('.hx-forge-cta .hx-btn--approve').disabled).toBe(true); // Land it, there and off, with its one line of why under it
-    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe("Can't land yet: vitest test/server/auth.test.js failed, lint failed, build is still running. Next: re-run vitest test/server/auth.test.js below, then re-run lint on the forge, then wait for build to finish, then press Refresh.");
+    const off = bar().querySelector('.hx-btn--approve');
+    expect(off.disabled).toBe(true); // Land it, there and off, with why on its title and what comes first under it
+    expect(off.getAttribute('title')).toBe("Can't land yet: vitest test/server/auth.test.js failed, lint failed, build is still running. Next: re-run vitest test/server/auth.test.js below, then re-run lint on the forge, then wait for build to finish, then press Refresh.");
+    expect(bar().querySelector('.hx-next').textContent).toBe('Then: re-run vitest test/server/auth.test.js and lint on the forge, and Land it once build finishes (1 check running).');
+    expect(q('#forge-detail .hx-forge-why')).toBe(null); // the paragraph is gone; Re-run stays in Checks, which is open
+    expect(q('#forge-detail [data-sec="checks"] [data-forge-rerun]')).not.toBe(null);
   });
 
   it('a draft says it is a draft', async () => {
@@ -830,7 +843,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     mount();
     await select(14);
     expect(q('[data-forge-merge]')).toBe(null);
-    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('It is a draft. Next: mark it ready for review on the forge, then press Refresh here.');
+    expect(q('#forge-detail [data-corn="actions"] .hx-next').textContent).toBe('Then: mark it ready for review on the forge, and Land it.');
   });
 
   it('Land it opens a confirm dialog that shows exactly what will land, announced, with the focus on Cancel', async () => {
@@ -1074,9 +1087,9 @@ describe('deploys: the list and the node panel', () => {
     await selectDeploy('9004');
     expect(server.urls().filter((u) => u.startsWith('/api/forge/deploys')).length).toBe(asked); // the list holds what it restarted
     expect(q('[data-work-ref="deploy:9004"]').getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(q('[data-work-ref="deploy:9004"]')); // the focus stays on the row
+    expect($('spec-drawer').contains(document.activeElement)).toBe(true); // in the list's place (spec 0015 D3)
     expect($('drawer-badge').textContent).toBe('Deploy');
-    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
+    expect(q('#forge-detail [data-sec="restarted"] .hx-sec-toggle').textContent).toBe('Restarted 3');
     expect(qa('#forge-detail [data-forge-node]').map((b) => b.textContent)).toEqual(['web · layer off', 'app · layer off', 'db · layer off']); // the Map's layers for them are off here
     expect(q('#forge-detail a[href]').textContent).toBe('Open the logs on GitHub ↗');
     expect(q('#forge-detail a[href]').getAttribute('href')).toBe('https://git.example.test/owner/name/actions/runs/9004');
@@ -1113,7 +1126,7 @@ describe('deploys: the list and the node panel', () => {
     await settle();
     await selectDeploy('9004');
     expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('deploy');
-    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
+    expect(q('#forge-detail [data-sec="restarted"] .hx-sec-toggle').textContent).toBe('Restarted 3');
     click(q('[data-forge-kind="pulls"]'));
     click(q('[data-work-ref="pull:12"]'));
     await settle();
@@ -1140,7 +1153,7 @@ describe('deploys: the list and the node panel', () => {
     $('forge-text').value = 'nothing like it';
     $('forge-text').dispatchEvent(new Event('input', { bubbles: true }));
     expect(q('.hx-forge-empty').textContent).toBe('No deploy matches these filters.');
-    expect(q('#forge-detail .hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
+    expect(q('#forge-detail [data-sec="restarted"] .hx-sec-toggle').textContent).toBe('Restarted 3');
   });
 
   it('a node button selects the node on the map', async () => {
@@ -1253,7 +1266,7 @@ describe('a spec pull request waiting to land on its approval (proposals.approve
 });
 
 describe('the Work panel: Specs, the Filter chip, the way back', () => {
-  it('lists the proposals the Proposals menu lists: title, state pill, a line, and the spec, PR, +/~ counts and scenarios; New idea is at the foot', async () => {
+  it('lists the proposals the Proposals menu lists: title, state pill, the spec and PR, and no summary, counts or scenarios (spec 0015 D3); New idea is at the foot', async () => {
     fakeServer();
     mount();
     openForge();
@@ -1261,11 +1274,11 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     const [meals, draft, local, broken] = rows();
     expect(meals.querySelector('.hx-forge-state').textContent).toBe('To decide');
     expect(meals.querySelector('.hx-forge-state').dataset.cornState).toBe('waiting');
-    expect(meals.querySelector('.hx-forge-sum').textContent).toBe('Adds /meals, read from the basket.');
+    expect(meals.querySelector('.hx-forge-sum')).toBe(null); // the summary is the node panel's
     expect(meals.querySelector('.hx-forge-facts').textContent).toContain('spec 0013PR #12');
-    expect(meals.querySelector('.hx-forge-facts').textContent).toContain('+4~13 scenarios');
+    expect(meals.querySelector('.hx-forge-facts').textContent).not.toMatch(/scenario|\+4/);
     expect(draft.querySelector('.hx-forge-state').textContent).toBe('Draft PR');
-    expect(draft.querySelector('.hx-forge-facts').textContent).toContain('−2');
+    expect(draft.querySelector('.hx-forge-facts').textContent).not.toContain('−2');
     expect(local.querySelector('.hx-forge-state').textContent).toBe('Local');
     expect(local.querySelector('.hx-forge-state').dataset.cornState).toBe('draft'); // every state-pill states its state (a proposal only in a checkout is a draft)
     expect(local.querySelector('.hx-forge-facts').textContent).toContain('in worktree w-1');
@@ -1328,6 +1341,8 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     await settle();
     expect([$('forge-list').hidden, $('forge-bar').hidden, $('notes-open').hidden]).toEqual([false, false, false]);
     expect(q('#forge-detail').getAttribute('data-work-kind')).toBe('pull');
+    click($('drawer-back')); // back to the list (spec 0015 D3: the node panel took its place), the pull request still selected
+    await settle();
     click(q('[data-forge-kind="issues"]')); // another tab: its own list, the pull request still in the node panel
     await settle();
     expect($('forge-list').hidden).toBe(false);

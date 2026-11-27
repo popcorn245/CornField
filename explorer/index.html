@@ -63,8 +63,10 @@
         </button>
       </div>
 
-      <!-- Replay (spec 0014 D1, explorer/history-replay.js): the map grows on a timeline, commit by commit; shown when the config has history on -->
-      <button type="button" id="replay-btn" class="hx-layers-chip hx-replay-btn" data-action="history-replay" data-corn-kind="secondary" aria-pressed="false" hidden title="Replay the map's history, commit by commit">Replay</button>
+      <!-- The controls of the view that is on (spec 0015 D5), then the Layers chip. In the Work view: Waiting on you (a toggle) and List, which explorer/work-view.js puts in the group;
+           the Map's Replay is on the History row of the Layers menu (D6). On a phone the two sit on the map's top-left row, the Layers chip first -->
+      <div class="hx-view-tools">
+      <div class="hx-view-controls" role="group" aria-label="Work view" data-corn="view-controls" hidden></div>
 
       <!-- The Layers chip: how many of the layers are on; it opens the layers menu. On a phone it sits on the map, top left. It is a piece (explorer/pieces/layers.js): page.js mounts it here. Until then a stand-in (its markup without ids) holds its place, so the first paint has the chip and nothing moves when the piece comes; test/explorer/page-pieces.test.js keeps the two the same -->
       <!--corn-placeholder:layers/menu-->
@@ -72,7 +74,7 @@
         <button type="button" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" data-corn="layers-button" part="layers-button"><span data-corn-string="layers">Layers</span><span class="hx-layers-count" data-corn="count" part="count"></span></button>
         <div class="hx-menu glass" hidden data-corn="layers-menu" part="layers-menu">
           <div class="hx-menu-title hx-menu-head" data-corn="menu-title" part="menu-title">
-            <span>Section Toggles</span>
+            <span>Layers</span>
             <span class="hx-menu-links">
               <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn="layers-all" part="layers-all" data-corn-kind="quiet" data-corn-string="layersAll">All</button>
               <span class="hx-faint">•</span>
@@ -108,6 +110,7 @@
         </div>
       </div>
       <!--corn-piece:layers/menu-->
+      </div>
 
       <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
       <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>

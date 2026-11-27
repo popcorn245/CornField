@@ -9,6 +9,7 @@ import { mergeSpecs } from '../proposal-model.js';
 import { waiting, specGroups } from '../waiting-model.js';
 import { plural, SPECS_POLL_MS } from './work-common.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
+import { sectionHtml } from '../panel-model.js';
 
 export function install(ctx) {
   const { inst, ui, m, fn, $ } = ctx;
@@ -75,14 +76,33 @@ export function install(ctx) {
     return items.find((e) => e.slug === item.slug && (item.number ? e.pull && e.pull.number === item.number : !e.pull)) || items.find((e) => e.slug === item.slug) || null;
   }
 
-  /** A proposal's actions in the node panel: Review (opens it over the map; Approve and Send back are the review's), and Start an agent on it when the config lets a run start */
-  function proposalActionsHtml(item) {
+  /**
+   * A proposal's part of the node panel (spec 0015 D4): Review (opens it over the map; Approve and Send back are the review's) is the primary action while it waits on you, Land it
+   * while its green spec pull request is all that is left; Start an agent on it when the config lets a run start. Its spec pull request's Land it, Next line, checks, files and build
+   * issue follow (pieces/work-prs.js), and what the Work list's card used to say of it: its summary, what it adds, changes and removes, and its scenarios.
+   */
+  function proposalParts(item) {
     const entry = specEntry(item);
     const source = (entry && entry.source) || item.source || '';
+    const pull = Number.isInteger(item.number) ? fn.detailParts({ self: true }) : null;
     const review = `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-corn-kind="approve" data-work-action="review" data-slug="${escHtml(item.slug)}" data-source="${escHtml(source)}">Review …</button>`;
+    const quietReview = review.replace('hx-btn hx-btn--approve hx-forge-act" data-corn-kind="approve"', 'hx-btn hx-forge-act" data-corn-kind="secondary"');
     const agent = fn.canStartAgent() ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-agent="proposal:${escHtml(item.slug)}" aria-label="${escHtml(t('startAgent'))} on proposal ${escHtml(item.slug)}">${escHtml(t('startAgent'))} …</button>` : '';
-    return `<div class="hx-forge-cta">${review}${agent}</div>`;
+    // Land it leads once nothing is left to decide and its checks are green; until then Review does, and Land it waits beside it
+    const landFirst = !!(pull && pull.land && pull.green && !item.waiting && !pull.next);
+    const primary = landFirst ? pull.land : review;
+    const others = landFirst ? [quietReview, agent, pull.open] : [pull ? pull.land : '', agent, pull ? pull.open : ''];
+    const c = (entry && entry.counts) || {};
+    const changes = [c.added ? `+${c.added} added` : '', c.changed ? `~${c.changed} changed` : '', c.removed ? `−${c.removed} removed` : ''].filter(Boolean).join(' · ');
+    const lead = entry && (entry.summary || changes)
+      ? `<div class="hx-work-lead">${entry.summary ? `<p class="hx-work-sum">${escHtml(entry.summary)}</p>` : ''}${changes ? `<p class="hx-faint hx-work-changes">${escHtml(changes)}</p>` : ''}</div>`
+      : '';
+    const scenarios = Number.isInteger(c.scenarios)
+      ? sectionHtml({ key: 'scenarios', title: 'Scenarios', count: c.scenarios, body: `<p class="hx-faint">${c.scenarios ? `${plural(c.scenarios, 'scenario')} to play. Review plays ${c.scenarios === 1 ? 'it' : 'them'} over the map, step by step.` : 'It has no scenario yet.'}</p>` })
+      : '';
+    // In spec 0015 D4's order: (Connected is the panel's) its pull request's checks and files, the scenarios, the build issue
+    return { primary, others, next: pull ? pull.next : '', notes: `${lead}${pull ? pull.notes : ''}`, sections: [...(pull ? pull.sections : []), scenarios, pull ? pull.build : ''] };
   }
 
-  Object.assign(fn, { specsList, waitingNow, loadSpecs, specsShownWords, readSpecsQuiet, syncSpecsPoll, specEntry, proposalActionsHtml });
+  Object.assign(fn, { specsList, waitingNow, loadSpecs, specsShownWords, readSpecsQuiet, syncSpecsPoll, specEntry, proposalParts });
 }

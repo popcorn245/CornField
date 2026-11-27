@@ -44,6 +44,8 @@ import { reach } from '../selection-view.js';
 import { announce, frameThem } from '../engine/keyboard.js';
 import { selectNode, clearSelection } from '../engine/selection.js';
 import { scopeOf, place, addParts } from '../engine/piece.js';
+import { panelKind, sectionHtml } from '../panel-model.js';
+import { applySections, onSectionsClick, onSectionsKey } from '../panel-sections.js';
 
 // ---------------------------------------------------------------------------
 //  Small HTML pieces shared by the sections below
@@ -96,6 +98,8 @@ export const LINES_CAP = 12;
 export const markup = () => ({
   drawer: '<aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details" inert data-corn="node-panel">'
     + '<div class="hx-drawer-body">'
+    // Back (spec 0015 D3): to the Work list this panel took the place of, or from a thread folded into a proposal to the proposal; hidden when there is nowhere to go back to
+    + '<button type="button" id="drawer-back" class="hx-forge-back hx-panel-back" data-action="panel-back" data-corn="back" hidden><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">Back</span></button>'
     + '<div class="hx-drawer-head">'
     + '<div class="hx-drawer-id">'
     + '<p class="hx-kicker"><span id="drawer-badge" data-corn="badge">Atom</span><span id="drawer-host" data-corn="node-host"></span><span id="drawer-diff" class="hx-diffpill" data-corn="diff-pill" hidden></span></p>'
@@ -265,7 +269,7 @@ function sectionsOf(inst) {
       const count = Number(th.comments) || 0;
       return `<li><button type="button" class="hx-row hx-thread-open" data-thread-open="${escHtml(th.number)}" data-corn="row" aria-label="Open thread #${escHtml(th.number)}, ${escHtml(th.title)}, ${count} ${count === 1 ? 'comment' : 'comments'}, in the issues and pull requests panel"><span class="hx-row-title">${escHtml(th.title)}</span><span class="hx-row-meta">#${escHtml(th.number)} · ${count}</span></button></li>`;
     });
-    return `<div class="hx-sec-block" data-corn="section"><h3 class="hx-sec-title">Threads</h3><ul class="hx-rows">${rows.join('')}</ul>${start}</div>`;
+    return sectionHtml({ key: 'threads', title: 'Threads', count: threads.length, body: `<ul class="hx-rows">${rows.join('')}</ul>${start}` });
   }
 
   /** "In this proposal": the diff for a changed node as key/value rows (id, parent, edges +2; a change shows each field before and after) */
@@ -389,7 +393,11 @@ export function mount(root, inst, options = {}) {
     if (!box || !state.selectedNode) return;
     box.innerHTML = sections.threadsSection(state.selectedNode);
     addParts(box);
+    applySections(inst, box, kindShown());
   }
+
+  /** The kind of node the panel shows, whose sections' open and closed the browser remembers (spec 0015 D4) */
+  const kindShown = () => drawer.dataset.panelKind || '';
 
   /** Draws "History" again in the open panel (spec 0014 D2: the history was read, a spec was picked, or Show all); nothing else in the panel moves */
   function repaintHistory() {
@@ -400,6 +408,7 @@ export function mount(root, inst, options = {}) {
     const key = active && box.contains(active) ? (active.dataset.historySpec ? `spec:${active.dataset.historySpec}` : active.hasAttribute('data-history-all') ? 'all' : '') : '';
     box.innerHTML = inst.ask('history:section', node) || '';
     addParts(box);
+    applySections(inst, box, kindShown());
     if (key.startsWith('spec:')) { const el = [...box.querySelectorAll('[data-history-spec]')].find((x) => `spec:${x.dataset.historySpec}` === key); if (el) el.focus(); }
     else if (key === 'all') { const first = box.querySelector('.hx-history-commit a'); if (first) first.focus(); }
   }
@@ -422,6 +431,7 @@ export function mount(root, inst, options = {}) {
     const els = [];
     for (let el = metaList.firstChild; el && el !== before; el = el.nextSibling) els.push(el);
     if (html) addParts(metaList);
+    for (const el of els) applySections(inst, el, kindShown());
     workShown = { node, html, els };
   }
   /** The work changed (`work:changed`: the Work layer came on or went off, or a new answer): the open panel's section for it is drawn again, and nothing else in it moves */
@@ -435,8 +445,11 @@ export function mount(root, inst, options = {}) {
   }
 
   /** Fills the panel for a node and opens it. The selection itself is the instance's (engine/selection.js); this is what is shown for it. */
+  let shownNode = null; // what the panel shows, for `panel:return` (the Work list stepped in front of it, spec 0015 D3)
   function show(node, { frame = false } = {}) {
     if (!node || gone) return;
+    shownNode = node;
+    drawer.dataset.panelKind = panelKind(node);
     const title = own('drawer-title');
     title.textContent = node.tag ? `<${node.tag}>` : node.label;
     title.classList.toggle('hx-mono', node.type === 'page' || !!node.tag); // a route or a tag reads as code
@@ -497,6 +510,10 @@ export function mount(root, inst, options = {}) {
       openBtn.hidden = true;
       own('drawer-run-btn').hidden = true;
     } else putWork(node, work ? work.html : '');
+    applySections(inst, metaList, kindShown()); // each section as it was left for this kind of node (spec 0015 D4)
+    // The foot holds a node of code's actions; a piece of work's are its action bar, at the top
+    own('drawer-copy-btn').closest('.hx-drawer-foot').hidden = !!(work && work.replace);
+    setBack(node);
 
     drawer.classList.add('drawer-open');
     drawer.inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
@@ -508,11 +525,46 @@ export function mount(root, inst, options = {}) {
   }
 
   /**
+   * Back, at the top of the panel (spec 0015 D3): from a thread folded into the selected proposal (spec 0015 D2), to the proposal; else, while the Work list is open on a desktop
+   * (it waits behind this panel: `panel:back`, answered by the Work list), to the list. Escape does the same. With nowhere to go back to it is hidden, and Escape closes the panel.
+   */
+  let backTo = null;
+  function setBack(node) {
+    const btn = own('drawer-back');
+    const sel = state.selectedNode;
+    const into = node && node.foldedInto && sel && sel !== node && sel.id === node.foldedInto ? sel : null;
+    const list = !into && node && !inline ? inst.ask('panel:back') : undefined;
+    backTo = into ? () => { show(into, { frame: false }); return true; } : typeof list === 'function' ? list : null;
+    if (!btn) return;
+    btn.hidden = !backTo;
+    const words = into ? `Back to ${into.label || into.id}` : 'Back to the list';
+    btn.querySelector('.hx-forge-back-text').textContent = words;
+    btn.setAttribute('aria-label', into ? words : 'Back to the Work list');
+  }
+  /** Goes back (the button, or Escape); false when there was nowhere to go */
+  function goBack() {
+    const go = backTo;
+    if (!go) return false;
+    backTo = null;
+    go();
+    return true;
+  }
+
+  /** The Work list took this panel's place (spec 0015 D3): the panel steps aside, the selection stays, Back on the list's row brings it again */
+  function stepAside() {
+    if (inline || gone || !drawer.classList.contains('drawer-open')) return;
+    drawer.classList.remove('drawer-open');
+    drawer.inert = true;
+    backdrop.hidden = true;
+  }
+
+  /**
    * Fills the panel for an edge and opens it: what it is, and what the proposal says about it (the engine's `showEdge` selects it and says `node:show-edge`).
    * As ever, an edge alone gets no sheet on a phone (the panel is opened, not `showSheet`ed), and Escape on the map does not close it.
    */
   function showEdge(edge) {
     if (!edge || gone) return;
+    shownNode = null;
     const row = (label, value) => (value ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${escHtml(label)}</div><div class="hx-fact-v">${escHtml(value)}</div></div>` : '');
     const kind = edge.kind || (edge.dashed ? 'usage' : 'ownership');
     const facts = row('Kind', kind) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
@@ -534,6 +586,9 @@ export function mount(root, inst, options = {}) {
     own('drawer-open-btn').hidden = true;
     own('drawer-file-btn').hidden = true;
     own('drawer-run-btn').hidden = true;
+    own('drawer-copy-btn').closest('.hx-drawer-foot').hidden = false;
+    setBack(null);
+    delete drawer.dataset.panelKind;
     drawer.classList.add('drawer-open');
     drawer.inert = false; // closed, the panel is inert (MAP-02): open for an edge, its links and its Close are reached as a node's are
     backdrop.hidden = false;
@@ -554,7 +609,20 @@ export function mount(root, inst, options = {}) {
     inst.map.render();
   }
 
+  /** After Back to the proposal the button that was pressed is gone: the focus goes to the title, as Enter on the map puts it */
+  function focusTitle() {
+    const now = inst.active();
+    if (!drawer.classList.contains('drawer-open') || (now && now.isConnected && now !== inst.doc.body && drawer.contains(now))) return;
+    const title = own('drawer-title');
+    title.setAttribute('tabindex', '-1');
+    title.focus();
+  }
+
   function close() {
+    shownNode = null;
+    backTo = null;
+    const btn = own('drawer-back');
+    if (btn) btn.hidden = true;
     drawer.classList.remove('drawer-open');
     drawer.inert = true;
     backdrop.hidden = true;
@@ -576,8 +644,10 @@ export function mount(root, inst, options = {}) {
     'start-run': () => startRun(),
     'select-node': (el) => selectNode(inst, sections.nodeById(el.dataset.id), { frame: true, source: 'link' }), // a link or a list row: the camera follows (spec 0008 D6)
     'frame-selection': () => frameThem(inst),
+    'panel-back': () => { if (goBack()) scope.timeout(focusTitle, 0); },
   };
   scope.listen(drawer, 'click', (e) => {
+    if (onSectionsClick(inst, e, kindShown())) return; // a section's title, a count that opens its rows, ⋯
     const target = e.target.closest && e.target.closest('[data-action]');
     if (!target) return;
     const shut = target.dataset.action === 'close-drawer';
@@ -607,9 +677,12 @@ export function mount(root, inst, options = {}) {
   }
   // Escape anywhere in the panel closes it, and the map has the focus again
   scope.listen(drawer, 'keydown', (e) => {
+    if (onSectionsKey(e)) return; // Escape in the open ⋯ menu closes the menu, not the panel
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (e.target.closest && e.target.closest('select, input, textarea')) return; // a field's own Escape first
     e.preventDefault();
+    // Back first (spec 0015 D3): to the Work list this panel took the place of, or from a folded thread to its proposal
+    if (backTo) { goBack(); scope.timeout(focusTitle, 0); announce(inst, 'Back'); return; }
     const back = inst.ask('node:back');
     clearSelection(inst, { source: 'keyboard' });
     if (!(back && back()) && state.canvas) state.canvas.focus();
@@ -621,6 +694,10 @@ export function mount(root, inst, options = {}) {
   scope.on('panel:covers', () => (!inline && !gone && !drawer.hidden && drawer.classList.contains('drawer-open') ? { right: drawer.offsetWidth } : undefined));
   scope.on('node:show', ({ node, frame }) => show(node, { frame }));
   scope.on('node:close', close);
+  // The Work list opened on a desktop: it takes this panel's place, and the selection stays (spec 0015 D3; a phone's sheets take turns on their own)
+  scope.on('work:list', ({ open }) => { if (open && !inline && !isPhone(inst)) stepAside(); });
+  // ... and the list's row of what it shows brings it back in the list's place (the list goes behind it again)
+  scope.on('panel:return', () => { if (shownNode && !inline && !gone && !drawer.classList.contains('drawer-open')) show(shownNode, { frame: false }); });
   scope.on('node:show-edge', ({ edge }) => showEdge(edge));
   // Enter on the map goes into the open panel: its title takes the focus, so a screen reader starts there and Tab goes on into it
   scope.on('node:focus', () => {

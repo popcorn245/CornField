@@ -12,7 +12,7 @@
  *   specReach(history, spec)          the nodes a spec's commits touched, and how many commits named it
  *   heatOf(history, at)               the History layer (spec 0014 D3): per node, how often it changed and how lately, as of a commit
  *   haloWidth(count, max)             a halo's width on screen (px) for how often its node changed
- *   historyRowOf(status, heat)        the Layers menu's row under Overlays
+ *   historyRowOf(status, heat, color, { replaying })   the Layers menu's row under Overlays, with Replay on it (spec 0015 D6)
  *   specBarHtml(pick, ctx)            the bar on the map while a spec is picked: `Spec 0012 · Work as a view: 6 commits, 72 nodes`
  *   commitKind(subject)               feat, fix, docs or other: a timeline mark's colour
  *   replayFrame(history, edges, at)   Replay (spec 0014 D1): what the map holds at a commit, what was born at it and what it changed
@@ -23,9 +23,10 @@
 
 import { escapeHtml as esc } from '../core/text.js';
 import { fileUrl } from './file-url.js';
+import { sectionHtml } from './panel-model.js';
 
-/** The most commits the section lists before "Show all N" */
-export const HISTORY_CAP = 12;
+/** The most commits the section lists before "Show all N" (spec 0015 D4: the last five) */
+export const HISTORY_CAP = 5;
 
 /** Where a commit, a pull request and an issue are on each forge's site */
 const SHAPES = {
@@ -142,14 +143,14 @@ export const dayOf = (iso, locale) => {
  * @param {{ history: object | null, status: 'off' | 'loading' | 'ready' | 'error', error?: string, links: ReturnType<typeof forgeLinks>, specs: ReturnType<typeof specFiles>, picked?: string | null, all?: boolean, locale?: string }} ctx
  */
 export function historySectionHtml(node, ctx) {
-  const head = '<h3 class="hx-sec-title">History</h3>';
-  const wrap = (body) => `<div class="hx-sec-block hx-history" data-corn="section" data-history>${head}${body}</div>`;
+  // A section of the panel (spec 0015 D4): its count is the commits, it starts closed (the browser remembers it open per kind of node: panel-sections.js)
+  const wrap = (body, count = null) => sectionHtml({ key: 'history', title: 'History', count, body, extra: ' data-history' }).replace('class="hx-sec-block hx-psec"', 'class="hx-sec-block hx-psec hx-history"');
   if (ctx.status === 'off') return '';
   if (ctx.status === 'loading') return wrap('<p class="hx-faint" data-corn="loading">Reading the history…</p>');
   if (ctx.status === 'error') return wrap(`<p class="hx-faint" data-corn="error">${esc(ctx.error || 'The history could not be read.')}</p>`);
   const t = nodeTrail(ctx.history, node.id);
   if (!t) return wrap('<p class="hx-faint">This node is not in the history yet: run <code class="hx-code">cornfield sync</code> and commit the map.</p>');
-  if (!t.commits.length) return wrap('<p class="hx-faint">No commit has changed this node\'s file yet.</p>');
+  if (!t.commits.length) return wrap('<p class="hx-faint">No commit has changed this node\'s file yet.</p>', 0);
   const n = t.commits.length;
   const share = Math.round((t.traced / n) * 100);
   const stats = `<p class="hx-history-stats"><span><b class="hx-ms">${n}</b> ${n === 1 ? 'commit' : 'commits'}</span> · <span><b class="hx-ms">${t.pulls.length}</b> ${t.pulls.length === 1 ? 'pull request' : 'pull requests'}</span> · <span><b class="hx-ms">${share}%</b> traced to a spec or issue</span></p>`;
@@ -158,8 +159,15 @@ export function historySectionHtml(node, ctx) {
     const on = ctx.picked === s;
     return `<button type="button" class="hx-lines-kind" data-corn-kind="quiet" data-history-spec="${esc(s)}" aria-pressed="${on}" title="Light every node spec ${esc(s)} reached">Spec ${esc(s)}${spec ? ` <span class="hx-faint">${esc(spec.label)}</span>` : ''}</button>`;
   });
-  const specs = specChips.length ? `<div class="hx-chips" role="group" aria-label="Specs behind it">${specChips.join('')}</div>` : '<p class="hx-faint">No commit to this node names a spec.</p>';
-  const issues = t.issues.length ? `<p class="hx-history-issues">Issues: ${t.issues.map((i) => { const href = ctx.links && ctx.links.issue(i); return href ? `<a class="hx-link" data-corn="text-link" href="${esc(href)}" target="_blank" rel="noreferrer">#${esc(i)}</a>` : `#${esc(i)}`; }).join(', ')}</p>` : '';
+  // The specs and the issues are counts that open (never all at once: a node of code can name eighty issues); a picked spec keeps its specs open, so its chip is in view
+  const counted = (words, rows, open) => `<button type="button" class="hx-textbtn hx-history-count" data-sub-toggle aria-expanded="${open}" data-corn-kind="quiet">${words}</button>${rows.replace(/^<(\w+)/, `<$1${open ? '' : ' hidden'}`)}`;
+  const picked = !!ctx.picked && t.specs.includes(ctx.picked);
+  const specs = specChips.length
+    ? counted(`${specChips.length} ${specChips.length === 1 ? 'spec' : 'specs'} behind it`, `<div class="hx-chips" role="group" aria-label="Specs behind it">${specChips.join('')}</div>`, picked)
+    : '<p class="hx-faint">No commit to this node names a spec.</p>';
+  const issues = t.issues.length
+    ? counted(`${t.issues.length} ${t.issues.length === 1 ? 'issue' : 'issues'}`, `<p class="hx-history-issues">${t.issues.map((i) => { const href = ctx.links && ctx.links.issue(i); return href ? `<a class="hx-link" data-corn="text-link" href="${esc(href)}" target="_blank" rel="noreferrer">#${esc(i)}</a>` : `#${esc(i)}`; }).join(', ')}</p>`, false)
+    : '';
   const shown = ctx.all ? t.commits : t.commits.slice(0, HISTORY_CAP);
   const rows = shown.map((c) => `<li class="hx-history-commit" data-corn="row">`
     + `<div class="hx-row-meta">${esc(dayOf(c.date, ctx.locale))} · ${c.nodes.length} ${c.nodes.length === 1 ? 'node' : 'nodes'}${t.born && c.index === t.born.index ? ' · <span class="hx-history-born">born here</span>' : ''} · <button type="button" class="hx-textbtn" data-corn-kind="quiet" data-history-at="${c.index}" aria-label="Replay the map at this commit: ${esc(c.subject)}">Replay here</button></div>`
@@ -167,7 +175,7 @@ export function historySectionHtml(node, ctx) {
     + trailHtml(c, ctx)
     + '</li>');
   const more = shown.length < n ? `<button type="button" class="hx-btn hx-btn--quiet hx-textact" data-corn="more" data-corn-kind="quiet" data-history-all>Show all ${n}</button>` : '';
-  return wrap(`${stats}<h4 class="hx-history-k">Specs behind it</h4>${specs}${issues}<h4 class="hx-history-k">Commits, newest first</h4><ol class="hx-history-list">${rows.join('')}</ol>${more}`);
+  return wrap(`${stats}<div class="hx-history-counts">${specs}${issues}</div><h4 class="hx-history-k">${shown.length < n ? `The last ${shown.length} commits` : 'Commits'}, newest first</h4><ol class="hx-history-list">${rows.join('')}</ol>${more}`, n);
 }
 
 /**
@@ -230,10 +238,12 @@ export const haloWidth = (count, max) => (max > 0 && count > 0 ? Math.round((1.5
  * @param {{ nodes: Map<string, unknown> } | null} heat
  * @param {string} color the dot's colour
  */
-export function historyRowOf(status, heat, color) {
+export function historyRowOf(status, heat, color, { replaying = false } = {}) {
   const n = heat ? heat.nodes.size : 0;
   const countText = status === 'ready' ? `${n} ${n === 1 ? 'node' : 'nodes'}` : status === 'loading' ? 'reading…' : status === 'error' ? 'not read' : 'not read yet';
-  return { key: HISTORY_LAYER, label: 'History', color, overlay: true, countText, desc: 'A halo round each node the history changed: the wider, the more often; pink this week, violet this month, grey before. Picking a spec in a node\'s History lights what it reached.' };
+  // Replay is the History layer's (spec 0015 D6): a button on its row, pressed while the timeline is open (page.js turns the layer on and opens it)
+  const action = { name: 'history-replay', label: 'Replay', pressed: replaying === true, title: 'Replay the map\'s history, commit by commit' };
+  return { key: HISTORY_LAYER, label: 'History', color, overlay: true, countText, action, desc: 'A halo round each node the history changed: the wider, the more often; pink this week, violet this month, grey before. Picking a spec in a node\'s History lights what it reached.' };
 }
 
 /**

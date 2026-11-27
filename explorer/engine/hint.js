@@ -4,7 +4,7 @@
  * The hint at the map's corner ("Click a node for what it is"; CF review F56), on an instance. Three rules:
  *   - its words follow the pointer: `hintInspect` / `hintDrag` for a mouse or a trackpad, `hintInspectTouch` / `hintDragTouch` where the
  *     main pointer is coarse (a finger). A repo that sets only `hintInspect` (or `hintDrag`) gets its words on both;
- *   - it goes once the person has selected a node, for the rest of the session (sessionStorage; the Flow view's own description stays,
+ *   - it goes once the person has selected a node, and does not come back in that browser (localStorage, spec 0015 D5; the Flow view's own description stays,
  *     since it says what Flow is, not how to use the map);
  *   - it is never shown over an open proposal, a node panel, the Work list or a sheet.
  * The icon is `[data-corn="hint-icon"]`, so a theme can restyle or replace it. explorer/hint.js keeps the old names for the page's instance.
@@ -32,28 +32,28 @@ export function hintText(inst, coarse = coarsePointer(inst.win)) {
     : hintWords({ text: t(inst, 'hintInspect'), set: isOverridden(inst, 'hintInspect') }, { text: t(inst, 'hintInspectTouch'), set: isOverridden(inst, 'hintInspectTouch') }, coarse);
 }
 
-const sessionOf = (inst) => { try { return inst.win ? inst.win.sessionStorage : null; } catch { return null; } };
-/** Whether a node was selected in this session, for this instance */
+const storeOf = (inst) => { try { return inst.win ? inst.win.localStorage : null; } catch { return null; } };
+/** Whether a node was ever selected in this browser, for this instance */
 const memory = (inst) => inst.slot('hint', () => {
   const m = { dismissed: false };
-  try { const store = sessionOf(inst); m.dismissed = !!store && store.getItem(HINT_STORAGE_KEY) === '1'; } catch { m.dismissed = false; }
+  try { const store = storeOf(inst); m.dismissed = !!store && store.getItem(HINT_STORAGE_KEY) === '1'; } catch { m.dismissed = false; }
   return m;
 });
 
-/** Remembers that a node was selected: the hint is not shown again this session */
+/** Remembers that a node was selected: the hint is not shown again in this browser */
 export function dismissHint(inst) {
   const m = memory(inst);
   if (m.dismissed) return;
   m.dismissed = true;
   if (!inst.el('instruction-badge-text')) return; // an instance with no hint (a map in another app's page) writes nothing in that page's storage
-  try { const store = sessionOf(inst); if (store) store.setItem(HINT_STORAGE_KEY, '1'); } catch { /* storage blocked: it holds for this page load */ }
+  try { const store = storeOf(inst); if (store) store.setItem(HINT_STORAGE_KEY, '1'); } catch { /* storage blocked: it holds for this page load */ }
   syncHint(inst);
 }
 
 /** For tests: the hint is new again */
 export function resetHint(inst) {
   memory(inst).dismissed = false;
-  try { const store = sessionOf(inst); if (store) store.removeItem(HINT_STORAGE_KEY); } catch { /* none */ }
+  try { const store = storeOf(inst); if (store) store.removeItem(HINT_STORAGE_KEY); } catch { /* none */ }
 }
 
 /** What covers the map: an open proposal, the node panel, the Work list, a sheet of the dock */

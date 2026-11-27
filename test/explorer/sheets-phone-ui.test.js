@@ -209,7 +209,7 @@ describe('two sheets at most: Work and the node panel take turns', () => {
     expect(stateOf('spec-drawer')).toBe('peek');
   });
 
-  it('does none of it from 768px: both panels are open at once', async () => {
+  it('does none of it from 768px: no sheets; the list takes the node panel\'s place on the right, and the selection stays (spec 0015 D3)', async () => {
     phone(false);
     mount();
     selectNode(state.baseNodes[0]);
@@ -218,7 +218,8 @@ describe('two sheets at most: Work and the node panel take turns', () => {
     await flush();
     expect($('spec-drawer').hasAttribute('data-sheet-away')).toBe(false);
     expect($('forge-panel').classList.contains('forge-open')).toBe(true);
-    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false); // they take turns in one place
+    expect(state.selectedNode).toBe(state.baseNodes[0]);
   });
 });
 

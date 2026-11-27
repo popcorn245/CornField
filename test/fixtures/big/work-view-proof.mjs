@@ -79,14 +79,14 @@ const namesOnScreen = (page) => page.evaluate(async () => {
   const off = boxes.filter((b) => b.l < 0 || b.r > stage.width || b.t < 0 || b.b > stage.height).map((b) => b.id);
   const over = [];
   for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) { const a = boxes[i]; const b = boxes[j]; if (a.l < b.r - 1 && a.r > b.l + 1 && a.t < b.b - 1 && a.b > b.t + 1) over.push(`${a.id} / ${b.id}`); }
-  const controls = [...document.querySelectorAll('.hx-work-chip, .hx-layers-chip, #fit-btn, .hx-view, .hx-hint:not([hidden])')].filter((e) => e.offsetParent !== null).map((e) => e.getBoundingClientRect());
+  const controls = [...document.querySelectorAll('.hx-view-control, .hx-layers-chip, #fit-btn, .hx-view, .hx-hint:not([hidden])')].filter((e) => e.offsetParent !== null).map((e) => e.getBoundingClientRect());
   const under = boxes.filter((b) => controls.some((c) => stage.left + b.l < c.right && stage.left + b.r > c.left && stage.top + b.t < c.bottom && stage.top + b.b > c.top)).map((b) => b.id);
   return { count: boxes.length, off, over, under, zoom: camera.zoom };
 });
 
 /** The controls on the page, pairwise: any two that overlap */
 const controlsOverlap = (page) => page.evaluate(() => {
-  const sel = ['.hx-view', '#preset-work-btn', '#fit-btn', '.hx-layers-chip', '.hx-work-bar', '#legend-toggle-btn', '[data-corn="forge-button"]', '.hx-account-btn', '.hx-search', '.hx-hint', '[data-corn="search-field"]'];
+  const sel = ['.hx-view', '#preset-work-btn', '#fit-btn', '.hx-layers-chip', '[data-corn="view-controls"]', '#legend-toggle-btn', '[data-corn="forge-button"]', '.hx-account-btn', '.hx-search', '.hx-hint', '[data-corn="search-field"]'];
   const seen = [];
   for (const s of sel) for (const e of document.querySelectorAll(s)) { const r = e.getBoundingClientRect(); if (e.offsetParent !== null && r.width > 0 && r.height > 0) seen.push({ s, e, r }); }
   const clash = [];
@@ -101,7 +101,7 @@ const controlsOverlap = (page) => page.evaluate(() => {
 /** The lanes' titles as drawn: their size, and whether each is on the screen and clear of the toggles */
 const laneTitles = (page) => page.evaluate(() => {
   const vw = window.innerWidth;
-  const others = ['.hx-work-bar', '.hx-layers-chip', '#fit-btn'].map((q) => document.querySelector(q)).filter((e) => e && e.offsetParent !== null).map((e) => e.getBoundingClientRect());
+  const others = ['[data-corn="view-controls"]', '.hx-layers-chip', '#fit-btn'].map((q) => document.querySelector(q)).filter((e) => e && e.offsetParent !== null).map((e) => e.getBoundingClientRect());
   return [...document.querySelectorAll('.hx-work-lanes .hx-work-lane-title')].filter((e) => getComputedStyle(e).visibility !== 'hidden').map((e) => {
     const r = e.getBoundingClientRect();
     return { text: e.textContent, px: parseFloat(getComputedStyle(e).fontSize), inside: r.left >= 0 && r.right <= vw, clear: others.every((bar) => r.right <= bar.left || r.left >= bar.right || r.bottom <= bar.top || r.top >= bar.bottom) };
@@ -183,7 +183,7 @@ async function main() {
     check('desktop, all work: no name is off the screen, over another name or under a control', names.count > 10 && names.off.length === 0 && names.over.length === 0 && names.under.length === 0, `${names.count} names, zoom ${names.zoom.toFixed(2)}; off ${names.off.join()} over ${names.over.slice(0, 3).join()} under ${names.under.slice(0, 3).join()}`);
     let lanes = await laneTitles(page);
     check('the lanes\' titles read at the first fit: Talk, Decide, Build, Ship and the code, 11 px or more, on the screen and clear of the toggles', lanes.length === 5 && lanes.every((l) => l.px >= 11 && l.inside && l.clear), lanes.map((l) => `${l.text.replace(/\s+/g, ' ')} ${l.px}px`).join(' | '));
-    const top = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); const r = state.canvas.getBoundingClientRect(); return { first: Math.min(...state.work.lanes.map((l) => state.camera.y + l.y * state.camera.zoom)), bar: document.querySelector('.hx-work-bar').getBoundingClientRect().bottom - r.top }; });
+    const top = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); const r = state.canvas.getBoundingClientRect(); return { first: Math.min(...state.work.lanes.map((l) => state.camera.y + l.y * state.camera.zoom)), bar: Math.max(0, document.querySelector('.hx-view-tools').getBoundingClientRect().bottom - r.top) }; });
     check('the lanes start under the toggles, without a band of nothing', top.first >= top.bar && top.first - top.bar < 40, `lanes at ${Math.round(top.first)} px, toggles end at ${Math.round(top.bar)}`);
     check('no control is over another', (await controlsOverlap(page)).length === 0, (await controlsOverlap(page)).join(' | '));
     await shot('desktop-dark-work');
@@ -242,14 +242,14 @@ async function main() {
 
     // Waiting on you
     await clear();
-    await page.click('[data-work-show="waiting"]'); await sleep(500);
+    await page.click('[data-work-toggle="waiting"]'); await sleep(500);
     s = await snap();
-    check('Waiting on you dims all but what waits', s.dim > 0 && (await page.getAttribute('[data-work-show="waiting"]', 'aria-pressed')) === 'true', `${s.dim} dimmed`);
+    check('Waiting on you dims all but what waits', s.dim > 0 && (await page.getAttribute('[data-work-toggle="waiting"]', 'aria-pressed')) === 'true', `${s.dim} dimmed`);
     names = await namesOnScreen(page);
     check('Waiting on you: the names are placed as before', names.off.length === 0 && names.over.length === 0, `${names.count} names`);
     await shot('desktop-dark-waiting');
-    await page.click('[data-work-show="all"]'); await sleep(300);
-    check('All work brings them back', (await snap()).dim === 0);
+    await page.click('[data-work-toggle="waiting"]'); await sleep(300);
+    check('Waiting on you off brings them back', (await snap()).dim === 0);
 
     // layers: the eight rows, a layer off, the drafts on
     await layersMenu();
@@ -322,7 +322,7 @@ async function main() {
     await clear();
     const requests = [];
     page.on('request', (r) => requests.push(`${r.method()} ${new URL(r.url()).pathname}`));
-    const listBtn = page.locator('.hx-work-bar [data-action="toggle-forge"]');
+    const listBtn = page.locator('[data-corn="view-controls"] [data-action="toggle-forge"]');
     check('the List toggle is in the Work view\'s bar, collapsed, and names the panel it opens', (await listBtn.isVisible()) && (await listBtn.getAttribute('aria-expanded')) === 'false' && (await listBtn.getAttribute('aria-controls')) === 'forge-panel');
     await listBtn.click(); await sleep(1500);
     const opened = await page.evaluate(() => { const p = document.querySelector('#forge-panel'); const r = p.getBoundingClientRect(); return { open: p.classList.contains('forge-open'), left: r.left, width: r.width, inert: p.inert, focus: document.activeElement && document.activeElement.id }; });
@@ -531,7 +531,7 @@ async function main() {
     await page.goto(`${BASE}/?issue=3`);
     await until(page, async () => (await import('/explorer/state.js')).state.selectedNode?.work === 'issue');
     await sleep(800);
-    await page.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1500);
+    await page.click('[data-corn="view-controls"] [data-action="toggle-forge"]'); await sleep(1500);
     const axe = await runAxe(page);
     check('axe: no violation in the Work view with the list open and a node selected (dark)', axe.length === 0, axe.join(' | '));
     await page.fill('#forge-text', '').catch(() => {});
@@ -547,7 +547,7 @@ async function main() {
     names = await namesOnScreen(page);
     check('light: no name off the screen or over another', names.off.length === 0 && names.over.length === 0 && names.under.length === 0, `${names.count} names`);
     await shot('desktop-light-work');
-    await page.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1500);
+    await page.click('[data-corn="view-controls"] [data-action="toggle-forge"]'); await sleep(1500);
     await pick('run:run-01RIGRUN000000000000000003'); await sleep(1500);
     const axeLight = await runAxe(page);
     check('axe: none with the list open and a waiting run\'s answer field in the node panel (light)', axeLight.length === 0, axeLight.join(' | '));
@@ -591,7 +591,7 @@ async function main() {
       const open = [...document.querySelectorAll('.hx-sheet')].filter((e) => (e.classList.contains('hx-forge') ? e.classList.contains('forge-open') : e.classList.contains('hx-drawer') ? e.classList.contains('drawer-open') : !e.hidden) && !e.hasAttribute('data-sheet-away')).map((e) => `${e.id}:${e.dataset.sheetState}`);
       return { open, map: (state.height - (state.coveredBottom || 0)) / state.height, selected: state.selectedNode ? state.selectedNode.id : null };
     });
-    const pList = pp.locator('.hx-work-bar [data-action="toggle-forge"]');
+    const pList = pp.locator('[data-corn="view-controls"] [data-action="toggle-forge"]');
     check('on a phone the List toggle is on the map, in the bar, and a tap target', (await pList.isVisible()) && ((await pList.boundingBox()).height >= 28));
     await pList.tap(); await sleep(1500);
     let sh = await sheetsNow();
@@ -639,7 +639,7 @@ async function finalShots(browser) {
     return { context, pg };
   };
   const pickOn = async (pg, id) => { await pg.evaluate(async (i) => { const { pick: p } = await import('/explorer/work-view.js'); p(i); }, id); await sleep(1500); };
-  const listOn = async (pg) => { await pg.click('.hx-work-bar [data-action="toggle-forge"]'); await sleep(1500); };
+  const listOn = async (pg) => { await pg.click('[data-corn="view-controls"] [data-action="toggle-forge"]'); await sleep(1500); };
   for (const scheme of ['dark', 'light']) {
     const { context, pg } = await open({ viewport: { width: 1440, height: 900 }, colorScheme: scheme });
     await listOn(pg);
@@ -661,7 +661,7 @@ async function finalShots(browser) {
   }
   for (const scheme of ['dark', 'light']) {
     const { context, pg } = await open({ viewport: { width: 390, height: 844 }, colorScheme: scheme, hasTouch: true, isMobile: true });
-    await pg.locator('.hx-work-bar [data-action="toggle-forge"]').tap(); await sleep(1500);
+    await pg.locator('[data-corn="view-controls"] [data-action="toggle-forge"]').tap(); await sleep(1500);
     await pg.locator('#forge-panel > .hx-sheet-handle').tap(); await sleep(900);
     await pg.screenshot({ path: path.join(FINAL, `phone-${scheme}-list-sheet.png`) });
     await pg.locator('#forge-list [data-work-ref]:visible').nth(1).tap(); await sleep(1500);

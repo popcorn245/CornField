@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   listUrl, serverState, matches, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, nodesForFile, isTestPath, testFilesOf, litFor,
   errorWords, defaultFilters,
-  mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
+  mergeBlock, nextWords, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
   KINDS, DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   // @ts-expect-error plain JS modules, no declarations
@@ -186,6 +186,19 @@ describe('what a pull request lights', () => {
 describe('actions: why not, what is confirmed, what is said', () => {
   const check = (state, extra = {}) => ({ id: `run:${state}`, name: state, state, url: null, rerunnable: false, canRerun: false, ...extra });
   const detail = (extra = {}, checks = [check('success')]) => ({ pull: pull(12, { head: { ref: 'feature/meals', sha: 'abc0000000000000000000000000000000000000' } }), checks, ...extra });
+
+  it('says in one Next line what comes before Land it (spec 0015 D4), and nothing when it can land', () => {
+    expect(nextWords(detail())).toBe('');
+    expect(nextWords({ ...detail(), pull: pull(12, { state: 'merged' }) })).toBe('');
+    expect(nextWords(detail({}, [check('success', { name: 'lint' }), check('running', { name: 'docs' })]))).toBe('Then: Land it once docs finishes (1 check running).');
+    expect(nextWords(detail({ specs: [{ slug: '0100-flow', approved: false }] }, [check('running', { name: 'docs' })]), { self: true })).toBe('Then: approve, and Land it once docs finishes (1 check running).');
+    expect(nextWords(detail({ specs: [{ slug: '0100-flow', approved: false }] }))).toBe('Then: approve 0100-flow, and Land it.');
+    expect(nextWords(detail({}, [check('failure', { name: 'lint', canRerun: true })]))).toBe('Then: re-run lint, and Land it.');
+    expect(nextWords(detail({}, [check('failure', { name: 'lint' })]))).toBe('Then: re-run lint on the forge, and Land it.');
+    expect(nextWords(detail({}, []))).toBe('Then: Land it once the forge has run its checks (none yet).');
+    expect(nextWords({ ...detail(), pull: pull(12, { draft: true }) })).toBe('Then: mark it ready for review on the forge, and Land it.');
+    expect(nextWords(detail({ stale: 'x' }))).toBe('Then: press Refresh (this is an older answer), and Land it.');
+  });
 
   it('lets a green, open, ready pull request land and gives every other a reason', () => {
     expect(mergeBlock(detail())).toBe(null);
