@@ -15,7 +15,8 @@
  *   deploy    deploy:<id>           ship     a workflow run the config says is a deploy (server/deploys.js)
  *
  * Every node: `{ id, kind, stage, title, state, open, waiting, url, updated, ...}` and its number (`number`), slug (`slug`), run id (`runId`) or
- * deploy id (`deployId`). `waiting` is spec 0010 D1's rule, worked out by the same functions the page's number uses (explorer/waiting-model.js
+ * deploy id (`deployId`). A run also carries `note` (its report's last word, the question when it waits), `brief` and `pull` (`{ number, state }` of the pull
+ * request it opened); an open pull request `checks` (`checkCounts`: failed, running, passed, green and the names), or null when they could not be read (spec 0016 D9). `waiting` is spec 0010 D1's rule, worked out by the same functions the page's number uses (explorer/waiting-model.js
  * `specStateOf`, explorer/runs-model.js `canAnswer`): a spec to decide, a run waiting on an answer; nothing else asks the maintainer a question.
  * The code a proposal adds, and the map does not hold yet, comes as `{ id, kind: 'code', planned: true, label, type, parent }`; the code that exists is
  * on the map the page already has, and is only named by edges.
@@ -51,7 +52,7 @@
  */
 
 import fs from 'node:fs';
-import { DEFAULT_LIMIT, ForgeError } from './forge.js';
+import { DEFAULT_LIMIT, ForgeError, isGreen, RERUN_STATES } from './forge.js';
 import { filesAt, forgeWords, pullProposals, readPullProposal, reviewStates } from './proposal-pulls.js';
 import { listProposalFiles } from './files.js';
 import { deploysOf } from './deploys.js';
@@ -150,6 +151,48 @@ async function each(items, fn) {
     }
   }));
   return out;
+}
+
+/** The longest a run's note or brief is carried, in characters */
+export const NOTE_CUT = 300;
+const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** The states a check is still on its way in */
+const GOING = new Set(['queued', 'running', 'pending', 'in_progress', 'waiting']);
+
+/**
+ * A commit's checks as counts (spec 0016 D9): failed (failed or cancelled), running (queued or running), passed, and `green` as landing reads it
+ * (server/forge.js `isGreen`). The inbox says "lint failed · test running" from the names of the failed and running ones (`failedNames`, `runningNames`, at most five each).
+ * @param {{ name: string, state: string }[]} checks
+ */
+export function checkCounts(checks) {
+  const list = Array.isArray(checks) ? checks : [];
+  const failed = list.filter((c) => RERUN_STATES.includes(c.state));
+  const going = list.filter((c) => GOING.has(c.state));
+  return {
+    failed: failed.length, running: going.length, passed: list.filter((c) => c.state === 'success').length, green: isGreen(list),
+    failedNames: failed.slice(0, 5).map((c) => text(c.name)), runningNames: going.slice(0, 5).map((c) => text(c.name)),
+  };
+}
+
+/** How long a head's checks are kept: while one runs, a minute (the page asks every minute); once all are over, ten (a re-run starts them again) */
+export const CHECKS_KEEP_RUNNING_MS = 60_000;
+export const CHECKS_KEEP_DONE_MS = 10 * 60_000;
+const CHECKS_KEPT_MAX = 500;
+/** where -> sha -> { at, keep, counts } */
+const checkCaches = new WeakMap();
+
+/** The checks at a head sha as counts, kept per `where` (CHECKS_KEEP_*); a failed read is never kept */
+async function checksAt(forge, where, sha, nowMs) {
+  const key = where && typeof where === 'object' ? where : checkCaches;
+  let kept = checkCaches.get(key);
+  if (!kept) checkCaches.set(key, (kept = new Map()));
+  const got = kept.get(sha);
+  if (got && nowMs - got.at < got.keep) return got.counts;
+  const counts = checkCounts(await forge.checks(sha));
+  kept.delete(sha);
+  kept.set(sha, { at: nowMs, keep: counts.running ? CHECKS_KEEP_RUNNING_MS : CHECKS_KEEP_DONE_MS, counts });
+  while (kept.size > CHECKS_KEPT_MAX) kept.delete(kept.keys().next().value);
+  return counts;
 }
 
 /** An id of the work graph's own: a map node with one would be two things */
@@ -338,10 +381,21 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
     }
   }
 
+  // The checks on each open pull request's head, as counts (spec 0016 D9): asked each time, since a head's checks move while it stays
+  const checkable = pulls.filter((p) => !specEntries.has(p.number) && p.state === 'open' && p.head && p.head.sha);
+  const gotChecks = await each(checkable, (pull) => attempt(() => checksAt(forge, where, pull.head.sha, nowMs)));
+  const checksOf = new Map();
+  const noChecks = [];
+  for (const [i, pull] of checkable.entries()) {
+    if (gotChecks[i].err) noChecks.push(pull.number);
+    else checksOf.set(pull.number, gotChecks[i].value);
+  }
+  if (noChecks.length) say('pulls', `The checks of ${noChecks.length === 1 ? 'pull request' : 'pull requests'} ${numbers(noChecks)} could not be read, so they are not said.`);
+
   for (const pull of pulls) {
     if (specEntries.has(pull.number)) continue;
     const id = `pull:${pull.number}`;
-    put({ id, kind: 'pull', title: pull.title, state: pull.state, open: pull.state === 'open', number: pull.number, url: webUrl(pull.url), updated: pull.updatedAt, draft: pull.draft, author: pull.author ? pull.author.login : null });
+    put({ id, kind: 'pull', title: pull.title, state: pull.state, open: pull.state === 'open', number: pull.number, url: webUrl(pull.url), updated: pull.updatedAt, draft: pull.draft, author: pull.author ? pull.author.login : null, checks: checksOf.get(pull.number) ?? null });
     byPull.set(pull.number, [id]);
     if (filesOf.has(pull.number)) for (const to of nodesOfFiles(filesOf.get(pull.number), mapNodes)) edge(id, to, 'changes');
   }
@@ -459,6 +513,9 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
     put({
       id, kind: 'run', title: runName(run), state: run.status, open: run.open === true, waiting: canAnswer(run), runId: run.runId, number: null, url: webUrl(run.report && run.report.url) || webUrl(run.comment && run.comment.url) || webUrl(run.pull && run.pull.url),
       updated: ended, requestedBy: run.requestedBy ?? null,
+      // what the inbox says of it (spec 0016 D9): its question or last word, what it was asked to do, and the pull request it opened
+      note: clip(text(run.report && run.report.note), NOTE_CUT) || null, brief: clip(text(run.brief), NOTE_CUT) || null,
+      pull: run.pull && Number.isInteger(run.pull.number) ? { number: run.pull.number, state: text(run.pull.state) || null } : null,
     });
     const about = [run.refs && run.refs.issue, run.refs && run.refs.thread].filter((n) => n != null).map(talkNode).filter(Boolean);
     for (const from of new Set(about)) edge(from, id, 'agent-on');
