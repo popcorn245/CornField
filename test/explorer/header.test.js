@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { explorerPage } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
-import { state } from '../../explorer/state.js';
+import { state, pageInstance } from '../../explorer/state.js';
 // @ts-expect-error plain JS modules, no declarations
 import { renderLayerToggles, LAYER_DEFS } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -71,7 +71,48 @@ describe('the header, left to right', () => {
   });
 
   it('has no Work panel button: the Work view\'s List toggle opens the lists (explorer/work-view.js)', () => {
-    expect(header().querySelector('[data-corn="forge-button"], .hx-work, [data-action="toggle-forge"]')).toBeNull();
+    expect(header().querySelector('[data-corn="forge-button"], .hx-work')).toBeNull();
+  });
+
+  it('keeps a place for the view\'s own controls after the View switch, before the Layers chip, empty and hidden until a view fills it; no Replay button (spec 0015 D5, D6)', () => {
+    const group = header().querySelector('[data-corn="view-controls"]');
+    expect(group.getAttribute('role')).toBe('group');
+    expect(group.hidden).toBe(true);
+    expect(group.children).toHaveLength(0); // the Work view puts its toggles here (work-view.js)
+    const all = [...header().querySelectorAll('*')];
+    expect(all.indexOf($('fit-btn'))).toBeLessThan(all.indexOf(group));
+    expect(all.indexOf(group)).toBeLessThan(all.indexOf($('legend-toggle-btn')));
+    expect(group.closest('.hx-view-tools').contains($('legend-toggle-btn'))).toBe(true); // on a phone the two sit on the map together
+    expect($('replay-btn')).toBeNull();
+  });
+});
+
+describe('the Layers menu (spec 0015 D6)', () => {
+  it('is titled Layers', () => {
+    expect($('legend-dropdown').querySelector('.hx-menu-head > span').textContent).toBe('Layers');
+    expect($('legend-dropdown').textContent).not.toContain('Section Toggles');
+  });
+
+  it('shows a legend only while its layer is on: the Key while any layer is, Agent runs while runs are drawn and their layer is on', () => {
+    state.nodes = [{ id: 'a', type: 'app', label: 'a', x: 0, y: 0, r: 10 }];
+    renderLayerToggles();
+    expect($('edge-key').hidden).toBe(false);
+    state.activeLayers = Object.fromEntries(LAYER_DEFS.map((l) => [l.key, false]));
+    renderLayerToggles();
+    expect($('edge-key').hidden).toBe(true); // no layer on, no line drawn
+    state.activeLayers = {};
+    renderLayerToggles();
+    const inst = pageInstance();
+    inst.emit('runs:map', { active: true });
+    expect($('runs-legend').hidden).toBe(false);
+    state.activeLayers = { runs: false };
+    renderLayerToggles();
+    expect($('runs-legend').hidden).toBe(true);
+    state.activeLayers = {};
+    inst.emit('runs:map', { active: false });
+    expect($('runs-legend').hidden).toBe(true);
+    expect($('history-legend').hidden).toBe(true); // the History layer's, while it is drawn (history-ui.test.js)
+    expect($('proposal-legend').hidden).toBe(true); // while a proposal is open
   });
 });
 

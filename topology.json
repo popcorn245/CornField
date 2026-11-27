@@ -11326,6 +11326,18 @@
       "label": "imports"
     },
     {
+      "from": "core-explorer-history-replay",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-core-release-notes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0015-a-quieter-work-view"
     },
@@ -11338,13 +11350,7 @@
       "from": "page-doc-docs-specs-0015-a-quieter-work-view",
       "to": "page-doc-docs-theming",
       "dashed": true
-    },
-    {
-      "from": "core-explorer-work-model",
-      "to": "core-core-release-notes",
-      "dashed": true,
-      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-27T01:12:33.698Z"
+  "updatedAt": "2026-11-27T01:48:35.170Z"
 }

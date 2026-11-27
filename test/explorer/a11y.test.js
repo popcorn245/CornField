@@ -394,6 +394,17 @@ describe('the issues and PRs panel', () => {
     await settle();
   };
 
+  it('has no violation in the header with the Work view\'s controls in it (spec 0015 D5)', async () => {
+    stub();
+    start();
+    press('#preset-work-btn');
+    await settle();
+    const group = document.querySelector('[data-corn="header"] [data-corn="view-controls"]');
+    expect(group.hidden).toBe(false);
+    expect([...group.querySelectorAll('button:not([hidden])')].map((b) => b.textContent)).toEqual(['Waiting on you', 'List']);
+    expect(await audit('[data-corn="header"]')).toEqual([]);
+  });
+
   it('has no violation closed (inert off screen)', async () => {
     stub();
     start();
@@ -685,7 +696,7 @@ describe('the issues and PRs panel', () => {
       expect(document.querySelector('#forge-detail').getAttribute('data-work-kind')).toBe('deploy');
       expect($('map-announcer').textContent).toBe('Deploy Deploy web of main, succeeded: 1 node restarted on the map, 1 named that is not on the map.');
       key($('forge-title'), 'Escape');
-      expect(document.activeElement).toBe($('forge-btn'));
+      expect(document.activeElement).toBe(document.querySelector('[data-action="toggle-forge"]')); // the first List toggle: the header's, where the Work view has put it (spec 0015 D5)
     });
   });
 

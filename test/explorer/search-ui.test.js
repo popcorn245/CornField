@@ -169,8 +169,12 @@ describe('stepping', () => {
     await settle();
     const first = currentResult().matches[0].node;
     expect(state.selectedNode.id).toBe(first.id);
+    expect($('search-results').hidden).toBe(true); // the choice is made: the list closes (spec 0015 D7), the field keeps the focus for the next Enter
+    expect(document.activeElement).toBe($('node-search'));
     expect(state.searchCurrent).toBe(first.id);
     expect($('search-count').textContent).toBe('1 of 7');
+    type('sync'); // typing opens it again
+    expect($('search-results').hidden).toBe(false);
     // the camera flies there at zoom 1 (reduced motion jumps; otherwise a glide, run here by hand)
     for (let t = 0; flying() && t < 400; t++) tickFlight(16 * t);
     expect(state.camera.zoom).toBeGreaterThanOrEqual(1);
@@ -238,15 +242,20 @@ describe('stepping', () => {
     expect(document.activeElement).toBe(rows().at(-1)); // the last row
     key(document.activeElement, 'Escape');
     expect(document.activeElement).toBe($('node-search'));
-    // a click on a row chooses it, and the focus stays on that row (the list is repainted round it)
+    // a click on a row (or Enter on it) chooses it and closes the list, so it does not lie over the node panel; the focus goes back to the field (spec 0015 D7)
     const row = rows().find((r) => r.dataset.searchId === 'page-sync-2');
     row.focus();
     row.click();
     await settle();
     expect(state.selectedNode.id).toBe('page-sync-2');
-    expect(document.activeElement.dataset.searchId).toBe('page-sync-2');
-    expect(document.activeElement.getAttribute('aria-current')).toBe('true');
+    expect($('search-results').hidden).toBe(true);
+    expect(document.activeElement).toBe($('node-search'));
+    expect($('node-search').getAttribute('aria-expanded')).toBe('false');
     expect($('search-count').textContent).toMatch(/^\d of 7$/);
+    // the down arrow opens it again, with the chosen row marked
+    key($('node-search'), 'ArrowDown');
+    expect($('search-results').hidden).toBe(false);
+    expect(rows().find((r) => r.dataset.searchId === 'page-sync-2').getAttribute('aria-current')).toBe('true');
   });
 
   it('N and P on the map step through the matches while a search is on, and through every node when none is', async () => {

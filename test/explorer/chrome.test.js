@@ -75,12 +75,13 @@ describe('the hint (F56)', () => {
     expect(hint().textContent).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
   });
 
-  it('goes once a node is picked, for the session, and stays for the Flow view\'s own description', () => {
+  it('goes once a node is picked, and does not come back in that browser (spec 0015 D5); the Flow view\'s own description stays', () => {
     syncHint();
     expect(hint().hidden).toBe(false);
     dismissHint();
     expect(hint().hidden).toBe(true);
-    expect(window.sessionStorage.getItem(HINT_STORAGE_KEY)).toBe('1');
+    expect(window.localStorage.getItem(HINT_STORAGE_KEY)).toBe('1');
+    expect(window.sessionStorage.getItem(HINT_STORAGE_KEY)).toBe(null);
     state.view = 'dataflow';
     syncHint();
     expect(hint().hidden).toBe(false);

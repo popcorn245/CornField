@@ -18,6 +18,7 @@
 import { announce } from './engine/keyboard.js';
 import { SPEEDS, commitKind, dayOf, parentsOf, replayCount, replayFrame, speedMs, stepWords, trailHtml } from './history-model.js';
 import { escapeHtml as esc } from '../core/text.js';
+import { redrawLayers } from './engine/layers.js';
 
 /** How long a node takes to bud out of its parent (ms) */
 export const BUD_MS = 520;
@@ -49,7 +50,15 @@ export function createReplay(inst, source) {
   const byId = (id) => state.nodes.find((n) => n.id === id);
   const labelOf = (id) => { const n = byId(id); return n ? String(n.label || n.id) : id; };
   const stage = () => (state.canvas && state.canvas.parentElement) || null;
-  const button = () => inst.el('replay-btn');
+  /** Replay's button, on the History row of the Layers menu (spec 0015 D6): it says pressed from `state.replay` each time the menu is drawn. Where the focus goes back when the
+   * timeline closes from inside: that button while the menu is open, else the menu's chip, else the map */
+  const returnFocus = () => {
+    const root = inst.root;
+    const find = (sel) => (root && root.querySelector ? root.querySelector(sel) : null);
+    const row = find('.hx-row-action[data-action="history-replay"]');
+    const to = row && !row.closest('[hidden]') ? row : find('[data-corn="layers-button"]') || state.canvas;
+    if (to && typeof to.focus === 'function') to.focus();
+  };
 
   function wire() {
     if (!inst.map) return;
@@ -270,9 +279,8 @@ export function createReplay(inst, source) {
     parents = parentsOf(state.edges);
     wire();
     buildStrip();
-    const btn = button();
-    if (btn) btn.setAttribute('aria-pressed', 'true');
     go(at, { say: true });
+    redrawLayers(inst); // Replay says pressed
     setPlaying(!inst.reducedMotion && at === 0);
     if (strip) strip.querySelector(playing ? '[data-replay="play"]' : '.hx-timeline-range').focus();
   }
@@ -287,8 +295,8 @@ export function createReplay(inst, source) {
     frame = null;
     if (strip) { strip.remove(); strip = null; }
     if (pulses) { pulses.remove(); pulses = null; }
-    const btn = button();
-    if (btn) { btn.setAttribute('aria-pressed', 'false'); if (had) btn.focus(); }
+    redrawLayers(inst);
+    if (had) returnFocus();
     inst.touchScene();
     inst.emit('history:at');
     if (inst.map) inst.map.render();
