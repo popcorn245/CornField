@@ -13,7 +13,7 @@ import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initForgePanel, resetForgePanelForTests, closeForge } from '../../explorer/forge-panel.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initWorkView, resetWorkViewForTests, closeWork } from '../../explorer/work-view.js';
+import { initWorkView, resetWorkViewForTests, closeWork, followWorkAddress } from '../../explorer/work-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -214,7 +214,7 @@ describe('the Work view\'s controls, in the header (spec 0015 D5)', () => {
     expect(all.indexOf(header().querySelector('[data-corn="view-switch"]'))).toBeLessThan(all.indexOf(group()));
     expect(all.indexOf(group())).toBeLessThan(all.indexOf(header().querySelector('[data-corn="layers-button"]')));
     expect(document.querySelector('.hx-work-bar, [data-corn="work-bar"]')).toBe(null);
-    expect([...group().querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Waiting on you', 'List']); // "All work" is not a button
+    expect([...group().querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Inbox', 'Graph', 'Waiting on you', 'List']); // "All work" is not a button; Inbox · Graph lead (spec 0016 D1)
     closeWork();
     expect(group().hidden).toBe(true);
   });
@@ -239,5 +239,73 @@ describe('the Work view\'s controls, in the header (spec 0015 D5)', () => {
     press(list());
     await settle();
     expect(list().getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+describe('the Work inbox (spec 0016)', () => {
+  const group = () => document.querySelector('[data-corn="view-controls"]');
+  const inbox = () => document.querySelector('[data-corn="inbox"]');
+  const as = (k) => group().querySelector(`[data-work-as="${k}"]`);
+  const waiting = () => group().querySelector('[data-work-toggle="waiting"]');
+  const rows = () => [...inbox().querySelectorAll('[data-corn="row"]')].map((r) => r.dataset.id);
+  const press = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const key = (k, target = document.body) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+  it('is where the Work view opens: the queue over the stage, its groups and rows, Waiting on you left to the Graph (D1, D2)', async () => {
+    fakeServer();
+    mount();
+    pageInstance().emit('work:open', { id: null });
+    await settle();
+    expect(inbox().hidden).toBe(false);
+    expect(as('inbox').getAttribute('aria-pressed')).toBe('true');
+    expect(as('graph').getAttribute('aria-pressed')).toBe('false');
+    expect(waiting().hidden).toBe(true);
+    expect(inbox().querySelector('.hx-inbox-sub').textContent).toBe('Nothing waits on you');
+    expect(rows()).toEqual(['issue:3']); // In motion (the open pull request) starts folded
+    const sections = [...inbox().querySelectorAll('[data-corn="section"]')].map((g) => g.dataset.group);
+    expect(sections).toEqual(['unclaimed', 'motion']);
+    for (const el of inbox().querySelectorAll('[data-corn]')) expect(el.getAttribute('part')).toBe(el.dataset.corn);
+    press(inbox().querySelector('[data-inbox-group="motion"]'));
+    expect(rows()).toEqual(['issue:3', 'pull:7']);
+  });
+
+  it('a row selects its piece of work in the node panel; J moves to the next row', async () => {
+    fakeServer();
+    mount();
+    pageInstance().emit('work:open', { id: null });
+    await settle();
+    press(inbox().querySelector('[data-inbox-group="motion"]'));
+    press(inbox().querySelector('[data-id="issue:3"]'));
+    await settle();
+    expect(state.selectedNode && state.selectedNode.id).toBe('issue:3');
+    expect(inbox().querySelector('[data-id="issue:3"] [data-inbox-open]').getAttribute('aria-current')).toBe('true');
+    key('j', inbox().querySelector('[data-id="issue:3"] [data-inbox-open]'));
+    await settle();
+    expect(state.selectedNode && state.selectedNode.id).toBe('pull:7');
+  });
+
+  it('G and the Graph button switch to the lanes, remembered; Waiting on you is back with them (D1)', async () => {
+    fakeServer();
+    mount();
+    pageInstance().emit('work:open', { id: null });
+    await settle();
+    key('g');
+    expect(inbox().hidden).toBe(true);
+    expect(as('graph').getAttribute('aria-pressed')).toBe('true');
+    expect(waiting().hidden).toBe(false);
+    expect(localStorage.getItem('cornfield.work.as')).toBe('graph');
+    press(as('inbox'));
+    expect(inbox().hidden).toBe(false);
+    expect(localStorage.getItem('cornfield.work.as')).toBe('inbox');
+  });
+
+  it('`?view=work&as=graph` opens the lanes', async () => {
+    fakeServer();
+    mount();
+    void followWorkAddress('?view=work&as=graph');
+    await settle();
+    expect(state.view).toBe('work');
+    expect(inbox().hidden).toBe(true);
+    expect(as('graph').getAttribute('aria-pressed')).toBe('true');
   });
 });

@@ -46,6 +46,7 @@ import { workButtonName } from './waiting-model.js';
 import { stepFrom } from './keyboard-model.js';
 import { RUNS_POLL_MS } from './pieces/work-common.js';
 import { showWorkRef, openForge, closeForge } from './forge-panel.js';
+import { mount as mountInbox } from './pieces/inbox.js';
 import {
   CODE_LAYER, DRAFT_LAYER, KIND_WORDS, addressOf, applyFilters, areaFor, arrowTarget, drawnEdges, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setOpenArea, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
@@ -62,11 +63,20 @@ let offPaint = null;
 let badges = null; // the Work layer's pills over the map (work-badges.js)
 let badgeWas = false; // whether the layer wanted the graph at the last look: it asks for it when it comes on
 let card = null; // the map's own card (pieces/status.js)
+let inbox = null; // the Work inbox over the stage (pieces/inbox.js, spec 0016)
 let timer = 0;
 let seq = 0; // the answer that is waited for: an older one is dropped
 let wasOn = false;
 
 const inst = () => pageInstance();
+
+/** Inbox or Graph (spec 0016 D1): the Work view opens on the Inbox; the choice is remembered like a layer */
+const AS_KEY = 'cornfield.work.as';
+function rememberedAs() {
+  try { return localStorage.getItem(AS_KEY) === 'graph' ? 'graph' : 'inbox'; } catch { return 'inbox'; }
+}
+const asOf = () => { const w = work(); if (w.as !== 'inbox' && w.as !== 'graph') w.as = rememberedAs(); return w.as; };
+const inInbox = () => on() && asOf() === 'inbox';
 const work = () => state.work || (state.work = newWorkState());
 const on = () => state.view === 'work';
 
@@ -148,7 +158,8 @@ function mount() {
   if (!stage || (els && els.stage === stage && els.bar.isConnected && stage.contains(els.lanes))) return;
   const bar = controlsSlot(stage);
   bar.hidden = true;
-  bar.innerHTML = '<button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-work-toggle="waiting" aria-pressed="false" title="Show only what waits on you; the rest is dimmed">Waiting on you</button>'
+  bar.innerHTML = '<span class="hx-work-as" role="group" aria-label="Show the work as"><button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-work-as="inbox" aria-pressed="true" title="What needs you, in a queue (G switches)">Inbox</button><button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-work-as="graph" aria-pressed="false" title="The lanes of work and the code they touch (G switches)">Graph</button></span>'
+    + '<button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-work-toggle="waiting" aria-pressed="false" title="Show only what waits on you; the rest is dimmed">Waiting on you</button>'
     + '<button type="button" class="hx-view-control" data-corn="work-chip" data-corn-kind="secondary" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work list" title="The lists of issues, pull requests, proposals, threads, runs and deploys" hidden>List</button>'
     + '<span class="hx-work-busy" hidden>Updating…</span>';
   const note = document.createElement('p');
@@ -169,7 +180,15 @@ function mount() {
   loading.innerHTML = `<div class="hx-work-skeleton" aria-hidden="true">${['Talk', 'Decide', 'Build', 'Ship', 'Code it touches'].map((name) => `<div class="hx-work-skel-lane"><span class="hx-work-lane-title">${name}</span><i></i><i></i><i></i><i></i></div>`).join('')}</div>`
     + '<p class="hx-work-loading-text" role="status">Reading the work from the forge. A big repository can take several seconds the first time; the page works meanwhile.</p>';
   stage.append(lanes, loading, note);
-  els = { stage, bar, waiting: bar.children[0], list: bar.children[1], busy: bar.children[2], note, lanes, loading };
+  els = { stage, bar, as: bar.children[0], waiting: bar.children[1], list: bar.children[2], busy: bar.children[3], note, lanes, loading };
+  if (inbox) inbox.destroy();
+  inbox = mountInbox(stage, {
+    pick: (id) => pick(id, { frame: false, source: 'link' }),
+    act: (id) => actOn(id),
+    announce: (words) => announce(inst(), words),
+    colorOf: (kind) => badgeColor(kind),
+    refresh: () => paintInbox(),
+  });
   paintList(!!inst().ask('work:on')); // the List toggle is there while the Work piece is on: a signed-in maintainer of a forge
   if (offPaint) offPaint();
   if (badges) badges.destroy();
@@ -205,7 +224,7 @@ function watchSize(stage) {
 function paintLanes(scene, camera) {
   if (!els) return;
   const w = work();
-  const show = on() && w.status === 'ok' && w.lanes.length > 0;
+  const show = on() && !inInbox() && w.status === 'ok' && w.lanes.length > 0;
   els.lanes.hidden = !show;
   if (!show) return;
   if (laneKey !== w.lanes) {
@@ -258,11 +277,48 @@ function paintBar() {
   const w = work();
   els.bar.hidden = !on();
   els.waiting.setAttribute('aria-pressed', String(!!w.waiting)); // the Work button's badge says how many; the toggle says only that it is on
+  els.waiting.hidden = inInbox(); // the Inbox is what waits on you, in a queue: dimming is the Graph's
+  for (const b of els.as.querySelectorAll('[data-work-as]')) b.setAttribute('aria-pressed', String(b.dataset.workAs === asOf()));
+  if (els.stage) els.stage.classList.toggle('is-inbox', inInbox());
   els.busy.hidden = !(on() && w.status === 'ok' && w.updating);
   els.loading.hidden = !(on() && w.status === 'loading');
   const lines = [...(w.stale ? [w.stale] : []), ...(w.lastError ? [w.lastError] : []), ...w.problems.map((p) => p.text)];
   els.note.hidden = !on() || !lines.length;
   els.note.textContent = lines.length ? lines.slice(0, 2).join(' ') + (lines.length > 2 ? ` and ${lines.length - 2} more.` : '') : '';
+  paintInbox();
+}
+
+/** The Inbox drawn from the last answer, the selection marked (spec 0016); hidden in the Graph and off the Work view */
+function paintInbox() {
+  if (!inbox) return;
+  const w = work();
+  inbox.paint(w.graph, { on: inInbox() && w.status === 'ok', selected: state.selectedNode ? state.selectedNode.id : null });
+}
+
+/** Inbox or Graph (spec 0016 D1), remembered; the Graph is fitted again as it comes back */
+function setAs(as) {
+  const w = work();
+  if (asOf() === as) return;
+  w.as = as;
+  try { localStorage.setItem(AS_KEY, as); } catch { /* remembering is a convenience */ }
+  paintBar();
+  if (on() && w.status === 'ok' && as === 'graph') { applyWorkLayout(state, { phone: isPhone() }); inst().touchScene(); fitGraphToViewport(fitPadding()); render(); }
+  if (as === 'inbox' && inbox) inbox.focus();
+  announce(inst(), as === 'inbox' ? 'Inbox.' : 'Graph: the lanes of work.');
+}
+
+/** A row's action (spec 0016 D5, D6): its piece of work is selected and the node panel's own primary action is pressed, with the confirm step it has there */
+function actOn(id) {
+  if (!pick(id, { frame: false, source: 'link' })) return;
+  const t0 = Date.now();
+  const press = () => {
+    const bar = document.querySelector('[data-corn="node-panel"] [data-corn="actions"]');
+    const btn = bar ? bar.querySelector('button:not([disabled]), a[href]') : null;
+    if (btn) { btn.click(); return; }
+    if (Date.now() - t0 < 2000) setTimeout(press, 60); // the Work piece draws a piece of work's actions once what it needs is read
+    else announce(inst(), 'Its actions are in the panel.');
+  };
+  setTimeout(press, 0);
 }
 
 /** The view opened or closed: the button, the bar, the stage; the map's own layers are back when it closed (work-model.js `leaveWork`) */
@@ -569,6 +625,7 @@ let opened = null;
  */
 function onSelection({ node: picked }) {
   if (!on() || work().status !== 'ok') return;
+  paintInbox();
   if (!picked) { openArea(null); return; }
   const node = work().nodes.find((n) => n.id === picked.id); // the view's own node (a tap names the scene's)
   if (!node) return;
@@ -638,6 +695,11 @@ function pickRef(ref) {
 //  Keys (the map's own are for the other views: Shift and an arrow still pan, the rest are the map's)
 // ---------------------------------------------------------------------------
 function onKey(e) {
+  if (on() && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'g' || e.key === 'G') && !(e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'))) {
+    e.preventDefault();
+    setAs(asOf() === 'inbox' ? 'graph' : 'inbox');
+    return;
+  }
   if (!on() || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !state.canvas || e.target !== state.canvas) return;
   const shown = shownInOrder();
   if (!shown.length) return;
@@ -663,6 +725,8 @@ function onClick(e) {
   if (t_.closest('[data-action="preset-work"]')) { if (on()) closeWork(); else openWork(); return; }
   if (t_.closest('[data-action="refresh-forge"]') && on()) { load({ again: true }); return; }
   if (t_.closest('[data-work-toggle="waiting"]') && on()) { setWaiting(!work().waiting); return; }
+  const as = t_.closest('[data-work-as]');
+  if (as && on()) { setAs(as.dataset.workAs); return; }
   const act = t_.closest('[data-work-action]');
   if (!act) return;
   if (act.dataset.workAction === 'open-item') { // a node panel's "Open work" link: the Work view opens on that piece of work (a new tab, by the link's own address, is left alone)
@@ -702,6 +766,7 @@ export async function followWorkAddress(search = location.search) {
   if (!ask) return false;
   if (!offered) { announce(inst(), 'The map of work needs a forge in the config.'); return false; }
   spend();
+  try { const as = new URLSearchParams(search).get('as'); if (as === 'graph' || as === 'inbox') work().as = as; } catch { /* the address is a convenience */ }
   return openWork({ ask: ask.kind ? ask : null });
 }
 
@@ -733,6 +798,8 @@ export function resetWorkViewForTests() {
   offered = false;
   els = null;
   card = null;
+  if (inbox) inbox.destroy();
+  inbox = null;
   seq++;
   wasOn = false;
 }

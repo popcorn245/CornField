@@ -3317,6 +3317,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work inbox's rules, the pure half (spec 0016 D2 to D4): no DOM, no `window`, no clock of its own. (explorer/inbox-model.js)"
+    },
+    {
+      "id": "core-explorer-pieces-inbox",
+      "label": "inbox.js",
+      "type": "core",
+      "file": "explorer/pieces/inbox.js",
+      "summary": "The Work inbox in cornfield's page (spec 0016 D1, D2, D5 to D8): the queue of what needs you, over the Work view's stage, beside the node panel.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work inbox in cornfield's page (spec 0016 D1, D2, D5 to D8): the queue of what needs you, over the Work view's stage, beside the node panel. (explorer/pieces/inbox.js)"
     }
   ],
   "edges": [
@@ -11516,7 +11526,29 @@
       "from": "page-doc-docs-issues-and-prs",
       "to": "page-doc-docs-specs-0016-work-inbox",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-inbox"
+    },
+    {
+      "from": "core-explorer-pieces-inbox",
+      "to": "core-explorer-inbox-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-inbox",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-pieces-inbox",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-27T04:29:52.052Z"
+  "updatedAt": "2026-11-27T04:50:01.037Z"
 }

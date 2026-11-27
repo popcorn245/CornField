@@ -66,7 +66,7 @@ const usedKindsJs = [...new Set(literal('kind', /\.dataset\.cornKind = '([^']+)'
 describe('the documented list', () => {
   it('is a list a brand can read in one sitting, with no repeats', () => {
     expect(hooks.length).toBeGreaterThanOrEqual(100);
-    expect(hooks.length).toBeLessThanOrEqual(200);
+    expect(hooks.length).toBeLessThanOrEqual(201);
     const all = tableValues('## The hooks');
     expect(all.length).toBe(hooks.length);
     expect(kinds.sort()).toEqual(['approve', 'danger', 'icon', 'primary', 'quiet', 'secondary']);

@@ -401,8 +401,32 @@ describe('the issues and PRs panel', () => {
     await settle();
     const group = document.querySelector('[data-corn="header"] [data-corn="view-controls"]');
     expect(group.hidden).toBe(false);
-    expect([...group.querySelectorAll('button:not([hidden])')].map((b) => b.textContent)).toEqual(['Waiting on you', 'List']);
+    expect([...group.querySelectorAll('button:not([hidden])')].map((b) => b.textContent)).toEqual(['Inbox', 'Graph', 'List']); // Waiting on you is the Graph's (spec 0016 D1)
     expect(await audit('[data-corn="header"]')).toEqual([]);
+  });
+
+  it('has no violation in the Work inbox, the Work view\'s start (spec 0016)', async () => {
+    const graph = {
+      ok: true,
+      problems: [],
+      edges: [{ from: 'proposal:0013-meals', to: 'run:01HZZZZZZZZZZZZZZZZZZZZZZZ', rel: 'agent-on' }],
+      nodes: [
+        { id: 'proposal:0013-meals', kind: 'proposal', stage: 'decide', title: 'Meals', state: 'review', open: true, waiting: true, number: 12, slug: '0013-meals', updated: '2026-10-16T10:00:00Z' },
+        { id: 'run:01HZZZZZZZZZZZZZZZZZZZZZZZ', kind: 'run', stage: 'build', title: 'spec on proposal 0013-meals', state: 'waiting', open: true, waiting: true, note: 'Plan ready', updated: '2026-10-16T11:00:00Z' },
+        { id: 'pull:13', kind: 'pull', stage: 'build', title: 'Lint everything', state: 'open', open: true, waiting: false, number: 13, updated: '2026-10-16T09:00:00Z', checks: { failed: 1, running: 0, passed: 2, green: false, failedNames: ['lint'], runningNames: [] } },
+        { id: 'issue:5', kind: 'issue', stage: 'talk', title: 'Sign-in', state: 'open', open: true, waiting: false, number: 5, updated: '2026-10-16T10:00:00Z' },
+      ],
+    };
+    stub();
+    const base = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => (new URL(url, 'http://localhost').pathname === '/api/forge/work-graph' ? { ok: true, status: 200, headers: new Headers(), json: async () => structuredClone(graph) } : base(url, init))));
+    start();
+    press('#preset-work-btn');
+    await settle();
+    const inbox = document.querySelector('[data-corn="inbox"]');
+    expect(inbox && inbox.hidden).toBe(false);
+    expect(inbox.querySelectorAll('[data-corn="row"]').length).toBe(3); // the run rides in the spec's row
+    expect(await audit('[data-corn="inbox"]')).toEqual([]);
   });
 
   it('has no violation closed (inert off screen)', async () => {
