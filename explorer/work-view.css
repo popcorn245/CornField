@@ -1,5 +1,5 @@
 /* The Work view (explorer/work-view.js, spec 0012): the line of what could not be read, and the node panel's work detail. Its controls (Waiting on you, List) are the header's (css/header.css, spec 0015 D5). */
-.hx-work-note { position: absolute; z-index: 3; left: var(--corn-space-4); bottom: var(--corn-space-4); max-width: min(32rem, calc(100% - var(--corn-space-8))); margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-work-note { position: absolute; z-index: 3; left: var(--corn-space-4); bottom: var(--corn-space-4); max-width: min(32rem, calc(100% - 2 * var(--corn-space-4))); margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text-2); font-size: var(--corn-text-xs); }
 .hx-work-note[hidden] { display: none; }
 .hx-view-badge { margin-left: var(--corn-space-2); }
 .hx-work-links { list-style: none; margin: 0; padding: 0; }
@@ -34,7 +34,7 @@
 .hx-stage.is-work .hx-hint { display: none; }
 @keyframes hx-work-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
 @media (prefers-reduced-motion: reduce) { .hx-work-skel-lane i { animation: none; opacity: 0.6; } }
-.hx-work-loading-text { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(26rem, calc(100% - var(--corn-space-8))); margin: 0; padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-1); color: var(--corn-text); font-size: var(--corn-text-sm); text-align: center; box-shadow: var(--corn-shadow); }
+.hx-work-loading-text { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(26rem, calc(100% - 2 * var(--corn-space-4))); margin: 0; padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-1); color: var(--corn-text); font-size: var(--corn-text-sm); text-align: center; box-shadow: var(--corn-shadow); }
 @container corn-box (max-width: 767px) {
   /* The Layers chip, the view's controls and Fit sit on the map's top row (layers.css, header.css); the lanes run top to bottom under it */
   .hx-work-note { bottom: var(--corn-space-4); }
