@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "spec": "0015",
+  "title": "A quieter Work view",
+  "summary": "The Work view without the clutter: the code work touches grouped by area with its lines drawn only for the selection, a spec pull request's conversation folded into its proposal, one side panel at a time, the node panel leading with its action, each view's controls in the header, and Replay inside the Layers menu's History row.",
+  "nodes": {
+    "change": [
+      { "id": "core-explorer-work-model", "set": { "desc": "The Work view's scene and layout: the work in lanes by stage, the code it touches grouped by area (opened in place), and a spec pull request's threads folded into its proposal." }, "why": "D1, D2: code grouped by area, spec threads folded" },
+      { "id": "core-explorer-work-view", "set": { "desc": "The Work view: its lanes and their titles, the lines from work to code drawn for the selection only, and its controls (Waiting on you, List) in the header." }, "why": "D1, D5: lines for the selection, controls in the header" },
+      { "id": "core-explorer-pieces-node-panel", "set": { "desc": "The node panel: kind, title and state, an action bar kept in view with the next action first, one Next line, then sections with their counts; it takes turns with the Work list in the right-hand slot." }, "why": "D3, D4: the action first, one panel at a time" },
+      { "id": "core-explorer-pieces-work-list", "set": { "desc": "The Work list: Specs, PRs, Issues, Threads, Runs and Deploys, in the right-hand slot it shares with the node panel; a row opens its detail there, with Back." }, "why": "D3: the list moves to the right and takes turns with the node panel" },
+      { "id": "core-explorer-pieces-layers", "set": { "desc": "The Layers menu: the map's layers, History with its Replay, and in the Work view one layer per kind of work; a legend shows while its layer is on." }, "why": "D6: Replay in the History row, legends follow their layer" },
+      { "id": "core-explorer-history-replay", "set": { "desc": "Replay: the map grows on a timeline, commit by commit, opened from the History row of the Layers menu." }, "why": "D6: Replay leaves the header" },
+      { "id": "core-explorer-hint", "set": { "desc": "The hint over the map, which leaves once a node has been selected." }, "why": "D5: the hint goes after the first selection" },
+      { "id": "core-explorer-pieces-search", "set": { "desc": "The search: a field, its matches and the steps through them; choosing a match selects its node and closes the results." }, "why": "D7: the results close on select" }
+    ]
+  },
+  "mockups": [
+    { "node": "core-explorer-work-view", "path": "0015-a-quieter-work-view/after-work.webp", "title": "The Work view after: Spec 0100 selected with Waiting on you on, its conversation folded into it, the code grouped by area with lines only for the selection, and the node panel leading with Review" },
+    { "node": "core-explorer-work-model", "path": "0015-a-quieter-work-view/before-work.webp", "title": "Before: the Work view with nothing selected, 44 code nodes in a column wired to every lane, and 7 threads that repeat the specs in Decide" },
+    { "node": "core-explorer-pieces-node-panel", "path": "0015-a-quieter-work-view/before-panels.webp", "title": "Before: the Work list and the node panel open together, the map left with about 560 px between them" }
+  ]
+}
