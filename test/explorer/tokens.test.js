@@ -236,6 +236,21 @@ describe('tokens.css defines the documented tokens', () => {
   });
 });
 
+describe('every token a stylesheet reads is one tokens.css defines', () => {
+  // A var() of a token that does not exist and has no fallback makes the whole declaration invalid, and the browser drops it without a word
+  // (`calc(100% - var(--corn-space-8))` left two of the Work view's boxes with no width limit). A fallback is allowed: it is what such a read meant.
+  it('reads no --corn-* token without a fallback unless tokens.css defines it', () => {
+    const tokens = fs.readFileSync(path.join(EXPLORER, 'tokens.css'), 'utf8');
+    const defined = new Set([...tokens.matchAll(/(--corn-[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+    const missing = [];
+    for (const f of files) {
+      const css = fs.readFileSync(path.join(EXPLORER, f), 'utf8');
+      for (const m of css.matchAll(/var\((--corn-[a-z0-9-]+)\s*\)/g)) if (!defined.has(m[1])) missing.push(`${f}: ${m[1]}`);
+    }
+    expect(missing).toEqual([]);
+  });
+});
+
 describe('the brand stylesheet in docs/theming.md', () => {
   const docs = fs.readFileSync(path.join(CORNFIELD, 'docs/theming.md'), 'utf8');
   const brand = [...docs.matchAll(/```css\n([\s\S]*?)```/g)].map((m) => m[1]).find((b) => b.startsWith('/* brand.css'));
