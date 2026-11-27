@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 // @ts-expect-error plain JS module, no declarations
-import { workGraph, stageOf, inWindow, isDrawn, buildMarkerOf, touchesOf, nodesOfFiles, MAX_OPEN_PULLS, MAX_PULL_FILES, WINDOW_DAYS, KINDS, RELS, STAGES } from '../../server/work-graph.js';
+import { workGraph, checkCounts, NOTE_CUT, stageOf, inWindow, isDrawn, buildMarkerOf, touchesOf, nodesOfFiles, MAX_OPEN_PULLS, MAX_PULL_FILES, WINDOW_DAYS, KINDS, RELS, STAGES } from '../../server/work-graph.js';
 // @ts-expect-error plain JS module, no declarations
 import { ForgeError } from '../../server/forge.js';
 // @ts-expect-error plain JS module, no declarations
@@ -59,6 +59,7 @@ function makeForge(data = {}) {
     comments: async (n) => { note('comments', n); return d.comments[n] ?? []; },
     file: async (sha, p) => { note('file', sha, p); return d.texts[`${sha}:${p}`] ?? null; },
     runs: async () => { note('runs'); return d.runs; },
+    checks: async (sha) => { note('checks', sha); return (d.checks || {})[sha] ?? []; },
     permission: async () => 'maintain',
   };
   return forge;
@@ -533,5 +534,69 @@ describe('waiting is the page\'s number, both ways', () => {
     const graphCount = g.nodes.filter((n) => n.waiting).length;
     expect(graphCount).toBe(5); // four specs (one of them twice) and the run that waits; not the one asked to stop
     expect(await pageNumber(forge, where, runList)).toBe(graphCount);
+  });
+});
+
+describe('what the inbox reads off the graph (spec 0016 D9)', () => {
+  it('counts a head\'s checks: failed and cancelled, queued and running, passed, green as landing reads it', () => {
+    expect(checkCounts([{ name: 'lint', state: 'failure' }, { name: 'e2e', state: 'cancelled' }, { name: 'test', state: 'running' }, { name: 'docs', state: 'queued' }, { name: 'validate', state: 'success' }]))
+      .toEqual({ failed: 2, running: 2, passed: 1, green: false, failedNames: ['lint', 'e2e'], runningNames: ['test', 'docs'] });
+    expect(checkCounts([{ name: 'validate', state: 'success' }, { name: 'skip', state: 'skipped' }])).toMatchObject({ failed: 0, running: 0, passed: 1, green: true });
+    expect(checkCounts([])).toMatchObject({ failed: 0, running: 0, passed: 0, green: false });
+    expect(checkCounts(null)).toMatchObject({ failed: 0, passed: 0 });
+  });
+
+  it('a run carries its question, its brief and the pull request it opened; an open pull request its checks, a spec PR none', async () => {
+    const s = story();
+    s.runs.list = async () => ({ runs: [run({ status: 'waiting', report: { state: 'waiting', note: 'Plan ready: approve to build, or tell me what to change.', at: ago(0.1) }, brief: 'Retire the export' })] });
+    s.forge.data.checks = { h27: [{ name: 'lint', state: 'failure' }, { name: 'test', state: 'running' }] };
+    const g = await graphOf(s);
+    const r = g.nodes.find((n) => n.kind === 'run');
+    expect(r).toMatchObject({ note: 'Plan ready: approve to build, or tell me what to change.', brief: 'Retire the export', pull: { number: 27, state: 'open' } });
+    expect(g.nodes.find((n) => n.id === 'pull:27').checks).toMatchObject({ failed: 1, running: 1, failedNames: ['lint'], runningNames: ['test'] });
+    const asked = s.forge.calls.filter((c) => c[0] === 'checks').map((c) => c[1]);
+    for (const n of g.nodes.filter((x) => x.kind === 'proposal' && x.number)) expect(asked).not.toContain(`h${n.number}`);
+    for (const n of g.nodes.filter((x) => x.kind === 'pull' && !x.open)) expect(n.checks).toBe(null);
+  });
+
+  it('a long note is cut, a run with none says null, and checks that cannot be read are said, the rest of the graph answered', async () => {
+    const s = story();
+    s.runs.list = async () => ({ runs: [run({ report: { note: 'x'.repeat(NOTE_CUT + 50), at: ago(0.1) }, brief: undefined, pull: null }), run({ runId: 'run-01BBBBBBBBBBBBBBBBBBBBBBBB', report: null })] });
+    s.forge.data.fail.checks = new ForgeError('away', { code: 'unavailable' });
+    const g = await graphOf(s);
+    const [a, b] = g.nodes.filter((n) => n.kind === 'run').sort((x, y) => (x.runId < y.runId ? -1 : 1));
+    expect(a.note).toHaveLength(NOTE_CUT);
+    expect(a.note.endsWith('…')).toBe(true);
+    expect(a).toMatchObject({ brief: null, pull: null });
+    expect(b.note).toBe(null);
+    expect(g.nodes.find((n) => n.id === 'pull:27').checks).toBe(null);
+    expect(g.problems.some((p) => p.source === 'pulls' && /checks of pull request/.test(p.text))).toBe(true);
+  });
+});
+
+describe('a head\'s checks are kept (spec 0016 D9)', () => {
+  it('asked once a minute while one runs, once in ten when all are over, and never kept when the read fails', async () => {
+    const s = story();
+    s.where = whereOf();
+    s.forge.data.checks = { h27: [{ name: 'test', state: 'running' }] };
+    const asks = () => s.forge.calls.filter((c) => c[0] === 'checks' && c[1] === 'h27').length;
+    await graphOf(s);
+    await graphOf(s, { now: () => NOW + 30_000 });
+    expect(asks()).toBe(1);
+    s.forge.data.checks.h27 = [{ name: 'test', state: 'success' }];
+    const later = await graphOf(s, { now: () => NOW + 61_000 });
+    expect(asks()).toBe(2);
+    expect(later.nodes.find((n) => n.id === 'pull:27').checks).toMatchObject({ passed: 1, running: 0, green: true });
+    await graphOf(s, { now: () => NOW + 9 * 60_000 });
+    expect(asks()).toBe(2);
+    await graphOf(s, { now: () => NOW + 12 * 60_000 });
+    expect(asks()).toBe(3);
+    const t = whereOf();
+    s.where = t;
+    s.forge.data.fail.checks = new ForgeError('away', { code: 'unavailable' });
+    await graphOf(s);
+    delete s.forge.data.fail.checks;
+    const back = await graphOf(s);
+    expect(back.nodes.find((n) => n.id === 'pull:27').checks).toMatchObject({ passed: 1 });
   });
 });

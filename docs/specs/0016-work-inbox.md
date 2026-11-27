@@ -95,6 +95,10 @@ Each step is its own pull request and release; cornfield's page keeps working af
 2. **The Inbox's rules** (D2 to D4): `explorer/inbox-model.js`, pure (no DOM), with the groups, the reasons in words, the order and the folding, tested on the rig's graph.
 3. **The Inbox in the page** (D1, D5 to D8): `explorer/pieces/inbox.js`, the Inbox · Graph toggle and its address, the queue and the detail with its actions, Around it, the keyboard, the screen reader's words, the phone's sheet, the strings and theme hooks, and a browser proof on the rig (`test/fixtures/big/inbox-proof.mjs`).
 
+## Where it stands
+
+Steps 1 to 3 are built. Step 3 differs from D5 in one place, on purpose: the selected row's detail is the node panel beside the queue, not a new pane, because spec 0015 already made that panel lead with the ask (its action bar first, one line on what comes next). Still to come: **Around it** (D5's small map of what the selected work touches), the Inbox's words in the page's `strings`, and the browser proof on the rig (`test/fixtures/big/inbox-proof.mjs`). One theme hook is added (`inbox`); its groups, rows, counts and tags are the page's own `section`, `row`, `count` and `tag`, so the documented list grows by one, to 201.
+
 ## What is not in this spec
 
 - Snooze, dismiss or "mark done" (D7).
